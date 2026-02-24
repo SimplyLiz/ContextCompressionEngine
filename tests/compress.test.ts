@@ -161,11 +161,11 @@ describe('compress', () => {
           id: '1',
           index: 0,
           role: 'assistant',
-          content: 'The configuration file is located at /etc/ultracontext/config.json and should be updated with the new settings.',
+          content: 'The configuration file is located at /etc/cce/config.json and should be updated with the new settings.',
         }),
       ];
       const result = compress(messages);
-      expect(result.messages[0].content).toContain('/etc/ultracontext/config.json');
+      expect(result.messages[0].content).toContain('/etc/cce/config.json');
       expect(result.compression.messages_preserved).toBe(1);
     });
 
@@ -225,7 +225,7 @@ describe('compress', () => {
       expect(compressed.content).toContain('This is the first sentence about architecture');
     });
 
-    it('writes _uc_original metadata on same-role merged messages', () => {
+    it('writes _cce_original metadata on same-role merged messages', () => {
       const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
       const messages: Message[] = [
         msg({ id: 'a', index: 0, role: 'user', content: prose }),
@@ -234,13 +234,13 @@ describe('compress', () => {
       const result = compress(messages, { recencyWindow: 0, dedup: false });
       // Same role → merged into 1
       expect(result.messages.length).toBe(1);
-      const meta = result.messages[0].metadata?._uc_original as { ids: string[]; version: number };
+      const meta = result.messages[0].metadata?._cce_original as { ids: string[]; version: number };
       expect(meta).toBeDefined();
       expect(meta.ids).toEqual(['a', 'b']);
       expect(meta.version).toBe(0);
     });
 
-    it('writes _uc_original with ids array on large prose compression', () => {
+    it('writes _cce_original with ids array on large prose compression', () => {
       const largeProse = 'First sentence here. ' + 'More text follows here. '.repeat(50);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System prompt.' }),
@@ -248,7 +248,7 @@ describe('compress', () => {
       ];
       const result = compress(messages, { recencyWindow: 0 });
       const compressed = result.messages[1];
-      const meta = compressed.metadata?._uc_original as { ids: string[]; version: number };
+      const meta = compressed.metadata?._cce_original as { ids: string[]; version: number };
       expect(meta).toBeDefined();
       expect(meta.ids).toEqual(['2']);
       expect(meta.version).toBe(0);
@@ -387,7 +387,7 @@ describe('compress', () => {
       expect(result.messages.length).toBe(3);
       const compressed = result.messages[1];
       expect(compressed.content).toMatch(/^\[summary:/);
-      const meta = compressed.metadata?._uc_original as { ids: string[]; version: number };
+      const meta = compressed.metadata?._cce_original as { ids: string[]; version: number };
       expect(meta.ids).toEqual(['2']);
       expect(meta.version).toBe(0);
     });
@@ -399,7 +399,7 @@ describe('compress', () => {
         msg({ id: '2', index: 1, role: 'user', content: mediumProse }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
-      const meta = result.messages[1].metadata?._uc_original as Record<string, unknown>;
+      const meta = result.messages[1].metadata?._cce_original as Record<string, unknown>;
       expect(meta).toHaveProperty('ids');
       expect(meta).not.toHaveProperty('id');
     });
@@ -424,7 +424,7 @@ describe('compress', () => {
       expect(result.compression.messages_preserved).toBe(1);
     });
 
-    it('preserves existing metadata alongside _uc_original', () => {
+    it('preserves existing metadata alongside _cce_original', () => {
       const largeProse = 'First sentence about some topic. ' + 'More text follows here. '.repeat(50);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System.' }),
@@ -434,7 +434,7 @@ describe('compress', () => {
       const compressed = result.messages[1];
       expect(compressed.metadata?.custom).toBe('value');
       expect(compressed.metadata?.priority).toBe(1);
-      expect(compressed.metadata?._uc_original).toBeDefined();
+      expect(compressed.metadata?._cce_original).toBeDefined();
     });
 
     it('maintains message order after compression', () => {
@@ -487,7 +487,7 @@ describe('compress', () => {
       expect(result.messages.length).toBe(1);
       expect(result.messages[0].role).toBe('user');
       expect(result.messages[0].content).toContain('2 messages merged');
-      const meta = result.messages[0].metadata?._uc_original as { ids: string[] };
+      const meta = result.messages[0].metadata?._cce_original as { ids: string[] };
       expect(meta.ids).toEqual(['1', '2']);
     });
 
@@ -863,14 +863,14 @@ describe('compress', () => {
       expect(result.compression.messages_compressed).toBe(1);
     });
 
-    it('_uc_original metadata present on code-split messages', () => {
+    it('_cce_original metadata present on code-split messages', () => {
       const prose = 'This is a detailed explanation of how the system handles authentication tokens and session management. '.repeat(3);
       const content = `${prose}\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
       const messages: Message[] = [
         msg({ id: 'cs1', index: 0, role: 'assistant', content }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
-      const meta = result.messages[0].metadata?._uc_original as { ids: string[]; version: number };
+      const meta = result.messages[0].metadata?._cce_original as { ids: string[]; version: number };
       expect(meta).toBeDefined();
       expect(meta.ids).toEqual(['cs1']);
       expect(meta.version).toBe(0);
@@ -984,7 +984,7 @@ describe('compress', () => {
     });
   });
 
-  describe('_uc_original normalization', () => {
+  describe('_cce_original normalization', () => {
     it('all compression paths use ids array shape', () => {
       const largeProse = 'First sentence here. ' + 'More text follows here. '.repeat(50);
       const mediumProse = 'This talks about general topics without any special formatting or patterns. '.repeat(3);
@@ -995,7 +995,7 @@ describe('compress', () => {
       const result = compress(messages, { preserve: [], recencyWindow: 0, dedup: false });
 
       for (const m of result.messages) {
-        const meta = m.metadata?._uc_original as Record<string, unknown>;
+        const meta = m.metadata?._cce_original as Record<string, unknown>;
         expect(meta).toBeDefined();
         expect(meta).toHaveProperty('ids');
         expect(meta).not.toHaveProperty('id');
@@ -1048,13 +1048,13 @@ describe('compress', () => {
   });
 
   describe('provenance metadata', () => {
-    it('sourceVersion flows into _uc_original.version and compression.original_version', () => {
+    it('sourceVersion flows into _cce_original.version and compression.original_version', () => {
       const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
       ];
       const result = compress(messages, { recencyWindow: 0, sourceVersion: 42 });
-      const meta = result.messages[0].metadata?._uc_original as { version: number };
+      const meta = result.messages[0].metadata?._cce_original as { version: number };
       expect(meta.version).toBe(42);
       expect(result.compression.original_version).toBe(42);
     });
@@ -1065,7 +1065,7 @@ describe('compress', () => {
         msg({ id: '1', index: 0, role: 'user', content: prose }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
-      const meta = result.messages[0].metadata?._uc_original as { version: number };
+      const meta = result.messages[0].metadata?._cce_original as { version: number };
       expect(meta.version).toBe(0);
       expect(result.compression.original_version).toBe(0);
     });
@@ -1075,28 +1075,28 @@ describe('compress', () => {
       const r1 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
       const r2 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
       const r3 = compress([msg({ id: 'b', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
-      const m1 = r1.messages[0].metadata?._uc_original as { summary_id: string };
-      const m2 = r2.messages[0].metadata?._uc_original as { summary_id: string };
-      const m3 = r3.messages[0].metadata?._uc_original as { summary_id: string };
-      expect(m1.summary_id).toMatch(/^uc_sum_/);
+      const m1 = r1.messages[0].metadata?._cce_original as { summary_id: string };
+      const m2 = r2.messages[0].metadata?._cce_original as { summary_id: string };
+      const m3 = r3.messages[0].metadata?._cce_original as { summary_id: string };
+      expect(m1.summary_id).toMatch(/^cce_sum_/);
       expect(m1.summary_id).toBe(m2.summary_id);
       expect(m1.summary_id).not.toBe(m3.summary_id);
     });
 
-    it('omits parent_ids when source has no prior _uc_original', () => {
+    it('omits parent_ids when source has no prior _cce_original', () => {
       const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
       const result = compress(
         [msg({ id: '1', index: 0, role: 'user', content: prose })],
         { recencyWindow: 0 },
       );
-      const meta = result.messages[0].metadata?._uc_original as Record<string, unknown>;
-      expect(meta.summary_id).toMatch(/^uc_sum_/);
+      const meta = result.messages[0].metadata?._cce_original as Record<string, unknown>;
+      expect(meta.summary_id).toMatch(/^cce_sum_/);
       expect(meta.parent_ids).toBeUndefined();
     });
 
     it('collects parent_ids from previously-compressed source messages', () => {
       const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const priorSummaryId = 'uc_sum_abc123';
+      const priorSummaryId = 'cce_sum_abc123';
       const messages: Message[] = [
         msg({
           id: 'x',
@@ -1104,13 +1104,13 @@ describe('compress', () => {
           role: 'user',
           content: prose,
           metadata: {
-            _uc_original: { ids: ['old1'], summary_id: priorSummaryId, version: 3 },
+            _cce_original: { ids: ['old1'], summary_id: priorSummaryId, version: 3 },
           },
         }),
         msg({ id: 'y', index: 1, role: 'user', content: prose }),
       ];
       const result = compress(messages, { preserve: [], recencyWindow: 0, dedup: false });
-      const meta = result.messages[0].metadata?._uc_original as {
+      const meta = result.messages[0].metadata?._cce_original as {
         ids: string[];
         summary_id: string;
         parent_ids?: string[];
@@ -1819,7 +1819,7 @@ describe('compress with embedSummaryId', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, embedSummaryId: true });
     expect(result.compression.messages_compressed).toBe(1);
-    expect(result.messages[0].content).toMatch(/^\[summary#uc_sum_/);
+    expect(result.messages[0].content).toMatch(/^\[summary#cce_sum_/);
   });
 
   it('does not embed summary_id by default', () => {
@@ -1837,8 +1837,8 @@ describe('compress with embedSummaryId', () => {
       msg({ id: 'test-id', index: 0, role: 'user', content: prose }),
     ];
     const result = compress(messages, { recencyWindow: 0, embedSummaryId: true });
-    const meta = result.messages[0].metadata?._uc_original as { summary_id: string };
-    expect(meta.summary_id).toMatch(/^uc_sum_/);
+    const meta = result.messages[0].metadata?._cce_original as { summary_id: string };
+    expect(meta.summary_id).toMatch(/^cce_sum_/);
     expect(result.messages[0].content).toContain(`[summary#${meta.summary_id}:`);
   });
 
@@ -1876,7 +1876,7 @@ describe('compress with embedSummaryId', () => {
       embedSummaryId: true,
       summarizer: (t) => t.slice(0, 40) + '...',
     });
-    expect(result.messages[0].content).toMatch(/^\[summary#uc_sum_/);
+    expect(result.messages[0].content).toMatch(/^\[summary#cce_sum_/);
   });
 });
 
@@ -2003,15 +2003,15 @@ describe('compress with forceConverge', () => {
     // First compress without budget to get the code-split result
     const initial = compress(messages, { recencyWindow: 0, dedup: false });
     const csSummary = initial.messages[0].content!;
-    // Code-split output should have _uc_original and be > 512 chars
-    expect(initial.messages[0].metadata?._uc_original).toBeDefined();
+    // Code-split output should have _cce_original and be > 512 chars
+    expect(initial.messages[0].metadata?._cce_original).toBeDefined();
     if (csSummary.length > 512) {
       // Now compress with impossible budget + forceConverge
       const result = compress(initial.messages, { tokenBudget: 1, dedup: false, forceConverge: true });
       const truncMsg = result.messages[0];
       expect(truncMsg.content).toMatch(/^\[truncated/);
-      // Original _uc_original should survive (not overwritten)
-      expect(truncMsg.metadata?._uc_original).toBeDefined();
+      // Original _cce_original should survive (not overwritten)
+      expect(truncMsg.metadata?._cce_original).toBeDefined();
     }
   });
 });
@@ -2029,7 +2029,7 @@ describe('dedup tag includes keep-target ID', () => {
       msg({ id: 'keep-me', index: 1, content: LONG }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.messages[0].content).toContain('of keep-me');
   });
 
@@ -2043,7 +2043,7 @@ describe('dedup tag includes keep-target ID', () => {
     // c is the keep target (latest)
     expect(result.messages[0].content).toContain('of c');
     expect(result.messages[1].content).toContain('of c');
-    expect(result.messages[2].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[2].content).not.toMatch(/^\[cce:dup/);
   });
 });
 

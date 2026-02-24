@@ -13,7 +13,7 @@ function makeSummaryId(ids: string[]): string {
   for (let i = 0; i < key.length; i++) {
     h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
   }
-  return `uc_sum_${h.toString(36)}`;
+  return `cce_sum_${h.toString(36)}`;
 }
 
 /**
@@ -23,7 +23,7 @@ function makeSummaryId(ids: string[]): string {
 function collectParentIds(msgs: Message[]): string[] {
   const parents: string[] = [];
   for (const m of msgs) {
-    const orig = m.metadata?._uc_original as Record<string, unknown> | undefined;
+    const orig = m.metadata?._cce_original as Record<string, unknown> | undefined;
     if (orig?.summary_id && typeof orig.summary_id === 'string') {
       parents.push(orig.summary_id);
     }
@@ -330,7 +330,7 @@ export function defaultTokenCounter(msg: Message): number {
 
 type Classified = { msg: Message; preserved: boolean; codeSplit?: boolean; dedup?: DedupAnnotation };
 
-/** Build a compressed message with _uc_original provenance metadata. */
+/** Build a compressed message with _cce_original provenance metadata. */
 function buildCompressedMessage(
   base: Message,
   ids: string[],
@@ -347,7 +347,7 @@ function buildCompressedMessage(
     content: summaryContent,
     metadata: {
       ...(base.metadata ?? {}),
-      _uc_original: {
+      _cce_original: {
         ids,
         summary_id: summaryId,
         ...(parents.length > 0 ? { parent_ids: parents } : {}),
@@ -555,8 +555,8 @@ function compressSync(
       const annotation = classified[i].dedup!;
       const keepTargetId = messages[annotation.duplicateOfIndex].id;
       const tag = annotation.similarity != null
-        ? `[uc:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
-        : `[uc:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
+        ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
+        : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
       result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
       if (annotation.similarity != null) {
         messagesFuzzyDeduped++;
@@ -729,8 +729,8 @@ async function compressAsync(
       const annotation = classified[i].dedup!;
       const keepTargetId = messages[annotation.duplicateOfIndex].id;
       const tag = annotation.similarity != null
-        ? `[uc:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
-        : `[uc:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
+        ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
+        : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
       result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
       if (annotation.similarity != null) {
         messagesFuzzyDeduped++;
@@ -906,8 +906,8 @@ function forceConvergePass(
 
     const oldTokens = counter(m);
 
-    // If already compressed (has _uc_original), just replace content in-place
-    const hasOriginal = !!(m.metadata?._uc_original);
+    // If already compressed (has _cce_original), just replace content in-place
+    const hasOriginal = !!(m.metadata?._cce_original);
     if (hasOriginal) {
       messages[cand.idx] = { ...m, content: tag };
     } else {
@@ -918,7 +918,7 @@ function forceConvergePass(
         content: tag,
         metadata: {
           ...(m.metadata ?? {}),
-          _uc_original: {
+          _cce_original: {
             ids: [m.id],
             summary_id: makeSummaryId([m.id]),
             version: sourceVersion,

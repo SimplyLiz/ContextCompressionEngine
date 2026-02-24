@@ -6,8 +6,8 @@ function lookup(store: StoreLookup, id: string): Message | undefined {
   return typeof store === 'function' ? store(id) : store[id];
 }
 
-function hasOriginal(msg: Message): msg is Message & { metadata: { _uc_original: { ids: string[] } } } {
-  const orig = msg.metadata?._uc_original as Record<string, unknown> | undefined;
+function hasOriginal(msg: Message): msg is Message & { metadata: { _cce_original: { ids: string[] } } } {
+  const orig = msg.metadata?._cce_original as Record<string, unknown> | undefined;
   return Array.isArray(orig?.ids) && (orig!.ids as unknown[]).length > 0;
 }
 
@@ -24,7 +24,7 @@ function expandOnce(messages: Message[], store: StoreLookup): UncompressResult {
       continue;
     }
 
-    const ids: string[] = (msg.metadata._uc_original as { ids: string[] }).ids;
+    const ids: string[] = (msg.metadata._cce_original as { ids: string[] }).ids;
     const originals: Message[] = [];
     const missing: string[] = [];
 

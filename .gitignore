@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+.venv/
+venv/
+
+# build
+dist/
+build/
+*.egg-info/
+*.tsbuildinfo
+
+# cache
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.eslintcache
+.cache
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+
+# os
+.DS_Store
+
+# ide
+.idea/
+.vscode/
+*.swp
+
+# indexing / analysis artifacts
+.ckb/
+*.scip
+
+# package managers
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions

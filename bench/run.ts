@@ -1163,7 +1163,7 @@ function runRealSessions(): void {
       // Classify compressed messages (on fuzzy result for aggregate)
       let preserved = 0, codeSplit = 0, summarized = 0;
       for (const m of crFuzzy.messages) {
-        if (!m.metadata?._uc_original) preserved++;
+        if (!m.metadata?._cce_original) preserved++;
         else if ((m.content ?? '').includes('```')) codeSplit++;
         else summarized++;
       }
@@ -1182,7 +1182,7 @@ function runRealSessions(): void {
       // Negative savings (merged-message-aware, on fuzzy result)
       let negatives = 0;
       for (const m of crFuzzy.messages) {
-        const meta = m.metadata?._uc_original as { ids?: string[] } | undefined;
+        const meta = m.metadata?._cce_original as { ids?: string[] } | undefined;
         if (!meta) continue;
         const ids = meta.ids ?? [m.id];
         const combinedLen = ids.reduce((sum, id) => {

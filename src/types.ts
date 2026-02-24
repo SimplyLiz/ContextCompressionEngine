@@ -14,7 +14,7 @@ export type CreateSummarizerOptions = {
 export type CompressOptions = {
   preserve?: string[];
   recencyWindow?: number;
-  /** Context version at the time of compression. Flows into _uc_original.version and compression.original_version. */
+  /** Context version at the time of compression. Flows into _cce_original.version and compression.original_version. */
   sourceVersion?: number;
   /** LLM-powered summarizer. When provided, compress() returns a Promise. */
   summarizer?: Summarizer;

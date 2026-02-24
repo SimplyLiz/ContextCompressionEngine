@@ -126,10 +126,10 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     expect(result.messages.length).toBe(2);
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.messages[0].content).toContain(`${LONG_CONTENT.length} chars`);
     // Last occurrence gets normal treatment (may be summarized or preserved)
-    expect(result.messages[1].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[1].content).not.toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(1);
   });
 
@@ -140,9 +140,9 @@ describe('compress with dedup', () => {
       msg({ id: '3', index: 2, content: LONG_CONTENT }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
-    expect(result.messages[1].content).toMatch(/^\[uc:dup/);
-    expect(result.messages[2].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
+    expect(result.messages[1].content).toMatch(/^\[cce:dup/);
+    expect(result.messages[2].content).not.toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(2);
   });
 
@@ -153,7 +153,7 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: false });
     expect(result.compression.messages_deduped).toBeUndefined();
-    expect(result.messages[0].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:dup/);
   });
 
   it('dedup omitted → dedup active (default: true)', () => {
@@ -163,7 +163,7 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0 });
     expect(result.compression.messages_deduped).toBe(1);
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
   });
 
   it('system role never deduped', () => {
@@ -172,8 +172,8 @@ describe('compress with dedup', () => {
       msg({ id: '2', index: 1, role: 'system', content: LONG_CONTENT }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).not.toMatch(/^\[uc:dup/);
-    expect(result.messages[1].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:dup/);
+    expect(result.messages[1].content).not.toMatch(/^\[cce:dup/);
   });
 
   it('tool_calls messages never deduped', () => {
@@ -182,8 +182,8 @@ describe('compress with dedup', () => {
       msg({ id: '2', index: 1, role: 'assistant', content: LONG_CONTENT, tool_calls: [{ id: 'tc2' }] }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).not.toMatch(/^\[uc:dup/);
-    expect(result.messages[1].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:dup/);
+    expect(result.messages[1].content).not.toMatch(/^\[cce:dup/);
   });
 
   it('code blocks get deduped (content prose summarizer skips)', () => {
@@ -195,7 +195,7 @@ describe('compress with dedup', () => {
       msg({ id: '3', index: 2, role: 'tool', content: codeContent }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBeGreaterThanOrEqual(1);
   });
 
@@ -206,7 +206,7 @@ describe('compress with dedup', () => {
       msg({ id: '3', index: 2, role: 'tool', content: LONG_JSON }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBeGreaterThanOrEqual(1);
   });
 
@@ -219,7 +219,7 @@ describe('compress with dedup', () => {
     // recencyWindow: 2 → last 2 messages preserved by recency
     // First message is duplicate outside window → deduped
     const result = compress(messages, { recencyWindow: 2, dedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     // Last 2 are in recency window, preserved
     expect(result.messages[1].content).toBe(LONG_CONTENT);
     expect(result.messages[2].content).toBe(LONG_CONTENT);
@@ -248,11 +248,11 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     // First message deduped
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     // Middle message summarized
     expect(result.messages[1].content).toMatch(/^\[summary:/);
     // Last duplicate preserved (or summarized, not deduped)
-    expect(result.messages[2].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[2].content).not.toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(1);
     expect(result.compression.messages_compressed).toBeGreaterThan(1);
   });
@@ -267,7 +267,7 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     // First message deduped
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     // Middle message code-split compressed
     expect(result.messages[1].content).toContain('```ts');
     expect(result.compression.messages_deduped).toBe(1);
@@ -280,8 +280,8 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     expect(result.messages.length).toBe(2);
-    expect(result.messages[0].content).not.toMatch(/^\[uc:dup/);
-    expect(result.messages[1].content).not.toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:dup/);
+    expect(result.messages[1].content).not.toMatch(/^\[cce:dup/);
   });
 
   it('stats: messages_deduped > 0 and ratio > 1', () => {
@@ -335,7 +335,7 @@ describe('compress with dedup', () => {
       msg({ id: '2', index: 1, content: LONG_CONTENT }),
     ];
     const result = await compress(messages, { recencyWindow: 0, dedup: true, summarizer: mockSummarizer });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(1);
   });
 
@@ -363,13 +363,13 @@ describe('compress with dedup', () => {
     expect(dedupMsg.content!.length).toBeLessThan(120);
   });
 
-  it('_uc_original metadata present on deduped messages', () => {
+  it('_cce_original metadata present on deduped messages', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: LONG_CONTENT }),
       msg({ id: '2', index: 1, content: LONG_CONTENT }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
-    const meta = result.messages[0].metadata?._uc_original as { ids: string[]; version: number };
+    const meta = result.messages[0].metadata?._cce_original as { ids: string[]; version: number };
     expect(meta).toBeDefined();
     expect(meta.ids).toEqual(['1']);
     expect(meta.version).toBe(0);
@@ -382,7 +382,7 @@ describe('compress with dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     // One of them should be deduped (the earlier one)
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(1);
   });
 
@@ -716,14 +716,14 @@ describe('transitive fuzzy similarity reports real Jaccard', () => {
 });
 
 describe('compress with fuzzy dedup', () => {
-  it('near-duplicate → earlier replaced with [uc:near-dup ...]', () => {
+  it('near-duplicate → earlier replaced with [cce:near-dup ...]', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
       msg({ id: '2', index: 1, content: 'something different in between that has enough length to avoid the short message threshold check.  Extra padding here.' }),
       msg({ id: '3', index: 2, content: MULTILINE_FILE_V2 }),
     ];
     const result = compress(messages, { recencyWindow: 0, fuzzyDedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:near-dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:near-dup/);
     expect(result.messages[0].content).toContain('% match');
     expect(result.compression.messages_fuzzy_deduped).toBe(1);
     // Exact dedup count should be 0 (these aren't identical)
@@ -738,18 +738,18 @@ describe('compress with fuzzy dedup', () => {
     ];
     const result = compress(messages, { recencyWindow: 0 });
     // Without fuzzyDedup: true, near-duplicates should NOT be caught
-    expect(result.messages[0].content).not.toMatch(/^\[uc:near-dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:near-dup/);
     expect(result.compression.messages_fuzzy_deduped).toBeUndefined();
   });
 
-  it('exact match still uses [uc:dup], not [uc:near-dup]', () => {
+  it('exact match still uses [cce:dup], not [cce:near-dup]', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
       msg({ id: '2', index: 1, content: MULTILINE_FILE }),
     ];
     const result = compress(messages, { recencyWindow: 0, fuzzyDedup: true });
-    expect(result.messages[0].content).toMatch(/^\[uc:dup/);
-    expect(result.messages[0].content).not.toMatch(/^\[uc:near-dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
+    expect(result.messages[0].content).not.toMatch(/^\[cce:near-dup/);
     expect(result.compression.messages_deduped).toBe(1);
   });
 
@@ -760,9 +760,9 @@ describe('compress with fuzzy dedup', () => {
     ];
     // Default 0.85 won't catch these, but 0.4 will
     const noMatch = compress(messages, { recencyWindow: 0, fuzzyDedup: true });
-    expect(noMatch.messages[0].content).not.toMatch(/^\[uc:near-dup/);
+    expect(noMatch.messages[0].content).not.toMatch(/^\[cce:near-dup/);
     const match = compress(messages, { recencyWindow: 0, fuzzyDedup: true, fuzzyThreshold: 0.4 });
-    expect(match.messages[0].content).toMatch(/^\[uc:near-dup/);
+    expect(match.messages[0].content).toMatch(/^\[cce:near-dup/);
     expect(match.compression.messages_fuzzy_deduped).toBe(1);
   });
 
@@ -775,7 +775,7 @@ describe('compress with fuzzy dedup', () => {
     // recencyWindow: 1 → only last message preserved by recency
     const result = compress(messages, { recencyWindow: 1, fuzzyDedup: true });
     // Earlier occurrence should be fuzzy-deduped
-    expect(result.messages[0].content).toMatch(/^\[uc:near-dup/);
+    expect(result.messages[0].content).toMatch(/^\[cce:near-dup/);
     // Last message (in recency window) preserved
     expect(result.messages[2].content).toBe(MULTILINE_FILE_V2);
   });

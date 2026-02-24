@@ -65,11 +65,11 @@ describe('uncompress', () => {
     const deepOriginal: Message = msg({ id: 'deep', index: 0, role: 'user', content: 'Original deep content.' });
     const midMessage: Message = {
       ...msg({ id: 'mid', index: 0, role: 'user', content: '[summary: mid-level]' }),
-      metadata: { _uc_original: { ids: ['deep'], summary_id: 'uc_sum_test1', version: 0 } },
+      metadata: { _cce_original: { ids: ['deep'], summary_id: 'cce_sum_test1', version: 0 } },
     };
     const outerMessage: Message = {
       ...msg({ id: 'outer', index: 0, role: 'user', content: '[summary: outer-level]' }),
-      metadata: { _uc_original: { ids: ['mid'], summary_id: 'uc_sum_test2', version: 0 } },
+      metadata: { _cce_original: { ids: ['mid'], summary_id: 'cce_sum_test2', version: 0 } },
     };
 
     const store = { mid: midMessage, deep: deepOriginal };
@@ -78,7 +78,7 @@ describe('uncompress', () => {
     expect(shallow.messages_expanded).toBe(1);
     expect(shallow.messages[0].id).toBe('mid');
     expect(shallow.messages[0].content).toBe('[summary: mid-level]');
-    const hasMeta = !!(shallow.messages[0].metadata?._uc_original as { ids: string[] })?.ids?.length;
+    const hasMeta = !!(shallow.messages[0].metadata?._cce_original as { ids: string[] })?.ids?.length;
     expect(hasMeta).toBe(true);
 
     const deep = uncompress([outerMessage], store, { recursive: true });
@@ -107,11 +107,11 @@ describe('uncompress', () => {
   it('recursive expansion stops on circular references (depth cap)', () => {
     const msgA: Message = {
       ...msg({ id: 'a', index: 0, role: 'user', content: '[summary: A]' }),
-      metadata: { _uc_original: { ids: ['b'], summary_id: 'uc_sum_a', version: 0 } },
+      metadata: { _cce_original: { ids: ['b'], summary_id: 'cce_sum_a', version: 0 } },
     };
     const msgB: Message = {
       ...msg({ id: 'b', index: 0, role: 'user', content: '[summary: B]' }),
-      metadata: { _uc_original: { ids: ['a'], summary_id: 'uc_sum_b', version: 0 } },
+      metadata: { _cce_original: { ids: ['a'], summary_id: 'cce_sum_b', version: 0 } },
     };
     const store = { a: msgA, b: msgB };
 
@@ -145,7 +145,7 @@ describe('uncompress', () => {
       chain.push({
         ...msg({ id: `m${i}`, index: 0, role: 'user', content: `[summary: level ${i}]` }),
         metadata: i < 19
-          ? { _uc_original: { ids: [`m${i + 1}`], summary_id: `uc_sum_${i}`, version: 0 } }
+          ? { _cce_original: { ids: [`m${i + 1}`], summary_id: `cce_sum_${i}`, version: 0 } }
           : {},
       });
     }
