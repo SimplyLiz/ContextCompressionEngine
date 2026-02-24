@@ -1,5 +1,7 @@
 # Benchmarks
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Running benchmarks, interpreting results, and comparing compression methods.
 
 ## Running tests

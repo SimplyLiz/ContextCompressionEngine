@@ -1,5 +1,7 @@
 # Token Budget
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Automatically find the least compression needed to fit a target token count.
 
 ## How it works

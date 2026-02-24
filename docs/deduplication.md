@@ -1,5 +1,7 @@
 # Deduplication
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Exact and fuzzy duplicate detection for repeated content in long conversations.
 
 ## Why dedup

@@ -1,5 +1,7 @@
 # Preservation Rules
 
+[Back to README](../README.md) | [All docs](README.md)
+
 What gets preserved, what gets compressed, and why.
 
 ## Rule priority

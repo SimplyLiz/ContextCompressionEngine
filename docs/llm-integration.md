@@ -1,5 +1,7 @@
 # LLM Integration
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Plug any LLM into the compression engine for semantic summarization.
 
 ## Summarizer interface

@@ -1,5 +1,7 @@
 # Provenance
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Metadata tracking for compressed messages.
 
 ## `_cce_original` metadata

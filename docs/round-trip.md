@@ -1,5 +1,7 @@
 # Round-trip Compression
 
+[Back to README](../README.md) | [All docs](README.md)
+
 Lossless compress/uncompress with the verbatim store.
 
 ## The lossless guarantee

@@ -1,5 +1,7 @@
 # Compression Pipeline
 
+[Back to README](../README.md) | [All docs](README.md)
+
 How `compress()` processes messages from start to finish.
 
 ## Pipeline overview
