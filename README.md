@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/context-compression-engine.svg)](https://www.npmjs.com/package/context-compression-engine)
-[![license](https://img.shields.io/npm/l/context-compression-engine.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
 Lossless context compression for LLMs. Zero dependencies. Zero API calls. Works everywhere JavaScript runs.
 
@@ -32,29 +32,9 @@ const { messages: originals } = uncompress(compressed, verbatim);
 
 No API keys. No network calls. Runs synchronously by default. Under 2ms for typical conversations.
 
-## Key findings: deterministic vs. LLM compression
+## Key findings
 
-The engine ships with a full benchmark suite that pits deterministic compression against LLM-powered summarization across real conversation scenarios. The results are counterintuitive:
-
-**The deterministic engine achieves 1.3-6.1x compression with zero latency and zero cost.** It scores sentences, packs a budget, strips filler — and in most scenarios, it compresses tighter than an LLM.
-
-Why? LLMs try to be _helpful_. They write fuller summaries that happen to be longer. The deterministic engine is optimized purely for compression — it doesn't care about readability, just signal density.
-
-**LLM summarization is opt-in for cases where semantic understanding improves summary quality** — long, prose-heavy conversations where the LLM's ability to paraphrase and merge concepts across many messages genuinely helps. The engine supports this via a pluggable `summarizer` option with a built-in fallback chain that automatically rejects LLM output when it's longer than the deterministic result.
-
-Don't take our word for it — run the benchmarks yourself:
-
-```bash
-# deterministic (no API keys needed)
-npm run bench
-
-# compare against LLM summarization
-OPENAI_API_KEY=sk-... npm run bench
-ANTHROPIC_API_KEY=sk-ant-... npm run bench
-OLLAMA_MODEL=llama3.2 npm run bench
-```
-
-The bench infrastructure is the deliverable. The numbers speak for themselves each time someone runs it.
+The deterministic engine achieves **1.3-6.1x compression with zero latency and zero cost.** It scores sentences, packs a budget, strips filler — and in most scenarios, it compresses tighter than an LLM. LLM summarization is opt-in for cases where semantic understanding improves quality. See [Benchmarks](docs/benchmarks.md) for the full comparison.
 
 ## Features
 
@@ -93,454 +73,68 @@ const {
 });
 
 // uncompress — restore originals from the verbatim store
-const { messages: originals } = uncompress(messages, verbatim);
+const { messages: originals } = uncompress(compressed, verbatim);
 ```
 
-**Important:** `messages` and `verbatim` must be persisted together atomically. Writing compressed messages without their verbatim originals causes irrecoverable data loss.
+**Important:** `messages` and `verbatim` must be persisted together atomically. Writing compressed messages without their verbatim originals causes irrecoverable data loss. See [Round-trip](docs/round-trip.md) for details.
 
-## API
+## Documentation
 
-### compress
+| Page                                                 | Description                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------- |
+| [API Reference](docs/api-reference.md)               | All exports, types, options, and result fields                  |
+| [Compression Pipeline](docs/compression-pipeline.md) | How compression works: classify, dedup, merge, summarize, guard |
+| [Deduplication](docs/deduplication.md)               | Exact + fuzzy dedup algorithms, tuning thresholds               |
+| [Token Budget](docs/token-budget.md)                 | Budget-driven compression, binary search, custom tokenizers     |
+| [LLM Integration](docs/llm-integration.md)           | Provider examples: Claude, OpenAI, Gemini, Grok, Ollama         |
+| [Round-trip](docs/round-trip.md)                     | Lossless compress/uncompress, VerbatimMap, atomicity            |
+| [Provenance](docs/provenance.md)                     | `_cce_original` metadata, summary_id, parent_ids                |
+| [Preservation Rules](docs/preservation-rules.md)     | What gets preserved, classification tiers, code-aware splitting |
+| [Benchmarks](docs/benchmarks.md)                     | Running benchmarks, LLM comparison, interpreting results        |
 
-Deterministic compression by default. Returns a `Promise` when a `summarizer` is provided.
+## API overview
+
+### `compress(messages, options?)`
+
+Deterministic compression. Returns a `Promise` when a `summarizer` is provided.
 
 ```ts
-import { compress } from 'context-compression-engine';
-
-// Sync — no summarizer
-const result = compress(messages, {
-  preserve: ['system'],
-  recencyWindow: 4,
-  sourceVersion: 1,
-});
-
-// Async — with LLM summarizer
-const result = await compress(messages, {
-  summarizer: async (text) => {
-    return await myLlm.summarize(text);
-  },
-});
-
-result.messages; // compressed message array
-result.verbatim; // original messages keyed by ID
-result.compression.ratio; // char compression ratio (>1 = savings)
-result.compression.token_ratio; // token compression ratio (>1 = savings)
-result.compression.messages_compressed; // how many were compressed
-result.compression.messages_preserved; // how many were kept as-is
-result.compression.messages_deduped; // exact duplicates replaced (when dedup: true)
-result.compression.messages_fuzzy_deduped; // near-duplicates replaced (when fuzzyDedup: true)
+const result = compress(messages, { preserve: ['system'], recencyWindow: 4 });
+result.messages; // compressed messages
+result.verbatim; // originals keyed by ID
+result.compression.ratio; // character compression ratio (>1 = savings)
+result.compression.token_ratio; // token compression ratio
 ```
 
-| Option             | Type                       | Default               | Description                                                                                 |
-| ------------------ | -------------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
-| `preserve`         | `string[]`                 | `['system']`          | Roles to never compress                                                                     |
-| `recencyWindow`    | `number`                   | `4`                   | Protect the last N messages from compression                                                |
-| `sourceVersion`    | `number`                   | `0`                   | Version tag for provenance tracking                                                         |
-| `summarizer`       | `Summarizer`               | —                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`                     |
-| `tokenBudget`      | `number`                   | —                     | Target token count. When set, binary-searches `recencyWindow` to fit                        |
-| `minRecencyWindow` | `number`                   | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                          |
-| `dedup`            | `boolean`                  | `true`                | Replace earlier exact-duplicate messages with a compact reference                           |
-| `fuzzyDedup`       | `boolean`                  | `false`               | Detect near-duplicate messages using line-level similarity                                  |
-| `fuzzyThreshold`   | `number`                   | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                  |
-| `embedSummaryId`   | `boolean`                  | `false`               | Embed `summary_id` in compressed content for downstream reference                           |
-| `forceConverge`    | `boolean`                  | `false`               | Hard-truncate non-recency messages when binary search bottoms out and budget still exceeded |
-| `tokenCounter`     | `(msg: Message) => number` | `defaultTokenCounter` | Custom token counter per message. Default: `ceil(content.length / 3.5)`                     |
+Full options: [API Reference](docs/api-reference.md#compressoptions)
 
-#### Summarizer fallback
+### `uncompress(messages, store, options?)`
 
-When a `summarizer` is provided, each message goes through a three-level fallback:
-
-1. **LLM summarizer** — uses the result if it is non-empty **and** strictly shorter than the input
-2. **Deterministic** — sentence extraction + entity preservation (if the LLM threw, returned empty, or returned equal/longer text)
-3. **Size guard** — preserves original verbatim if even deterministic compression would increase size
-
-This design was validated by benchmarking: the fallback correctly rejects LLM summaries that are longer than the deterministic output, which happens more often than you'd expect.
-
-#### Token budget
-
-Use `tokenBudget` to automatically find the least compression needed to fit a token limit. The engine binary-searches `recencyWindow` internally.
-
-By default, tokens are estimated at ~3.5 characters per token. For accurate budgeting, pass a `tokenCounter` that uses your model's tokenizer — the counter is used for all budget decisions, binary search iterations, force-converge deltas, and `token_ratio` stats.
+Restore originals. Accepts a `VerbatimMap` or a `(id) => Message` lookup function.
 
 ```ts
-import { compress, defaultTokenCounter } from 'context-compression-engine';
-
-const result = compress(messages, {
-  tokenBudget: 4000,
-  minRecencyWindow: 2,
-});
-
-result.fits; // true if result fits within budget
-result.tokenCount; // token count (via tokenCounter)
-
-// Plug in a real tokenizer
-import { encode } from 'gpt-tokenizer';
-
-const result = compress(messages, {
-  tokenBudget: 4000,
-  tokenCounter: (msg) => {
-    const text = typeof msg.content === 'string' ? msg.content : '';
-    return encode(text).length;
-  },
-});
-
-// With LLM summarizer for tighter fits
-const result = await compress(messages, {
-  tokenBudget: 4000,
-  summarizer: mySummarizer,
-});
-```
-
-When `forceConverge` is enabled, the engine hard-truncates non-recency messages to 512 characters if the binary search bottoms out and the budget is still exceeded. Guaranteed convergence, no LLM involved.
-
-```ts
-const result = compress(messages, {
-  tokenBudget: 4000,
-  forceConverge: true,
-});
-// result.fits is guaranteed true (unless only system/recency messages remain)
-```
-
-### uncompress
-
-Restore originals from the verbatim store. Always sync. Supports recursive expansion for multi-layer compression (up to 10 levels deep).
-
-The second argument accepts either a plain `VerbatimMap` object or a lookup function `(id: string) => Message | undefined` — useful when verbatim data lives in a database rather than in-memory.
-
-```ts
-import { uncompress } from 'context-compression-engine';
-
 const { messages, missing_ids } = uncompress(compressed, verbatim);
-
-// recursive — follows chains of compressed-then-recompressed messages
-const deep = uncompress(compressed, verbatim, { recursive: true });
-
-// function store — look up originals from a database
-const result = uncompress(compressed, (id) => db.getMessageById(id));
-
-// missing_ids.length > 0 means data loss (partial write)
 ```
 
-### createSummarizer
+### `createSummarizer(callLlm, options?)`
 
 Create an LLM-powered summarizer with an optimized prompt template.
 
 ```ts
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const summarizer = createSummarizer(
-  async (prompt) => {
-    return await myLlm.complete(prompt);
-  },
-  { maxResponseTokens: 300 },
-);
-
+const summarizer = createSummarizer(async (prompt) => myLlm.complete(prompt));
 const result = await compress(messages, { summarizer });
 ```
 
-The prompt preserves code references, file paths, function/variable names, URLs, API keys, error messages, numbers, and technical decisions — stripping only filler and redundant explanations.
+### `createEscalatingSummarizer(callLlm, options?)`
 
-For domain-specific compression, use `systemPrompt` to inject context:
+Three-level escalation: normal → aggressive → deterministic fallback.
 
-```ts
-const summarizer = createSummarizer(callLlm, {
-  systemPrompt:
-    'This is a legal contract. Preserve all clause numbers, party names, and defined terms.',
-});
-```
+### `defaultTokenCounter(msg)`
 
-| Option              | Type                       | Default    | Description                                                          |
-| ------------------- | -------------------------- | ---------- | -------------------------------------------------------------------- |
-| `maxResponseTokens` | `number`                   | `300`      | Hint for maximum tokens in the LLM response                          |
-| `systemPrompt`      | `string`                   | —          | Domain-specific instructions prepended to the built-in rules         |
-| `mode`              | `'normal' \| 'aggressive'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget |
-| `preserveTerms`     | `string[]`                 | —          | Domain-specific terms appended to the built-in preserve list         |
-
-### createEscalatingSummarizer
-
-Three-level escalation summarizer (normal → aggressive → deterministic fallback):
-
-1. **Level 1: Normal** — concise prose summary via the LLM
-2. **Level 2: Aggressive** — terse bullet points at half the token budget (if Level 1 fails or returns longer text)
-3. **Level 3: Deterministic** — sentence extraction fallback via the compression pipeline
-
-```ts
-import { createEscalatingSummarizer, compress } from 'context-compression-engine';
-
-const summarizer = createEscalatingSummarizer(async (prompt) => myLlm.complete(prompt), {
-  maxResponseTokens: 300,
-  systemPrompt: 'This is a legal contract. Preserve all clause numbers.',
-  preserveTerms: ['clause numbers', 'party names'],
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-| Option              | Type       | Default | Description                                                  |
-| ------------------- | ---------- | ------- | ------------------------------------------------------------ |
-| `maxResponseTokens` | `number`   | `300`   | Hint for maximum tokens in the LLM response                  |
-| `systemPrompt`      | `string`   | —       | Domain-specific instructions prepended to the built-in rules |
-| `preserveTerms`     | `string[]` | —       | Domain-specific terms appended to the built-in preserve list |
-
-Note: `mode` is not accepted — the escalating summarizer manages both modes internally.
-
-## Deduplication
-
-Long-running conversations — especially agentic coding sessions — often contain repeated content: the same file read multiple times, identical grep results, duplicate test output. Dedup detects these repetitions and replaces earlier occurrences with a compact reference, keeping only the latest copy.
-
-### Exact dedup (on by default)
-
-```ts
-const result = compress(messages, { dedup: true }); // default
-```
-
-Messages with identical content are detected via hash grouping. Earlier occurrences are replaced with a compact reference. Originals are stored in the verbatim map — `uncompress()` restores them.
-
-### Fuzzy dedup (opt-in)
-
-```ts
-const result = compress(messages, { fuzzyDedup: true });
-```
-
-Detects near-duplicates using line-level Jaccard similarity. Useful when the same file is read across edit cycles — the content evolves slightly but remains largely the same.
-
-The algorithm:
-
-1. **Fingerprint bucketing** — groups candidates by their first 5 non-empty normalized lines (requires 3+ shared)
-2. **Length-ratio pre-filter** — skips pairs where `min/max < 0.7`
-3. **Line-level Jaccard** — `|A ∩ B| / |A ∪ B|` using multiset frequency maps of normalized lines
-4. **Union-find grouping** — transitively connected duplicates share a single canonical copy
-
-```ts
-// Strict (default) — only very similar content
-compress(messages, { fuzzyDedup: true, fuzzyThreshold: 0.85 });
-
-// Relaxed — catch more variants
-compress(messages, { fuzzyDedup: true, fuzzyThreshold: 0.6 });
-```
-
-Both exact and fuzzy dedup are fully lossless — originals are always in the verbatim map.
-
-## LLM Summarizer Examples
-
-The `summarizer` option accepts any function with the signature `(text: string) => string | Promise<string>`. Use `createSummarizer` to wrap your LLM call with an optimized prompt, or write the prompt yourself for full control.
-
-### Anthropic (Claude)
-
-```ts
-import Anthropic from '@anthropic-ai/sdk';
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const anthropic = new Anthropic();
-
-const summarizer = createSummarizer(async (prompt) => {
-  const msg = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 300,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return msg.content[0].type === 'text' ? msg.content[0].text : '';
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-### OpenAI
-
-```ts
-import OpenAI from 'openai';
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const openai = new OpenAI();
-
-const summarizer = createSummarizer(async (prompt) => {
-  const res = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    max_tokens: 300,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return res.choices[0].message.content ?? '';
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-### Google Gemini
-
-```ts
-import { GoogleGenAI } from '@google/genai';
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-const summarizer = createSummarizer(async (prompt) => {
-  const res = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: prompt,
-  });
-  return res.text ?? '';
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-### xAI (Grok)
-
-xAI's API is OpenAI-compatible — use the OpenAI SDK with a different base URL:
-
-```ts
-import OpenAI from 'openai';
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const xai = new OpenAI({
-  apiKey: process.env.XAI_API_KEY,
-  baseURL: 'https://api.x.ai/v1',
-});
-
-const summarizer = createSummarizer(async (prompt) => {
-  const res = await xai.chat.completions.create({
-    model: 'grok-3-fast',
-    max_tokens: 300,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return res.choices[0].message.content ?? '';
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-### Ollama
-
-```ts
-import { createSummarizer, compress } from 'context-compression-engine';
-
-const summarizer = createSummarizer(async (prompt) => {
-  const res = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama3', prompt, stream: false }),
-  });
-  const json = await res.json();
-  return json.response;
-});
-
-const result = await compress(messages, { summarizer });
-```
-
-### Any Provider
-
-The summarizer is just a function. Use any HTTP API, local model, or custom logic:
-
-```ts
-// Simple truncation (no LLM needed)
-const summarizer = (text: string) => text.slice(0, 200) + '...';
-
-// Custom API
-const summarizer = async (text: string) => {
-  const res = await fetch('https://my-api.com/summarize', {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  });
-  return (await res.json()).summary;
-};
-```
-
-If the summarizer throws or returns text longer than the input, the engine falls back to deterministic compression automatically.
-
-## What Gets Preserved
-
-The classifier automatically preserves content that should never be summarized:
-
-| Content Type    | Example                           | Preserved?                  |
-| --------------- | --------------------------------- | --------------------------- |
-| Code fences     | ` ```ts const x = 1; ``` `        | Yes                         |
-| SQL             | `SELECT * FROM users WHERE ...`   | Yes                         |
-| JSON            | `{"key": "value"}`                | Yes                         |
-| API keys        | `sk-proj-abc123...`               | Yes                         |
-| URLs            | `https://docs.example.com/api`    | Yes                         |
-| File paths      | `/etc/config.json`                | Yes                         |
-| Short messages  | `< 120 chars`                     | Yes                         |
-| Tool calls      | Messages with `tool_calls` array  | Yes                         |
-| System messages | `role: 'system'` (default)        | Yes                         |
-| Duplicates      | Repeated content (exact or fuzzy) | **Replaced with reference** |
-| Long prose      | General discussion, explanations  | **Compressed**              |
-
-Code-mixed messages get split: prose is summarized, code fences stay verbatim.
-
-## Preservation Rules
-
-Messages are preserved (never compressed) when any of these apply:
-
-1. **Role** is in the `preserve` list (default: `['system']`)
-2. **Recency** — within the last `recencyWindow` messages (default: 4)
-3. **Tool calls** — message has a `tool_calls` array
-4. **Short** — content under 120 characters
-5. **Already compressed** — starts with `[summary:`
-6. **Code with short prose** — has code fences but prose under 200 chars
-7. **Structured content** — classifier detects code, SQL, keys, etc.
-8. **Valid JSON** — parseable JSON content
-9. **Size guard** — compressed output would be larger than original
-
-## Provenance Metadata
-
-Every compressed message carries provenance in its `metadata` field:
-
-```ts
-{
-  ids: string[];          // original message IDs this summary covers
-  summary_id: string;     // deterministic ID (hash-based) for this summary
-  parent_ids?: string[];  // summary_ids of prior compressions (provenance chain)
-  version: number;        // sourceVersion at time of compression
-}
-```
-
-- **`ids`** — always an array, even for single messages. These are the keys into the `verbatim` map.
-- **`summary_id`** — derived from `ids` via djb2 hash. Deterministic: same input IDs always produce the same summary_id.
-- **`parent_ids`** — present only when compressing already-compressed messages (re-compression). Forms a chain for multi-layer provenance tracking.
-- **`version`** — mirrors `CompressOptions.sourceVersion`. Defaults to `0`.
-
-## Benchmarks
-
-The benchmark suite is the proof. Run it yourself:
-
-```bash
-# 333 tests
-npm test
-
-# type check
-npx tsc --noEmit
-
-# benchmark — deterministic compression, no API keys needed
-npm run bench
-```
-
-The benchmark covers seven conversation scenarios (coding assistant, long Q&A, tool-heavy, short, deep conversation, structured content, agentic coding), token budget optimization with and without dedup, fuzzy dedup accuracy, and real-session compression on actual Claude Code transcripts.
-
-### LLM benchmark
-
-The benchmark runner includes an opt-in LLM section that compares deterministic compression against real LLM-powered summarization head-to-head. Set one or more environment variables to enable it:
-
-| Variable            | Provider  | Default model                                             |
-| ------------------- | --------- | --------------------------------------------------------- |
-| `OPENAI_API_KEY`    | OpenAI    | `gpt-4.1-mini` (override: `OPENAI_MODEL`)                 |
-| `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` (override: `ANTHROPIC_MODEL`) |
-| `OLLAMA_MODEL`      | Ollama    | `llama3.2` (host override: `OLLAMA_HOST`)                 |
-
-```bash
-# Run with OpenAI
-OPENAI_API_KEY=sk-... npm run bench
-
-# Run with Ollama (local)
-OLLAMA_MODEL=llama3.2 npm run bench
-
-# Run with multiple providers
-OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=sk-ant-... npm run bench
-```
-
-Each scenario runs three methods side-by-side: `deterministic`, `llm-basic` (`createSummarizer`), and `llm-escalate` (`createEscalatingSummarizer`). All methods verify round-trip integrity. The three-level fallback design is validated live — the engine correctly rejects LLM summaries that fail to beat deterministic output.
-
-The LLM providers require their respective SDKs to be installed (`openai`, `@anthropic-ai/sdk`). Missing SDKs are detected at runtime and print a skip message — no crash, no hard dependency.
+Built-in estimator: `ceil(content.length / 3.5)`. Replace with a real tokenizer for accurate budgets.
 
 ## License
 
-[Apache-2.0](LICENSE)
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal use, open-source projects, and non-commercial purposes.
+
+**Commercial use** requires a separate license. Contact [lisa@tastehub.io](mailto:lisa@tastehub.io) — happy to discuss collaboration and licensing options.
