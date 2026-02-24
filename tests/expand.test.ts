@@ -11,11 +11,19 @@ const PROSE = 'This is a long message about general topics that could be compres
 
 describe('uncompress', () => {
   it('roundtrip: compress then uncompress restores exact input', () => {
-    const codeProse = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3);
+    const codeProse =
+      'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+        3,
+      );
     const input: Message[] = [
       msg({ id: 'sys', index: 0, role: 'system', content: 'System prompt.' }),
       msg({ id: 'u1', index: 1, role: 'user', content: PROSE }),
-      msg({ id: 'a1', index: 2, role: 'assistant', content: `${codeProse}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`` }),
+      msg({
+        id: 'a1',
+        index: 2,
+        role: 'assistant',
+        content: `${codeProse}\n\n\`\`\`ts\nconst x = 1;\n\`\`\``,
+      }),
       msg({ id: 'u2', index: 3, role: 'user', content: 'Short.' }),
     ];
     const compressed = compress(input, { recencyWindow: 0 });
@@ -62,7 +70,12 @@ describe('uncompress', () => {
   });
 
   it('non-recursive stops after one expansion layer', () => {
-    const deepOriginal: Message = msg({ id: 'deep', index: 0, role: 'user', content: 'Original deep content.' });
+    const deepOriginal: Message = msg({
+      id: 'deep',
+      index: 0,
+      role: 'user',
+      content: 'Original deep content.',
+    });
     const midMessage: Message = {
       ...msg({ id: 'mid', index: 0, role: 'user', content: '[summary: mid-level]' }),
       metadata: { _cce_original: { ids: ['deep'], summary_id: 'cce_sum_test1', version: 0 } },
@@ -78,7 +91,8 @@ describe('uncompress', () => {
     expect(shallow.messages_expanded).toBe(1);
     expect(shallow.messages[0].id).toBe('mid');
     expect(shallow.messages[0].content).toBe('[summary: mid-level]');
-    const hasMeta = !!(shallow.messages[0].metadata?._cce_original as { ids: string[] })?.ids?.length;
+    const hasMeta = !!(shallow.messages[0].metadata?._cce_original as { ids: string[] })?.ids
+      ?.length;
     expect(hasMeta).toBe(true);
 
     const deep = uncompress([outerMessage], store, { recursive: true });
@@ -100,7 +114,7 @@ describe('uncompress', () => {
     expect(empty.messages[0].content).toMatch(/^\[summary:/);
 
     const partial = uncompress(compressed.messages, { a: input[0] });
-    expect(partial.messages.find(m => m.id === 'a')).toBeDefined();
+    expect(partial.messages.find((m) => m.id === 'a')).toBeDefined();
     expect(partial.missing_ids).toContain('b');
   });
 
@@ -121,9 +135,7 @@ describe('uncompress', () => {
   });
 
   it('function store works without recursive option', () => {
-    const input: Message[] = [
-      msg({ id: 'a', index: 0, role: 'user', content: PROSE }),
-    ];
+    const input: Message[] = [msg({ id: 'a', index: 0, role: 'user', content: PROSE })];
     const compressed = compress(input, { recencyWindow: 0 });
     expect(compressed.compression.messages_compressed).toBe(1);
 
@@ -144,13 +156,16 @@ describe('uncompress', () => {
     for (let i = 0; i < 20; i++) {
       chain.push({
         ...msg({ id: `m${i}`, index: 0, role: 'user', content: `[summary: level ${i}]` }),
-        metadata: i < 19
-          ? { _cce_original: { ids: [`m${i + 1}`], summary_id: `cce_sum_${i}`, version: 0 } }
-          : {},
+        metadata:
+          i < 19
+            ? { _cce_original: { ids: [`m${i + 1}`], summary_id: `cce_sum_${i}`, version: 0 } }
+            : {},
       });
     }
     const store: Record<string, Message> = {};
-    for (const m of chain) { store[m.id] = m; }
+    for (const m of chain) {
+      store[m.id] = m;
+    }
 
     const result = uncompress([chain[0]], store, { recursive: true });
     // 1 initial expansion + 10 loop iterations = 11 max
@@ -178,7 +193,7 @@ describe('uncompress', () => {
     const lookupFn = (id: string) => combined[id];
     const deep = uncompress(second.messages, lookupFn, { recursive: true });
     expect(deep.messages.length).toBe(3);
-    expect(deep.messages.map(m => m.id)).toEqual(['a', 'b', 'c']);
+    expect(deep.messages.map((m) => m.id)).toEqual(['a', 'b', 'c']);
     expect(deep.messages[0].content).toBe(PROSE);
     expect(deep.missing_ids).toEqual([]);
   });

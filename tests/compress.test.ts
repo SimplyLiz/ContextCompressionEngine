@@ -17,8 +17,21 @@ describe('compress', () => {
   describe('preservation rules', () => {
     it('preserves system role by default', () => {
       const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'system', content: 'You are a helpful assistant. '.repeat(20) }),
-        msg({ id: '2', index: 1, role: 'user', content: 'This is a long user message that talks about many things and goes on for a while to exceed the threshold. '.repeat(10) }),
+        msg({
+          id: '1',
+          index: 0,
+          role: 'system',
+          content: 'You are a helpful assistant. '.repeat(20),
+        }),
+        msg({
+          id: '2',
+          index: 1,
+          role: 'user',
+          content:
+            'This is a long user message that talks about many things and goes on for a while to exceed the threshold. '.repeat(
+              10,
+            ),
+        }),
       ];
       const result = compress(messages);
       expect(result.messages[0].role).toBe('system');
@@ -28,7 +41,15 @@ describe('compress', () => {
 
     it('compresses long prose tool messages', () => {
       const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: 'Tool output result that is fairly long and contains detailed information about the operation. '.repeat(5) }),
+        msg({
+          id: '1',
+          index: 0,
+          role: 'tool',
+          content:
+            'Tool output result that is fairly long and contains detailed information about the operation. '.repeat(
+              5,
+            ),
+        }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].role).toBe('tool');
@@ -38,7 +59,15 @@ describe('compress', () => {
 
     it('compresses long prose function messages', () => {
       const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'function', content: 'Function result with enough content to pass the length threshold easily here. '.repeat(5) }),
+        msg({
+          id: '1',
+          index: 0,
+          role: 'function',
+          content:
+            'Function result with enough content to pass the length threshold easily here. '.repeat(
+              5,
+            ),
+        }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].role).toBe('function');
@@ -47,10 +76,11 @@ describe('compress', () => {
     });
 
     it('preserves tool messages with JSON content', () => {
-      const jsonContent = JSON.stringify({ result: 'success', data: { items: [1, 2, 3], total: 3 } });
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: jsonContent }),
-      ];
+      const jsonContent = JSON.stringify({
+        result: 'success',
+        data: { items: [1, 2, 3], total: 3 },
+      });
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: jsonContent })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].content).toBe(jsonContent);
       expect(result.compression.messages_preserved).toBe(1);
@@ -58,7 +88,13 @@ describe('compress', () => {
 
     it('preserves tool messages with code content', () => {
       const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: '```typescript\nconst x = 1;\nconst y = 2;\nreturn x + y;\n```\nHere is the code result from the tool execution.' }),
+        msg({
+          id: '1',
+          index: 0,
+          role: 'tool',
+          content:
+            '```typescript\nconst x = 1;\nconst y = 2;\nreturn x + y;\n```\nHere is the code result from the tool execution.',
+        }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].content).toContain('```');
@@ -66,36 +102,33 @@ describe('compress', () => {
     });
 
     it('preserves short tool messages', () => {
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: 'OK' }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: 'OK' })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].content).toBe('OK');
       expect(result.compression.messages_preserved).toBe(1);
     });
 
     it('preserves tool results containing SQL', () => {
-      const sqlContent = 'SELECT u.id, u.email FROM users u JOIN orders o ON u.id = o.user_id WHERE o.total > 100 ORDER BY o.created_at DESC LIMIT 50';
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: sqlContent }),
-      ];
+      const sqlContent =
+        'SELECT u.id, u.email FROM users u JOIN orders o ON u.id = o.user_id WHERE o.total > 100 ORDER BY o.created_at DESC LIMIT 50';
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: sqlContent })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].content).toBe(sqlContent);
       expect(result.compression.messages_preserved).toBe(1);
     });
 
     it('preserves tool results containing API keys', () => {
-      const envContent = 'DATABASE_URL=postgres://localhost/mydb\nOPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012mno345pqr\nPORT=3000';
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'tool', content: envContent }),
-      ];
+      const envContent =
+        'DATABASE_URL=postgres://localhost/mydb\nOPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012mno345pqr\nPORT=3000';
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: envContent })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.messages[0].content).toBe(envContent);
       expect(result.compression.messages_preserved).toBe(1);
     });
 
     it('preserves function results containing SQL', () => {
-      const sqlContent = 'ERROR: relation "users" does not exist\nSTATEMENT: INSERT INTO audit_log (user_id, action) VALUES ($1, $2) RETURNING id';
+      const sqlContent =
+        'ERROR: relation "users" does not exist\nSTATEMENT: INSERT INTO audit_log (user_id, action) VALUES ($1, $2) RETURNING id';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'function', content: sqlContent }),
       ];
@@ -110,7 +143,10 @@ describe('compress', () => {
           id: '1',
           index: 0,
           role: 'assistant',
-          content: 'Let me help with that request by calling the appropriate function to get the data. '.repeat(5),
+          content:
+            'Let me help with that request by calling the appropriate function to get the data. '.repeat(
+              5,
+            ),
           tool_calls: [{ id: 'tc1', function: { name: 'search', arguments: '{}' } }],
         }),
       ];
@@ -133,7 +169,8 @@ describe('compress', () => {
           id: '1',
           index: 0,
           role: 'assistant',
-          content: '```typescript\nconst x = 1;\nconst y = 2;\nreturn x + y;\n```\nHere is the code you requested for the addition function.',
+          content:
+            '```typescript\nconst x = 1;\nconst y = 2;\nreturn x + y;\n```\nHere is the code you requested for the addition function.',
         }),
       ];
       const result = compress(messages);
@@ -147,7 +184,8 @@ describe('compress', () => {
           id: '1',
           index: 0,
           role: 'assistant',
-          content: 'Check out the documentation at https://docs.example.com/api/v2/reference for more details on the endpoints.',
+          content:
+            'Check out the documentation at https://docs.example.com/api/v2/reference for more details on the endpoints.',
         }),
       ];
       const result = compress(messages);
@@ -161,7 +199,8 @@ describe('compress', () => {
           id: '1',
           index: 0,
           role: 'assistant',
-          content: 'The configuration file is located at /etc/cce/config.json and should be updated with the new settings.',
+          content:
+            'The configuration file is located at /etc/cce/config.json and should be updated with the new settings.',
         }),
       ];
       const result = compress(messages);
@@ -181,8 +220,24 @@ describe('compress', () => {
 
     it('respects custom preserve roles', () => {
       const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'developer', content: 'Important developer instructions that should be preserved across all interactions. '.repeat(5) }),
-        msg({ id: '2', index: 1, role: 'user', content: 'A long message about general topics that could be compressed since it has no special content. '.repeat(10) }),
+        msg({
+          id: '1',
+          index: 0,
+          role: 'developer',
+          content:
+            'Important developer instructions that should be preserved across all interactions. '.repeat(
+              5,
+            ),
+        }),
+        msg({
+          id: '2',
+          index: 1,
+          role: 'user',
+          content:
+            'A long message about general topics that could be compressed since it has no special content. '.repeat(
+              10,
+            ),
+        }),
       ];
       const result = compress(messages, { preserve: ['developer'] });
       expect(result.messages[0].role).toBe('developer');
@@ -192,7 +247,9 @@ describe('compress', () => {
 
   describe('compression behavior', () => {
     it('compresses each role separately (no cross-role merging)', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -211,8 +268,11 @@ describe('compress', () => {
     });
 
     it('compresses large prose to bracketed summary', () => {
-      const largeProse = 'This is the first sentence about architecture. ' +
-        'It continues with many more sentences about various aspects of the system design. '.repeat(15);
+      const largeProse =
+        'This is the first sentence about architecture. ' +
+        'It continues with many more sentences about various aspects of the system design. '.repeat(
+          15,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'You are helpful.' }),
         msg({ id: '2', index: 1, role: 'user', content: largeProse }),
@@ -226,7 +286,9 @@ describe('compress', () => {
     });
 
     it('writes _cce_original metadata on same-role merged messages', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: 'a', index: 0, role: 'user', content: prose }),
         msg({ id: 'b', index: 1, role: 'user', content: prose }),
@@ -257,7 +319,10 @@ describe('compress', () => {
 
   describe('stats and edge cases', () => {
     it('returns correct compression ratio', () => {
-      const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+      const prose =
+        'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+          10,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -286,7 +351,10 @@ describe('compress', () => {
     });
 
     it('token_ratio > 1 when compressing', () => {
-      const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+      const prose =
+        'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+          10,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -305,7 +373,10 @@ describe('compress', () => {
     });
 
     it('token_ratio differs from char ratio', () => {
-      const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+      const prose =
+        'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+          10,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -321,19 +392,17 @@ describe('compress', () => {
     it('token_ratio uses ceil(chars/3.5) estimation', () => {
       // Use a system message (role-preserved) so we test the zero-compression path
       const content = 'You are a helpful assistant. '.repeat(12); // 336 chars
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'system', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'system', content })];
       const result = compress(messages, { recencyWindow: 0 });
       // All preserved → token_ratio === 1
       expect(result.compression.token_ratio).toBe(1);
     });
-
   });
 
   describe('interleaving and grouping', () => {
     it('splits compressed groups around a preserved message', () => {
-      const longProse = 'This talks about general topics without any special formatting or code. '.repeat(15);
+      const longProse =
+        'This talks about general topics without any special formatting or code. '.repeat(15);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: longProse }),
         msg({ id: '2', index: 1, role: 'tool', content: 'Tool result' }),
@@ -350,7 +419,8 @@ describe('compress', () => {
     });
 
     it('splits at role boundaries and at preserved boundaries', () => {
-      const longProse = 'This talks about general topics without any special formatting or code. '.repeat(15);
+      const longProse =
+        'This talks about general topics without any special formatting or code. '.repeat(15);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: longProse }),
         msg({ id: '2', index: 1, role: 'assistant', content: longProse }),
@@ -377,7 +447,10 @@ describe('compress', () => {
   describe('medium prose (120-800 chars)', () => {
     it('compresses a single isolated message in the 120-800 range', () => {
       // ~320 chars of pure prose, no T0 triggers
-      const mediumProse = 'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(3);
+      const mediumProse =
+        'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(
+          3,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System prompt.' }),
         msg({ id: '2', index: 1, role: 'user', content: mediumProse }),
@@ -393,7 +466,10 @@ describe('compress', () => {
     });
 
     it('uses {ids} shape (not {id}) for single-message merge path', () => {
-      const mediumProse = 'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(3);
+      const mediumProse =
+        'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(
+          3,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System.' }),
         msg({ id: '2', index: 1, role: 'user', content: mediumProse }),
@@ -407,10 +483,11 @@ describe('compress', () => {
 
   describe('edge cases', () => {
     it('compresses system role when preserve is empty array', () => {
-      const longSystem = 'You are a helpful assistant who provides detailed and comprehensive responses to all queries. '.repeat(12);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'system', content: longSystem }),
-      ];
+      const longSystem =
+        'You are a helpful assistant who provides detailed and comprehensive responses to all queries. '.repeat(
+          12,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'system', content: longSystem })];
       const result = compress(messages, { preserve: [], recencyWindow: 0 });
       expect(result.compression.messages_compressed).toBe(1);
       expect(result.messages[0].content).toMatch(/^\[summary:/);
@@ -425,10 +502,17 @@ describe('compress', () => {
     });
 
     it('preserves existing metadata alongside _cce_original', () => {
-      const largeProse = 'First sentence about some topic. ' + 'More text follows here. '.repeat(50);
+      const largeProse =
+        'First sentence about some topic. ' + 'More text follows here. '.repeat(50);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System.' }),
-        msg({ id: '2', index: 1, role: 'user', content: largeProse, metadata: { custom: 'value', priority: 1 } }),
+        msg({
+          id: '2',
+          index: 1,
+          role: 'user',
+          content: largeProse,
+          metadata: { custom: 'value', priority: 1 },
+        }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
       const compressed = result.messages[1];
@@ -438,7 +522,9 @@ describe('compress', () => {
     });
 
     it('maintains message order after compression', () => {
-      const longProse = 'General discussion about various topics without special patterns. '.repeat(15);
+      const longProse = 'General discussion about various topics without special patterns. '.repeat(
+        15,
+      );
       const messages: Message[] = [
         msg({ id: 'a', index: 0, role: 'system', content: 'System.' }),
         msg({ id: 'b', index: 1, role: 'user', content: longProse }),
@@ -447,12 +533,14 @@ describe('compress', () => {
         msg({ id: 'e', index: 4, role: 'user', content: 'Thanks' }),
       ];
       const result = compress(messages, { recencyWindow: 0, dedup: false });
-      const ids = result.messages.map(m => m.id);
+      const ids = result.messages.map((m) => m.id);
       expect(ids).toEqual(['a', 'b', 'c', 'd', 'e']);
     });
 
     it('preserves original id and role on compressed messages', () => {
-      const longProse = 'General discussion about various topics without special patterns. '.repeat(15);
+      const longProse = 'General discussion about various topics without special patterns. '.repeat(
+        15,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System.' }),
         msg({ id: '2', index: 1, role: 'assistant', content: longProse }),
@@ -466,7 +554,9 @@ describe('compress', () => {
 
   describe('role-boundary grouping', () => {
     it('does not merge user and assistant messages together', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -478,7 +568,9 @@ describe('compress', () => {
     });
 
     it('merges consecutive same-role messages', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'user', content: prose }),
@@ -492,7 +584,9 @@ describe('compress', () => {
     });
 
     it('each compressed message retains its original role and id', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: 'u1', index: 0, role: 'user', content: prose }),
         msg({ id: 'a1', index: 1, role: 'assistant', content: prose }),
@@ -511,28 +605,36 @@ describe('compress', () => {
 
   describe('recency protection', () => {
     it('preserves last 4 messages by default', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [];
       for (let i = 0; i < 8; i++) {
-        messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }));
+        messages.push(
+          msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }),
+        );
       }
       const result = compress(messages, { dedup: false });
       // Last 4 preserved by recency, first 4 compressible
-      const preserved = result.messages.filter(m => !m.content?.startsWith('[summary:'));
+      const preserved = result.messages.filter((m) => !m.content?.startsWith('[summary:'));
       expect(preserved.length).toBeGreaterThanOrEqual(4);
       // Check that the last 4 original messages are in the result untouched
       for (let i = 4; i < 8; i++) {
-        const found = result.messages.find(m => m.id === `${i}`);
+        const found = result.messages.find((m) => m.id === `${i}`);
         expect(found).toBeDefined();
         expect(found!.content).not.toMatch(/^\[summary:/);
       }
     });
 
     it('respects custom recencyWindow', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [];
       for (let i = 0; i < 6; i++) {
-        messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }));
+        messages.push(
+          msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }),
+        );
       }
       const result = compress(messages, { recencyWindow: 2, dedup: false });
       // Last 2 preserved by recency
@@ -542,7 +644,9 @@ describe('compress', () => {
     });
 
     it('recencyWindow: 0 disables protection', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -554,7 +658,9 @@ describe('compress', () => {
     });
 
     it('window larger than message count preserves all', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: prose }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -567,7 +673,8 @@ describe('compress', () => {
 
   describe('summarize quality', () => {
     it('skips leading filler like "Great."', () => {
-      const text = 'Great. Now I need help with the Express project structure. The team has four developers.';
+      const text =
+        'Great. Now I need help with the Express project structure. The team has four developers.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(5) }),
       ];
@@ -579,9 +686,7 @@ describe('compress', () => {
 
     it('caps at 400 chars when no punctuation', () => {
       const noPunct = 'word '.repeat(200); // 1000 chars, no sentence-ending punctuation
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: noPunct }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: noPunct })];
       const result = compress(messages, { recencyWindow: 0 });
       // The summary text (between [summary: and the suffix) should not exceed 400 chars
       const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
@@ -590,7 +695,8 @@ describe('compress', () => {
     });
 
     it('includes first substantive + last sentence', () => {
-      const text = 'Sure. The database needs three replicas for redundancy. Each replica handles read traffic. The final config uses PostgreSQL.';
+      const text =
+        'Sure. The database needs three replicas for redundancy. Each replica handles read traffic. The final config uses PostgreSQL.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(4) }),
       ];
@@ -601,10 +707,11 @@ describe('compress', () => {
     });
 
     it('falls back to first sentence when all sentences are filler', () => {
-      const text = 'Sure thing. OK then. Thanks for that. Got it. No problem. Will do. Right. Absolutely. '.repeat(3);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'Sure thing. OK then. Thanks for that. Got it. No problem. Will do. Right. Absolutely. '.repeat(
+          3,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toMatch(/^\[summary:/);
@@ -614,8 +721,10 @@ describe('compress', () => {
 
     it('hard caps overall summary at 400 chars', () => {
       // Use non-hex chars to avoid triggering hash_or_sha T0 detection
-      const longSentence = 'Wor '.repeat(50) + 'is the architecture we chose for this particular deployment. ';
-      const text = longSentence + 'The last sentence describes the final outcome of this deployment strategy.';
+      const longSentence =
+        'Wor '.repeat(50) + 'is the architecture we chose for this particular deployment. ';
+      const text =
+        longSentence + 'The last sentence describes the final outcome of this deployment strategy.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(5) }),
       ];
@@ -626,7 +735,8 @@ describe('compress', () => {
     });
 
     it('extracts content from multiple paragraphs', () => {
-      const text = 'The database uses PostgreSQL with three replicas for redundancy.\n\n' +
+      const text =
+        'The database uses PostgreSQL with three replicas for redundancy.\n\n' +
         'However the caching layer is critically important for performance.\n\n' +
         'The final deployment runs on Kubernetes with auto-scaling enabled.';
       const messages: Message[] = [
@@ -639,7 +749,8 @@ describe('compress', () => {
     });
 
     it('weights emphasis words higher', () => {
-      const text = 'The system starts up normally. However the authentication module requires special configuration. The logs show standard output.';
+      const text =
+        'The system starts up normally. However the authentication module requires special configuration. The logs show standard output.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(4) }),
       ];
@@ -650,8 +761,9 @@ describe('compress', () => {
     });
 
     it('budget ceiling at 400 chars', () => {
-      const sentences = Array.from({ length: 20 }, (_, i) =>
-        `Sentence number ${i + 1} provides additional context about the deployment.`
+      const sentences = Array.from(
+        { length: 20 },
+        (_, i) => `Sentence number ${i + 1} provides additional context about the deployment.`,
       ).join(' ');
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: sentences.repeat(3) }),
@@ -663,7 +775,8 @@ describe('compress', () => {
     });
 
     it('weights PASS/FAIL/ERROR status words higher', () => {
-      const text = 'The build completed without issues. FAIL src/auth.test.ts login validation. The logs are clean.';
+      const text =
+        'The build completed without issues. FAIL src/auth.test.ts login validation. The logs are clean.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(4) }),
       ];
@@ -675,7 +788,8 @@ describe('compress', () => {
     it('weights grep-style file:line references higher', () => {
       // Use paragraphs so each becomes its own sentence unit — avoids the
       // sentence splitter breaking on the dot in the filename
-      const text = 'There are some boring results below that have nothing useful in them at all\n\n' +
+      const text =
+        'There are some boring results below that have nothing useful in them at all\n\n' +
         'auth_handler:42: const token = getToken()\n\n' +
         'The output is complete and nothing else matters here at all for now\n\n';
       const messages: Message[] = [
@@ -690,10 +804,11 @@ describe('compress', () => {
 
   describe('entity extraction', () => {
     it('extracts camelCase identifiers', () => {
-      const text = 'We should refactor the getUserProfile function and update fetchData accordingly. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'We should refactor the getUserProfile function and update fetchData accordingly. '.repeat(
+          8,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -703,9 +818,7 @@ describe('compress', () => {
 
     it('extracts snake_case identifiers', () => {
       const text = 'The user_profile table and auth_token column need migration. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -714,10 +827,11 @@ describe('compress', () => {
     });
 
     it('extracts proper nouns (filtered against common starters)', () => {
-      const text = 'Express and TypeScript are used in the project. The team uses Redis for caching. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'Express and TypeScript are used in the project. The team uses Redis for caching. '.repeat(
+          8,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -728,10 +842,11 @@ describe('compress', () => {
     });
 
     it('extracts PascalCase identifiers (TypeScript, WebSocket)', () => {
-      const text = 'We need TypeScript support and WebSocket connections for the JavaScript project. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'We need TypeScript support and WebSocket connections for the JavaScript project. '.repeat(
+          8,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -741,10 +856,9 @@ describe('compress', () => {
     });
 
     it('extracts numbers with context', () => {
-      const text = 'The system handles 5000 requests per batch and allows 3 retries per operation. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'The system handles 5000 requests per batch and allows 3 retries per operation. '.repeat(8);
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -752,10 +866,10 @@ describe('compress', () => {
     });
 
     it('extracts vowelless abbreviations (pnpm, npm, ssh)', () => {
-      const text = 'We use pnpm workspaces and connect via ssh to deploy the grpc service. '.repeat(8);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text = 'We use pnpm workspaces and connect via ssh to deploy the grpc service. '.repeat(
+        8,
+      );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       expect(content).toContain('entities:');
@@ -765,10 +879,11 @@ describe('compress', () => {
     });
 
     it('caps entities at 10', () => {
-      const text = 'Alice Bob Charlie Dave Eve Frank Grace Heidi Ivan Judy Karl Liam Mallory spoke about getUserData fetchItems parseConfig with user_id auth_token db_name cache_key log_level queue_size worker_count and 5 retries and 10 seconds. '.repeat(3);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: text }),
-      ];
+      const text =
+        'Alice Bob Charlie Dave Eve Frank Grace Heidi Ivan Judy Karl Liam Mallory spoke about getUserData fetchItems parseConfig with user_id auth_token db_name cache_key log_level queue_size worker_count and 5 retries and 10 seconds. '.repeat(
+          3,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
       const result = compress(messages, { recencyWindow: 0 });
       const content = result.messages[0].content!;
       const entitiesMatch = content.match(/entities: ([^\]]+)/);
@@ -780,11 +895,12 @@ describe('compress', () => {
 
   describe('code-aware splitting', () => {
     it('code + long prose → code-split compressed', () => {
-      const longProse = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3);
+      const longProse =
+        'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+          3,
+        );
       const content = `${longProse}\n\n\`\`\`typescript\nconst token = await auth.getToken();\nconst session = createSession(token);\n\`\`\`\n\nAfter running this code the session is established and ready to use.`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.compression.messages_compressed).toBe(1);
       const output = result.messages[0].content!;
@@ -796,23 +912,25 @@ describe('compress', () => {
 
     it('code fences preserved verbatim', () => {
       const fence = '```js\nfunction add(a, b) {\n  return a + b;\n}\n```';
-      const prose = 'Here is an explanation of the addition function that takes two parameters and returns their sum. '.repeat(3);
+      const prose =
+        'Here is an explanation of the addition function that takes two parameters and returns their sum. '.repeat(
+          3,
+        );
       const content = `${prose}\n\n${fence}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output).toContain(fence);
     });
 
     it('prose around code is summarized without entities (identifiers already in fences)', () => {
-      const prose = 'The getUserProfile function in the Express middleware needs refactoring to support WebSocket connections. '.repeat(3);
+      const prose =
+        'The getUserProfile function in the Express middleware needs refactoring to support WebSocket connections. '.repeat(
+          3,
+        );
       const fence = '```ts\nconst profile = getUserProfile(req);\n```';
       const content = `${prose}\n\n${fence}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output).toMatch(/\[summary:/);
@@ -822,9 +940,7 @@ describe('compress', () => {
 
     it('code + short prose (< 80 chars) → fully preserved', () => {
       const content = 'Here is the code:\n\n```ts\nconst x = 1;\n```\n\nDone.';
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       expect(result.compression.messages_preserved).toBe(1);
       expect(result.messages[0].content).toBe(content);
@@ -833,13 +949,12 @@ describe('compress', () => {
     it('code-split skipped when summary output would be larger than original prose', () => {
       // Prose just above 80 chars — single sentence that can't be compressed shorter
       // than the [summary: ] wrapper (12 chars overhead)
-      const prose = 'We call getUserProfile and fetchUserData and handleAuthToken in the TypeScript middleware layer.';
+      const prose =
+        'We call getUserProfile and fetchUserData and handleAuthToken in the TypeScript middleware layer.';
       const fence = '```ts\nconst x = getUserProfile(req);\n```';
       const content = `${prose}\n\n${fence}`;
       expect(prose.trim().length).toBeGreaterThanOrEqual(80);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       // Single sentence with identifiers → summarizer keeps it as-is → [summary: ...] wrapper
       // makes it larger → compression skipped, message preserved
@@ -849,12 +964,14 @@ describe('compress', () => {
     });
 
     it('code-split with substantial prose achieves positive savings', () => {
-      const prose = 'The authentication system validates incoming request tokens against the session store and checks expiration timestamps before allowing access to protected resources. '.repeat(4);
-      const fence = '```ts\nconst session = await store.get(token);\nif (!session || session.expired) throw new AuthError();\n```';
+      const prose =
+        'The authentication system validates incoming request tokens against the session store and checks expiration timestamps before allowing access to protected resources. '.repeat(
+          4,
+        );
+      const fence =
+        '```ts\nconst session = await store.get(token);\nif (!session || session.expired) throw new AuthError();\n```';
       const content = `${prose}\n\n${fence}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output.length).toBeLessThan(content.length);
@@ -864,11 +981,12 @@ describe('compress', () => {
     });
 
     it('_cce_original metadata present on code-split messages', () => {
-      const prose = 'This is a detailed explanation of how the system handles authentication tokens and session management. '.repeat(3);
+      const prose =
+        'This is a detailed explanation of how the system handles authentication tokens and session management. '.repeat(
+          3,
+        );
       const content = `${prose}\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
-      const messages: Message[] = [
-        msg({ id: 'cs1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: 'cs1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const meta = result.messages[0].metadata?._cce_original as { ids: string[]; version: number };
       expect(meta).toBeDefined();
@@ -879,11 +997,12 @@ describe('compress', () => {
     it('multiple fences in one message — all preserved', () => {
       const fence1 = '```python\ndef hello():\n    print("hi")\n```';
       const fence2 = '```bash\nnpm install express\n```';
-      const prose = 'First we define the Python function for our greeting handler, then install the Express dependency for the server. '.repeat(2);
+      const prose =
+        'First we define the Python function for our greeting handler, then install the Express dependency for the server. '.repeat(
+          2,
+        );
       const content = `${prose}\n\n${fence1}\n\nThen run the install:\n\n${fence2}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output).toContain(fence1);
@@ -894,11 +1013,12 @@ describe('compress', () => {
 
     it('indented closing backticks are detected as fences', () => {
       const fence = '```bash\n  ollama serve &\n  ollama pull llama3.2\n  ```';
-      const prose = 'Here is how to set up the local inference server for development and testing with the model runner. '.repeat(3);
+      const prose =
+        'Here is how to set up the local inference server for development and testing with the model runner. '.repeat(
+          3,
+        );
       const content = `${prose}\n\n${fence}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output).toContain(fence);
@@ -908,11 +1028,12 @@ describe('compress', () => {
 
     it('indented opening and closing backticks are detected as fences', () => {
       const fence = '   ```bash\n   alembic upgrade head\n   ```';
-      const prose = 'The implementation is complete and all files have been created for the beta registration system. '.repeat(4);
+      const prose =
+        'The implementation is complete and all files have been created for the beta registration system. '.repeat(
+          4,
+        );
       const content = `${prose}\n\n${fence}`;
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'assistant', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'assistant', content })];
       const result = compress(messages, { recencyWindow: 0 });
       const output = result.messages[0].content!;
       expect(output).toContain(fence);
@@ -923,15 +1044,21 @@ describe('compress', () => {
 
   describe('no negative savings', () => {
     it('prose-only compression never exceeds original length', () => {
-      const medium = 'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(3);
-      const large = 'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(10);
+      const medium =
+        'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(
+          3,
+        );
+      const large =
+        'This talks about general topics without any special formatting or patterns that would trigger preservation rules. '.repeat(
+          10,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: medium }),
         msg({ id: '2', index: 1, role: 'assistant', content: large }),
       ];
       const result = compress(messages, { preserve: [], recencyWindow: 0, dedup: false });
       for (const m of result.messages) {
-        const orig = messages.find(o => o.id === m.id)!;
+        const orig = messages.find((o) => o.id === m.id)!;
         expect(m.content!.length).toBeLessThanOrEqual(orig.content!.length);
       }
     });
@@ -939,7 +1066,10 @@ describe('compress', () => {
 
   describe('idempotency', () => {
     it('compress is idempotent — re-compressing output produces identical result', () => {
-      const prose = 'The authentication system validates incoming request tokens against the session store and checks expiration timestamps before allowing access to protected resources. '.repeat(4);
+      const prose =
+        'The authentication system validates incoming request tokens against the session store and checks expiration timestamps before allowing access to protected resources. '.repeat(
+          4,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'system', content: 'System prompt.' }),
         msg({ id: '2', index: 1, role: 'user', content: prose }),
@@ -956,12 +1086,11 @@ describe('compress', () => {
 
   describe('prose-only size guard', () => {
     it('preserves entity-dense short messages where summary would grow', () => {
-      const content = 'Call getUserProfile fetchUserData handleAuthToken validateSession refreshCache parseConfig buildQuery formatResponse logMetrics in the TypeScript codebase.';
+      const content =
+        'Call getUserProfile fetchUserData handleAuthToken validateSession refreshCache parseConfig buildQuery formatResponse logMetrics in the TypeScript codebase.';
       expect(content.length).toBeGreaterThanOrEqual(120);
       expect(content.length).toBeLessThan(300);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content })];
       const result = compress(messages, { preserve: [], recencyWindow: 0 });
       expect(result.compression.messages_preserved).toBe(1);
       expect(result.compression.messages_compressed).toBe(0);
@@ -971,12 +1100,11 @@ describe('compress', () => {
     it('single message preserved when summary wrapper exceeds original length', () => {
       // Single sentence just above 120ch — summarizer keeps the full
       // sentence, and the [summary: ] wrapper (12ch) makes it longer
-      const content = 'Call getUserProfile and fetchUserData and handleAuthToken and validateSession and refreshCache in the TypeScript codebase.';
+      const content =
+        'Call getUserProfile and fetchUserData and handleAuthToken and validateSession and refreshCache in the TypeScript codebase.';
       expect(content.length).toBeGreaterThanOrEqual(120);
       expect(content.length).toBeLessThan(200); // short enough that wrapper overhead matters
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content }),
-      ];
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content })];
       const result = compress(messages, { preserve: [], recencyWindow: 0 });
       expect(result.messages[0].content).toBe(content);
       expect(result.compression.messages_preserved).toBe(1);
@@ -987,7 +1115,8 @@ describe('compress', () => {
   describe('_cce_original normalization', () => {
     it('all compression paths use ids array shape', () => {
       const largeProse = 'First sentence here. ' + 'More text follows here. '.repeat(50);
-      const mediumProse = 'This talks about general topics without any special formatting or patterns. '.repeat(3);
+      const mediumProse =
+        'This talks about general topics without any special formatting or patterns. '.repeat(3);
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: largeProse }),
         msg({ id: '2', index: 1, role: 'assistant', content: mediumProse }),
@@ -1006,8 +1135,13 @@ describe('compress', () => {
 
   describe('verbatim', () => {
     it('contains all and only compressed originals across paths (single, merge, code-split)', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const codeProse = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
+      const codeProse =
+        'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+          3,
+        );
       const codeContent = `${codeProse}\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
       const messages: Message[] = [
         msg({ id: 'sys', index: 0, role: 'system', content: 'System prompt.' }),
@@ -1033,12 +1167,20 @@ describe('compress', () => {
     });
 
     it('Object.keys(verbatim).length === messages_compressed invariant', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const cases: Message[][] = [
         [],
         [msg({ id: '1', index: 0, role: 'user', content: prose })],
-        [msg({ id: 'a', index: 0, role: 'user', content: prose }), msg({ id: 'b', index: 1, role: 'user', content: prose })],
-        [msg({ id: '1', index: 0, role: 'user', content: prose }), msg({ id: '2', index: 1, role: 'assistant', content: prose })],
+        [
+          msg({ id: 'a', index: 0, role: 'user', content: prose }),
+          msg({ id: 'b', index: 1, role: 'user', content: prose }),
+        ],
+        [
+          msg({ id: '1', index: 0, role: 'user', content: prose }),
+          msg({ id: '2', index: 1, role: 'assistant', content: prose }),
+        ],
       ];
       for (const messages of cases) {
         const result = compress(messages, { recencyWindow: 0, dedup: false });
@@ -1049,10 +1191,10 @@ describe('compress', () => {
 
   describe('provenance metadata', () => {
     it('sourceVersion flows into _cce_original.version and compression.original_version', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: prose }),
-      ];
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
       const result = compress(messages, { recencyWindow: 0, sourceVersion: 42 });
       const meta = result.messages[0].metadata?._cce_original as { version: number };
       expect(meta.version).toBe(42);
@@ -1060,10 +1202,10 @@ describe('compress', () => {
     });
 
     it('sourceVersion defaults to 0 when omitted', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const messages: Message[] = [
-        msg({ id: '1', index: 0, role: 'user', content: prose }),
-      ];
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
       const result = compress(messages, { recencyWindow: 0 });
       const meta = result.messages[0].metadata?._cce_original as { version: number };
       expect(meta.version).toBe(0);
@@ -1071,10 +1213,21 @@ describe('compress', () => {
     });
 
     it('generates deterministic summary_id from input ids', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const r1 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
-      const r2 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
-      const r3 = compress([msg({ id: 'b', index: 0, role: 'user', content: prose })], { recencyWindow: 0, dedup: false });
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
+      const r1 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], {
+        recencyWindow: 0,
+        dedup: false,
+      });
+      const r2 = compress([msg({ id: 'a', index: 0, role: 'user', content: prose })], {
+        recencyWindow: 0,
+        dedup: false,
+      });
+      const r3 = compress([msg({ id: 'b', index: 0, role: 'user', content: prose })], {
+        recencyWindow: 0,
+        dedup: false,
+      });
       const m1 = r1.messages[0].metadata?._cce_original as { summary_id: string };
       const m2 = r2.messages[0].metadata?._cce_original as { summary_id: string };
       const m3 = r3.messages[0].metadata?._cce_original as { summary_id: string };
@@ -1084,18 +1237,21 @@ describe('compress', () => {
     });
 
     it('omits parent_ids when source has no prior _cce_original', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
-      const result = compress(
-        [msg({ id: '1', index: 0, role: 'user', content: prose })],
-        { recencyWindow: 0 },
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
       );
+      const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], {
+        recencyWindow: 0,
+      });
       const meta = result.messages[0].metadata?._cce_original as Record<string, unknown>;
       expect(meta.summary_id).toMatch(/^cce_sum_/);
       expect(meta.parent_ids).toBeUndefined();
     });
 
     it('collects parent_ids from previously-compressed source messages', () => {
-      const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
+      const prose = 'This is a long message about general topics that could be compressed. '.repeat(
+        5,
+      );
       const priorSummaryId = 'cce_sum_abc123';
       const messages: Message[] = [
         msg({
@@ -1128,31 +1284,34 @@ describe('compress overload contract', () => {
   const prose = 'This is a long message about general topics that could be compressed. '.repeat(5);
 
   it('returns a plain object (not a Promise) when no summarizer is provided', () => {
-    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], { recencyWindow: 0 });
+    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], {
+      recencyWindow: 0,
+    });
     // If this were a Promise, .messages would be undefined
     expect(result.messages).toBeDefined();
     expect(result).not.toBeInstanceOf(Promise);
   });
 
   it('returns a Promise when a summarizer is provided', () => {
-    const result = compress(
-      [msg({ id: '1', index: 0, role: 'user', content: prose })],
-      { recencyWindow: 0, summarizer: (t) => t.slice(0, 20) },
-    );
+    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], {
+      recencyWindow: 0,
+      summarizer: (t) => t.slice(0, 20),
+    });
     expect(result).toBeInstanceOf(Promise);
   });
 
   it('result without tokenBudget does not have fits or tokenCount', () => {
-    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], { recencyWindow: 0 });
+    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], {
+      recencyWindow: 0,
+    });
     expect(result.fits).toBeUndefined();
     expect(result.tokenCount).toBeUndefined();
   });
 
   it('result with tokenBudget always has fits and tokenCount', () => {
-    const result = compress(
-      [msg({ id: '1', index: 0, role: 'user', content: prose })],
-      { tokenBudget: 10000 },
-    );
+    const result = compress([msg({ id: '1', index: 0, role: 'user', content: prose })], {
+      tokenBudget: 10000,
+    });
     expect(typeof result.fits).toBe('boolean');
     expect(typeof result.tokenCount).toBe('number');
   });
@@ -1162,14 +1321,14 @@ describe('compress overload contract', () => {
 // compress with summarizer (async)
 // ---------------------------------------------------------------------------
 
-const LONG_PROSE = 'This is a long message about general topics that could be compressed. '.repeat(5);
+const LONG_PROSE = 'This is a long message about general topics that could be compressed. '.repeat(
+  5,
+);
 
 describe('compress with summarizer', () => {
   it('uses LLM result when shorter than input', async () => {
     const mockSummarizer = async (text: string) => text.slice(0, 50) + '...';
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const result = await compress(messages, { recencyWindow: 0, summarizer: mockSummarizer });
     expect(result.compression.messages_compressed).toBe(1);
     expect(result.messages[0].content).toMatch(/^\[summary:/);
@@ -1191,19 +1350,17 @@ describe('compress with summarizer', () => {
 
   it('falls back to deterministic when LLM returns longer text', async () => {
     const growingSummarizer = async (text: string) => text + ' EXTRA PADDING THAT MAKES IT LONGER';
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const withLlm = await compress(messages, { recencyWindow: 0, summarizer: growingSummarizer });
     const withoutLlm = compress(messages, { recencyWindow: 0 });
     expect(withLlm.messages).toEqual(withoutLlm.messages);
   });
 
   it('falls back when LLM throws', async () => {
-    const failingSummarizer = async () => { throw new Error('LLM unavailable'); };
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const failingSummarizer = async () => {
+      throw new Error('LLM unavailable');
+    };
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const withLlm = await compress(messages, { recencyWindow: 0, summarizer: failingSummarizer });
     const withoutLlm = compress(messages, { recencyWindow: 0 });
     expect(withLlm.messages).toEqual(withoutLlm.messages);
@@ -1215,7 +1372,11 @@ describe('compress with summarizer', () => {
       msg({ id: 'u1', index: 1, role: 'user', content: LONG_PROSE }),
       msg({ id: 'a1', index: 2, role: 'assistant', content: LONG_PROSE }),
     ];
-    const compressed = await compress(messages, { recencyWindow: 0, dedup: false, summarizer: (t) => t.slice(0, 40) + '...' });
+    const compressed = await compress(messages, {
+      recencyWindow: 0,
+      dedup: false,
+      summarizer: (t) => t.slice(0, 40) + '...',
+    });
     expect(compressed.compression.messages_compressed).toBeGreaterThan(0);
     const expanded = uncompress(compressed.messages, compressed.verbatim);
     expect(expanded.messages).toEqual(messages);
@@ -1224,9 +1385,7 @@ describe('compress with summarizer', () => {
 
   it('works with a synchronous summarizer (non-Promise return)', async () => {
     const syncSummarizer = (text: string) => text.slice(0, 40) + '...';
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const result = await compress(messages, { recencyWindow: 0, summarizer: syncSummarizer });
     expect(result.compression.messages_compressed).toBe(1);
     expect(result.messages[0].content).toMatch(/^\[summary:/);
@@ -1238,7 +1397,10 @@ describe('compress with summarizer', () => {
       calls.push(text);
       return text.slice(0, 50) + '...';
     };
-    const prose = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3);
+    const prose =
+      'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+        3,
+      );
     const code = '```ts\nconst x = 1;\n```';
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'assistant', content: `${prose}\n\n${code}` }),
@@ -1251,9 +1413,7 @@ describe('compress with summarizer', () => {
 
   it('falls back to deterministic when summarizer returns empty string', async () => {
     const emptySummarizer = async () => '';
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const withEmpty = await compress(messages, { recencyWindow: 0, summarizer: emptySummarizer });
     const withoutLlm = compress(messages, { recencyWindow: 0 });
     expect(withEmpty.messages).toEqual(withoutLlm.messages);
@@ -1265,7 +1425,11 @@ describe('compress with summarizer', () => {
       msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
       msg({ id: '2', index: 1, role: 'user', content: LONG_PROSE }),
     ];
-    const result = await compress(messages, { recencyWindow: 0, dedup: false, summarizer: emptySummarizer });
+    const result = await compress(messages, {
+      recencyWindow: 0,
+      dedup: false,
+      summarizer: emptySummarizer,
+    });
     for (const m of result.messages) {
       expect(typeof m.content === 'string' ? m.content.length : 0).toBeGreaterThan(0);
     }
@@ -1273,7 +1437,10 @@ describe('compress with summarizer', () => {
 
   it('code-split path: falls back to deterministic when summarizer returns empty', async () => {
     const emptySummarizer = async () => '';
-    const prose = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3);
+    const prose =
+      'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+        3,
+      );
     const code = '```ts\nconst x = 1;\n```';
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'assistant', content: `${prose}\n\n${code}` }),
@@ -1285,10 +1452,11 @@ describe('compress with summarizer', () => {
 
   it('falls back to deterministic when summarizer returns equal-length text', async () => {
     const sameLengthSummarizer = async (text: string) => 'x'.repeat(text.length);
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
-    const withSame = await compress(messages, { recencyWindow: 0, summarizer: sameLengthSummarizer });
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
+    const withSame = await compress(messages, {
+      recencyWindow: 0,
+      summarizer: sameLengthSummarizer,
+    });
     const withoutLlm = compress(messages, { recencyWindow: 0 });
     expect(withSame.messages).toEqual(withoutLlm.messages);
   });
@@ -1296,9 +1464,7 @@ describe('compress with summarizer', () => {
   it('falls back when summarizer returns text exactly one char shorter (boundary)', async () => {
     // length < text.length is true, length > 0 is true → should use the LLM result
     const oneCharShorter = async (text: string) => 'x'.repeat(text.length - 1);
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: LONG_PROSE })];
     const result = await compress(messages, { recencyWindow: 0, summarizer: oneCharShorter });
     // The summarizer result IS shorter, so it should be used (not fall back to deterministic)
     const deterministic = compress(messages, { recencyWindow: 0 });
@@ -1324,10 +1490,15 @@ describe('compress with tokenBudget', () => {
   });
 
   it('reduces recencyWindow until under budget', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [];
     for (let i = 0; i < 10; i++) {
-      messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }));
+      messages.push(
+        msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }),
+      );
     }
     const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m), 0);
     const result = compress(messages, { tokenBudget: Math.floor(totalTokens / 2), dedup: false });
@@ -1337,7 +1508,10 @@ describe('compress with tokenBudget', () => {
   });
 
   it('returns fits: false with best effort for impossible budgets', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'user', content: prose }),
       msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -1349,7 +1523,10 @@ describe('compress with tokenBudget', () => {
   });
 
   it('preserves round-trip integrity', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [
       msg({ id: 'sys', index: 0, role: 'system', content: 'System prompt.' }),
       msg({ id: 'u1', index: 1, role: 'user', content: prose }),
@@ -1363,10 +1540,15 @@ describe('compress with tokenBudget', () => {
   });
 
   it('respects minRecencyWindow — last N messages stay uncompressed', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [];
     for (let i = 0; i < 10; i++) {
-      messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }));
+      messages.push(
+        msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }),
+      );
     }
     const result = compress(messages, { tokenBudget: 1, minRecencyWindow: 5, dedup: false });
     // Binary search cannot go below rw=5, so last 5 messages must be uncompressed
@@ -1380,7 +1562,10 @@ describe('compress with tokenBudget', () => {
   });
 
   it('tokenCount in result is accurate', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'user', content: prose }),
       msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -1388,15 +1573,19 @@ describe('compress with tokenBudget', () => {
     ];
     const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m), 0);
     const result = compress(messages, { tokenBudget: Math.floor(totalTokens / 2), dedup: false });
-    const actualTokens = result.messages.reduce((sum: number, m: Message) => sum + estimateTokens(m), 0);
+    const actualTokens = result.messages.reduce(
+      (sum: number, m: Message) => sum + estimateTokens(m),
+      0,
+    );
     expect(result.tokenCount).toBe(actualTokens);
   });
 
   it('handles single message', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const result = compress(messages, { tokenBudget: 10 });
     expect(result.fits).toBe(false);
     expect(result.tokenCount).toBeGreaterThan(0);
@@ -1410,33 +1599,47 @@ describe('compress with tokenBudget', () => {
   });
 
   it('tokenBudget with summarizer achieves tighter fit', async () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [];
     for (let i = 0; i < 8; i++) {
-      messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }));
+      messages.push(
+        msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: prose }),
+      );
     }
     const aggressiveSummarizer = async (text: string) => text.slice(0, 30) + '...';
     const syncResult = compress(messages, { tokenBudget: 200, dedup: false });
-    const asyncResult = await compress(messages, { tokenBudget: 200, dedup: false, summarizer: aggressiveSummarizer });
+    const asyncResult = await compress(messages, {
+      tokenBudget: 200,
+      dedup: false,
+      summarizer: aggressiveSummarizer,
+    });
     expect(asyncResult.tokenCount!).toBeLessThanOrEqual(syncResult.tokenCount!);
   });
 
   it('tokenBudget with summarizer sets fits: true when under budget', async () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: 'Short.' }),
-    ];
-    const result = await compress(messages, { tokenBudget: 10000, summarizer: (t) => t.slice(0, 20) });
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: 'Short.' })];
+    const result = await compress(messages, {
+      tokenBudget: 10000,
+      summarizer: (t) => t.slice(0, 20),
+    });
     expect(result.fits).toBe(true);
     expect(typeof result.tokenCount).toBe('number');
     expect(result.tokenCount).toBeLessThanOrEqual(10000);
   });
 
   it('tokenBudget with summarizer sets fits: false for impossible budget', async () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
-    const result = await compress(messages, { tokenBudget: 1, summarizer: (t) => t.slice(0, 30) + '...' });
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
+    const result = await compress(messages, {
+      tokenBudget: 1,
+      summarizer: (t) => t.slice(0, 30) + '...',
+    });
     expect(result.fits).toBe(false);
     expect(result.tokenCount).toBeGreaterThan(1);
   });
@@ -1447,20 +1650,30 @@ describe('compress with tokenBudget', () => {
       msg({ id: '2', index: 1, role: 'assistant', content: 'Another short one.' }),
     ];
     const result = compress(messages, { tokenBudget: 10000 });
-    const actualTokens = result.messages.reduce((sum: number, m: Message) => sum + estimateTokens(m), 0);
+    const actualTokens = result.messages.reduce(
+      (sum: number, m: Message) => sum + estimateTokens(m),
+      0,
+    );
     expect(result.tokenCount).toBe(actualTokens);
     expect(result.compression.messages_compressed).toBe(0);
   });
 
   it('tokenBudget with summarizer round-trip integrity', async () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        10,
+      );
     const messages: Message[] = [
       msg({ id: 'sys', index: 0, role: 'system', content: 'System prompt.' }),
       msg({ id: 'u1', index: 1, role: 'user', content: prose }),
       msg({ id: 'a1', index: 2, role: 'assistant', content: prose }),
     ];
     const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m), 0);
-    const result = await compress(messages, { tokenBudget: Math.floor(totalTokens / 2), dedup: false, summarizer: (t) => t.slice(0, 40) + '...' });
+    const result = await compress(messages, {
+      tokenBudget: Math.floor(totalTokens / 2),
+      dedup: false,
+      summarizer: (t) => t.slice(0, 40) + '...',
+    });
     const expanded = uncompress(result.messages, result.verbatim);
     expect(expanded.messages).toEqual(messages);
     expect(expanded.missing_ids).toEqual([]);
@@ -1472,7 +1685,10 @@ describe('compress with tokenBudget', () => {
 // ---------------------------------------------------------------------------
 
 describe('edge case boundaries', () => {
-  const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+  const prose =
+    'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+      10,
+    );
 
   it('tokenBudget: 0 — everything exceeds budget, result has fits: false', () => {
     const messages: Message[] = [
@@ -1497,11 +1713,14 @@ describe('edge case boundaries', () => {
   });
 
   it('summarizer returning text longer than input — falls back to deterministic', async () => {
-    const growingSummarizer = async (text: string) => text + ' '.repeat(500) + 'MUCH LONGER PADDING';
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
-    const withGrowing = await compress(messages, { recencyWindow: 0, dedup: false, summarizer: growingSummarizer });
+    const growingSummarizer = async (text: string) =>
+      text + ' '.repeat(500) + 'MUCH LONGER PADDING';
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
+    const withGrowing = await compress(messages, {
+      recencyWindow: 0,
+      dedup: false,
+      summarizer: growingSummarizer,
+    });
     const deterministic = compress(messages, { recencyWindow: 0, dedup: false });
     expect(withGrowing.messages).toEqual(deterministic.messages);
   });
@@ -1538,9 +1757,7 @@ describe('structured tool output summarization', () => {
       'src/routes.ts:35: router.get("/profile", guard)',
       'src/config.ts:5: export const JWT_SECRET = env.SECRET',
     ].join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: grepOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: grepOutput })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     expect(content).toMatch(/^\[summary:/);
@@ -1569,9 +1786,7 @@ describe('structured tool output summarization', () => {
       'Tests completed with 1 failed and 11 passed out of 12 total.',
       'Duration was 4.2 seconds for the full suite.',
     ].join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: testOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: testOutput })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     expect(content).toMatch(/^\[summary:/);
@@ -1592,9 +1807,7 @@ describe('structured tool output summarization', () => {
       'src/config.ts:5: export const secret from env.',
       'PASS type checking completed without issues.',
     ].join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: mixed }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: mixed })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     expect(content).toMatch(/^\[summary:/);
@@ -1613,9 +1826,7 @@ describe('structured tool output summarization', () => {
       '  - migrate: run database migrations',
       '  - seed: populate test data',
     ].join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: listOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: listOutput })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     expect(content).toMatch(/^\[summary:/);
@@ -1623,10 +1834,11 @@ describe('structured tool output summarization', () => {
   });
 
   it('plain prose is NOT detected as structured', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no special formatting or code. '.repeat(5);
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no special formatting or code. '.repeat(
+        5,
+      );
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     // Should use normal prose summarizer (entities suffix), not structured
@@ -1635,39 +1847,32 @@ describe('structured tool output summarization', () => {
   });
 
   it('fewer than 6 lines falls back to prose summarizer', () => {
-    const shortStructured = [
-      'PASS src/test.ts',
-      'Tests: 1 passed',
-      'Duration: 0.5s',
-    ].join('\n');
-    const prose = 'This is additional context that is long enough to exceed the one hundred twenty character threshold for compression eligibility. Extra padding here to make it work properly.';
+    const shortStructured = ['PASS src/test.ts', 'Tests: 1 passed', 'Duration: 0.5s'].join('\n');
+    const prose =
+      'This is additional context that is long enough to exceed the one hundred twenty character threshold for compression eligibility. Extra padding here to make it work properly.';
     const content = prose + '\n' + shortStructured;
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content })];
     const result = compress(messages, { recencyWindow: 0 });
     // Should not crash — may be preserved (short) or prose-summarized
     expect(result.messages[0].content).toBeDefined();
   });
 
   it('structured summary is shorter than original', () => {
-    const grepOutput = Array.from({ length: 20 }, (_, i) =>
-      `src/module${i}.ts:${i * 10 + 1}: export function handler${i}()`
+    const grepOutput = Array.from(
+      { length: 20 },
+      (_, i) => `src/module${i}.ts:${i * 10 + 1}: export function handler${i}()`,
     ).join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: grepOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: grepOutput })];
     const result = compress(messages, { recencyWindow: 0 });
     expect(result.messages[0].content!.length).toBeLessThan(grepOutput.length);
   });
 
   it('many files shows count with +N more', () => {
-    const grepOutput = Array.from({ length: 10 }, (_, i) =>
-      `src/file${i}.ts:1: export const x${i} = ${i}`
+    const grepOutput = Array.from(
+      { length: 10 },
+      (_, i) => `src/file${i}.ts:1: export const x${i} = ${i}`,
     ).join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: grepOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: grepOutput })];
     const result = compress(messages, { recencyWindow: 0 });
     const content = result.messages[0].content!;
     expect(content).toContain('+');
@@ -1680,12 +1885,11 @@ describe('structured tool output summarization', () => {
       calls.push(text);
       return text.slice(0, 50) + '...';
     };
-    const grepOutput = Array.from({ length: 8 }, (_, i) =>
-      `src/mod${i}.ts:${i + 1}: export function fn${i}()`
+    const grepOutput = Array.from(
+      { length: 8 },
+      (_, i) => `src/mod${i}.ts:${i + 1}: export function fn${i}()`,
     ).join('\n');
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'tool', content: grepOutput }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'tool', content: grepOutput })];
     await compress(messages, { recencyWindow: 0, summarizer: trackingSummarizer });
     // Structured output should bypass the LLM summarizer
     expect(calls.length).toBe(0);
@@ -1693,18 +1897,25 @@ describe('structured tool output summarization', () => {
 
   describe('input validation', () => {
     it('throws on non-array messages', () => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       expect(() => compress(null as any)).toThrow('messages must be an array');
       expect(() => compress('hello' as any)).toThrow('messages must be an array');
       expect(() => compress(42 as any)).toThrow('messages must be an array');
+      /* eslint-enable @typescript-eslint/no-explicit-any */
     });
 
     it('throws on null/non-object message entries', () => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       expect(() => compress([null as any])).toThrow('messages[0] must be an object');
       expect(() => compress([42 as any])).toThrow('messages[0] must be an object');
+      /* eslint-enable @typescript-eslint/no-explicit-any */
     });
 
     it('throws on message missing id', () => {
-      expect(() => compress([{ role: 'user', content: 'hi' } as any])).toThrow('missing required field "id"');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(() => compress([{ role: 'user', content: 'hi' } as any])).toThrow(
+        'missing required field "id"',
+      );
     });
 
     it('accepts valid empty array', () => {
@@ -1732,7 +1943,10 @@ describe('structured tool output summarization', () => {
 
   describe('merged message preserves extra fields', () => {
     it('function role with name field survives merge compression', () => {
-      const prose = 'This is a long function result about general topics that could be compressed since it has no verbatim content. '.repeat(5);
+      const prose =
+        'This is a long function result about general topics that could be compressed since it has no verbatim content. '.repeat(
+          5,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'function', content: prose, name: 'get_weather' }),
         msg({ id: '2', index: 1, role: 'function', content: prose, name: 'get_weather' }),
@@ -1741,11 +1955,15 @@ describe('structured tool output summarization', () => {
       // Merged into 1 message — should carry the name field from sourceMsgs[0]
       expect(result.messages.length).toBe(1);
       expect(result.messages[0].content).toContain('2 messages merged');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((result.messages[0] as any).name).toBe('get_weather');
     });
 
     it('extra fields preserved on single compressed message', () => {
-      const prose = 'This is a long function result about general topics that could be compressed since it has no verbatim content. '.repeat(5);
+      const prose =
+        'This is a long function result about general topics that could be compressed since it has no verbatim content. '.repeat(
+          5,
+        );
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'function', content: prose, name: 'search_docs' }),
       ];
@@ -1758,8 +1976,12 @@ describe('structured tool output summarization', () => {
 
   describe('dedup does not inflate messages_compressed', () => {
     it('messages_compressed excludes deduped messages', () => {
-      const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(5);
-      const LONG = 'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
+      const prose =
+        'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+          5,
+        );
+      const LONG =
+        'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, content: LONG }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -1776,7 +1998,8 @@ describe('structured tool output summarization', () => {
     });
 
     it('exact duplicates: compressed + deduped + preserved == total', () => {
-      const LONG = 'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
+      const LONG =
+        'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, content: LONG }),
         msg({ id: '2', index: 1, content: LONG }),
@@ -1791,17 +2014,27 @@ describe('structured tool output summarization', () => {
     });
 
     it('Object.keys(verbatim) covers all compressed and deduped messages', () => {
-      const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(5);
-      const LONG = 'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
+      const prose =
+        'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+          5,
+        );
+      const LONG =
+        'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
       const messages: Message[] = [
         msg({ id: '1', index: 0, content: LONG }),
         msg({ id: '2', index: 1, role: 'assistant', content: prose }),
         msg({ id: '3', index: 2, content: LONG }),
       ];
       const result = compress(messages, { recencyWindow: 0, dedup: true });
-      const { messages_compressed, messages_deduped = 0, messages_fuzzy_deduped = 0 } = result.compression;
+      const {
+        messages_compressed,
+        messages_deduped = 0,
+        messages_fuzzy_deduped = 0,
+      } = result.compression;
       // Verbatim map holds originals for both compressed and deduped messages
-      expect(Object.keys(result.verbatim).length).toBe(messages_compressed + messages_deduped + messages_fuzzy_deduped);
+      expect(Object.keys(result.verbatim).length).toBe(
+        messages_compressed + messages_deduped + messages_fuzzy_deduped,
+      );
     });
   });
 });
@@ -1811,21 +2044,20 @@ describe('structured tool output summarization', () => {
 // ---------------------------------------------------------------------------
 
 describe('compress with embedSummaryId', () => {
-  const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(5);
+  const prose =
+    'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+      5,
+    );
 
   it('embeds summary_id in content when enabled', () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const result = compress(messages, { recencyWindow: 0, embedSummaryId: true });
     expect(result.compression.messages_compressed).toBe(1);
     expect(result.messages[0].content).toMatch(/^\[summary#cce_sum_/);
   });
 
   it('does not embed summary_id by default', () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const result = compress(messages, { recencyWindow: 0 });
     expect(result.compression.messages_compressed).toBe(1);
     expect(result.messages[0].content).toMatch(/^\[summary: /);
@@ -1833,9 +2065,7 @@ describe('compress with embedSummaryId', () => {
   });
 
   it('embedded ID matches metadata summary_id', () => {
-    const messages: Message[] = [
-      msg({ id: 'test-id', index: 0, role: 'user', content: prose }),
-    ];
+    const messages: Message[] = [msg({ id: 'test-id', index: 0, role: 'user', content: prose })];
     const result = compress(messages, { recencyWindow: 0, embedSummaryId: true });
     const meta = result.messages[0].metadata?._cce_original as { summary_id: string };
     expect(meta.summary_id).toMatch(/^cce_sum_/);
@@ -1843,9 +2073,7 @@ describe('compress with embedSummaryId', () => {
   });
 
   it('re-compress of [summary# messages treats them as already-compressed', () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const first = compress(messages, { recencyWindow: 0, embedSummaryId: true });
     expect(first.messages[0].content).toMatch(/^\[summary#/);
 
@@ -1868,9 +2096,7 @@ describe('compress with embedSummaryId', () => {
   });
 
   it('works with async summarizer', async () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: prose }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: prose })];
     const result = await compress(messages, {
       recencyWindow: 0,
       embedSummaryId: true,
@@ -1887,8 +2113,17 @@ describe('compress with embedSummaryId', () => {
 describe('compress with forceConverge', () => {
   // Large JSON content gets preserved by normal compression (valid JSON check)
   // but is eligible for force-truncation since it's > 512 chars and not a system role
-  const bigJson = JSON.stringify({ items: Array.from({ length: 50 }, (_, i) => ({ id: i, name: `item_${i}`, desc: `Description for item number ${i} which adds length` })) });
-  const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(10);
+  const bigJson = JSON.stringify({
+    items: Array.from({ length: 50 }, (_, i) => ({
+      id: i,
+      name: `item_${i}`,
+      desc: `Description for item number ${i} which adds length`,
+    })),
+  });
+  const prose =
+    'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+      10,
+    );
 
   it('guarantees tokenCount drops when preserved messages are force-truncated', () => {
     const messages: Message[] = [
@@ -1918,9 +2153,16 @@ describe('compress with forceConverge', () => {
   it('respects minRecencyWindow — recency messages NOT truncated', () => {
     const messages: Message[] = [];
     for (let i = 0; i < 6; i++) {
-      messages.push(msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: bigJson }));
+      messages.push(
+        msg({ id: `${i}`, index: i, role: i % 2 === 0 ? 'user' : 'assistant', content: bigJson }),
+      );
     }
-    const result = compress(messages, { tokenBudget: 1, minRecencyWindow: 3, dedup: false, forceConverge: true });
+    const result = compress(messages, {
+      tokenBudget: 1,
+      minRecencyWindow: 3,
+      dedup: false,
+      forceConverge: true,
+    });
     // Last 3 messages are in the recency window and must not be truncated
     const last3 = result.messages.slice(-3);
     for (const m of last3) {
@@ -1955,15 +2197,22 @@ describe('compress with forceConverge', () => {
       msg({ id: '1', index: 1, role: 'assistant', content: bigJson }),
       msg({ id: '2', index: 2, role: 'user', content: prose }),
     ];
-    const without = await compress(messages, { tokenBudget: 1, dedup: false, summarizer: (t) => t.slice(0, 30) + '...' });
-    const withForce = await compress(messages, { tokenBudget: 1, dedup: false, forceConverge: true, summarizer: (t) => t.slice(0, 30) + '...' });
+    const without = await compress(messages, {
+      tokenBudget: 1,
+      dedup: false,
+      summarizer: (t) => t.slice(0, 30) + '...',
+    });
+    const withForce = await compress(messages, {
+      tokenBudget: 1,
+      dedup: false,
+      forceConverge: true,
+      summarizer: (t) => t.slice(0, 30) + '...',
+    });
     expect(withForce.tokenCount!).toBeLessThan(without.tokenCount!);
   });
 
   it('no-op when already under budget', () => {
-    const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'user', content: 'Short.' }),
-    ];
+    const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: 'Short.' })];
     const result = compress(messages, { tokenBudget: 10000, forceConverge: true });
     expect(result.fits).toBe(true);
     expect(result.messages[0].content).toBe('Short.');
@@ -1976,7 +2225,9 @@ describe('compress with forceConverge', () => {
     ];
     const first = compress(messages, { tokenBudget: 1, dedup: false, forceConverge: true });
     // Some messages should have been force-truncated
-    const hasTruncated = first.messages.some(m => typeof m.content === 'string' && m.content.startsWith('[truncated'));
+    const hasTruncated = first.messages.some(
+      (m) => typeof m.content === 'string' && m.content.startsWith('[truncated'),
+    );
     expect(hasTruncated).toBe(true);
 
     // Re-compress: truncated messages should be preserved, not re-summarized
@@ -1994,7 +2245,10 @@ describe('compress with forceConverge', () => {
   it('truncates already-compressed messages that exceed 512 chars', () => {
     // Code-split produces content > 512 chars: [summary: ...] + code fences
     const longFence = '```ts\n' + 'const x = 1;\n'.repeat(50) + '```';
-    const longProse = 'This is a detailed explanation of the authentication system design and how it integrates with session management. '.repeat(4);
+    const longProse =
+      'This is a detailed explanation of the authentication system design and how it integrates with session management. '.repeat(
+        4,
+      );
     const codeContent = `${longProse}\n\n${longFence}`;
     const messages: Message[] = [
       msg({ id: 'cs1', index: 0, role: 'assistant', content: codeContent }),
@@ -2007,7 +2261,11 @@ describe('compress with forceConverge', () => {
     expect(initial.messages[0].metadata?._cce_original).toBeDefined();
     if (csSummary.length > 512) {
       // Now compress with impossible budget + forceConverge
-      const result = compress(initial.messages, { tokenBudget: 1, dedup: false, forceConverge: true });
+      const result = compress(initial.messages, {
+        tokenBudget: 1,
+        dedup: false,
+        forceConverge: true,
+      });
       const truncMsg = result.messages[0];
       expect(truncMsg.content).toMatch(/^\[truncated/);
       // Original _cce_original should survive (not overwritten)
@@ -2021,7 +2279,8 @@ describe('compress with forceConverge', () => {
 // ---------------------------------------------------------------------------
 
 describe('dedup tag includes keep-target ID', () => {
-  const LONG = 'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
+  const LONG =
+    'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
 
   it('exact dup tag contains the keep-target message ID', () => {
     const messages: Message[] = [
@@ -2052,7 +2311,10 @@ describe('dedup tag includes keep-target ID', () => {
 // ---------------------------------------------------------------------------
 
 describe('compress with custom tokenCounter', () => {
-  const LONG = 'This is a long message that exceeds the compression threshold and contains enough prose to compress. '.repeat(5);
+  const LONG =
+    'This is a long message that exceeds the compression threshold and contains enough prose to compress. '.repeat(
+      5,
+    );
 
   it('tokenCount reflects custom counter with fixed value', () => {
     const messages: Message[] = [
@@ -2087,7 +2349,9 @@ describe('compress with custom tokenCounter', () => {
 
   it('forceConverge uses custom counter for delta math', () => {
     // JSON content > 512 chars is preserved by classifier but eligible for forceConverge truncation
-    const bigJson = JSON.stringify({ data: Array.from({ length: 50 }, (_, i) => ({ id: i, value: `item_${i}` })) });
+    const bigJson = JSON.stringify({
+      data: Array.from({ length: 50 }, (_, i) => ({ id: i, value: `item_${i}` })),
+    });
     const messages: Message[] = [
       msg({ id: '0', index: 0, role: 'user', content: bigJson }),
       msg({ id: '1', index: 1, role: 'assistant', content: bigJson }),
@@ -2095,7 +2359,7 @@ describe('compress with custom tokenCounter', () => {
       msg({ id: '3', index: 3, role: 'assistant', content: 'recent message' }),
     ];
     // Heavy counter: 1 token per char
-    const heavyCounter = (m: Message) => typeof m.content === 'string' ? m.content.length : 0;
+    const heavyCounter = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
     const without = compress(messages, {
       tokenBudget: 1,
       tokenCounter: heavyCounter,

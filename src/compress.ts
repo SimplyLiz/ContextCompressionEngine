@@ -31,9 +31,11 @@ function collectParentIds(msgs: Message[]): string[] {
   return parents;
 }
 
-const FILLER_RE = /^(?:great|sure|ok|okay|thanks|thank you|got it|right|yes|no|alright|absolutely|exactly|indeed|cool|nice|perfect|wonderful|awesome|fantastic|sounds good|makes sense|i see|i understand|understood|noted|certainly|of course|no problem|no worries|will do|let me|i'll|i can|i would|well|so|now)[,.!?\s]/i;
+const FILLER_RE =
+  /^(?:great|sure|ok|okay|thanks|thank you|got it|right|yes|no|alright|absolutely|exactly|indeed|cool|nice|perfect|wonderful|awesome|fantastic|sounds good|makes sense|i see|i understand|understood|noted|certainly|of course|no problem|no worries|will do|let me|i'll|i can|i would|well|so|now)[,.!?\s]/i;
 
-const EMPHASIS_RE = /\b(?:importantly|note that|however|critical|crucial|essential|significant|notably|key point|in particular|specifically|must|require[ds]?|never|always)\b/i;
+const EMPHASIS_RE =
+  /\b(?:importantly|note that|however|critical|crucial|essential|significant|notably|key point|in particular|specifically|must|require[ds]?|never|always)\b/i;
 
 function scoreSentence(sentence: string): number {
   let score = 0;
@@ -46,7 +48,12 @@ function scoreSentence(sentence: string): number {
   // Emphasis phrases
   if (EMPHASIS_RE.test(sentence)) score += 4;
   // Numbers with units
-  score += (sentence.match(/\b\d+(?:\.\d+)?\s*(?:seconds?|ms|MB|GB|TB|KB|retries?|workers?|threads?|nodes?|replicas?|requests?|%)\b/gi) ?? []).length * 2;
+  score +=
+    (
+      sentence.match(
+        /\b\d+(?:\.\d+)?\s*(?:seconds?|ms|MB|GB|TB|KB|retries?|workers?|threads?|nodes?|replicas?|requests?|%)\b/gi,
+      ) ?? []
+    ).length * 2;
   // Vowelless abbreviations (3+ consonants)
   score += (sentence.match(/\b[bcdfghjklmnpqrstvwxz]{3,}\b/gi) ?? []).length * 2;
   // PASS/FAIL/ERROR/WARNING/WARN status words
@@ -61,7 +68,7 @@ function scoreSentence(sentence: string): number {
 }
 
 function summarize(text: string, maxBudget?: number): string {
-  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+  const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
 
   type Scored = { text: string; score: number; origIdx: number; primary: boolean };
   const allSentences: Scored[] = [];
@@ -72,7 +79,12 @@ function summarize(text: string, maxBudget?: number): string {
     if (!sentences || sentences.length === 0) {
       const trimmed = para.trim();
       if (trimmed.length > 0) {
-        allSentences.push({ text: trimmed, score: scoreSentence(trimmed), origIdx: globalIdx++, primary: true });
+        allSentences.push({
+          text: trimmed,
+          score: scoreSentence(trimmed),
+          origIdx: globalIdx++,
+          primary: true,
+        });
       }
       continue;
     }
@@ -106,8 +118,12 @@ function summarize(text: string, maxBudget?: number): string {
   const seenText = new Set<string>();
   let usedChars = 0;
 
-  const primaryByScore = allSentences.filter(s => s.primary && s.score >= 0).sort((a, b) => b.score - a.score);
-  const secondaryByScore = allSentences.filter(s => !s.primary && s.score >= 0).sort((a, b) => b.score - a.score);
+  const primaryByScore = allSentences
+    .filter((s) => s.primary && s.score >= 0)
+    .sort((a, b) => b.score - a.score);
+  const secondaryByScore = allSentences
+    .filter((s) => !s.primary && s.score >= 0)
+    .sort((a, b) => b.score - a.score);
 
   for (const pool of [primaryByScore, secondaryByScore]) {
     for (const entry of pool) {
@@ -131,7 +147,7 @@ function summarize(text: string, maxBudget?: number): string {
   // Re-sort by original position to preserve reading order
   selected.sort((a, b) => a.origIdx - b.origIdx);
 
-  const result = selected.map(s => s.text).join(' ... ');
+  const result = selected.map((s) => s.text).join(' ... ');
   if (result.length > budget) {
     return result.slice(0, budget - 3) + '...';
   }
@@ -142,11 +158,12 @@ function summarize(text: string, maxBudget?: number): string {
 // Structured tool output detection and summarization
 // ---------------------------------------------------------------------------
 
-const STRUCTURAL_RE = /^(?:\S+\.\w+:\d+:|[ \t]+[-•*]|[ \t]*\w[\w ./-]*:\s|(?:PASS|FAIL|ERROR|WARNING|WARN|OK|SKIP)\b)/;
+const STRUCTURAL_RE =
+  /^(?:\S+\.\w+:\d+:|[ \t]+[-•*]|[ \t]*\w[\w ./-]*:\s|(?:PASS|FAIL|ERROR|WARNING|WARN|OK|SKIP)\b)/;
 
 function isStructuredOutput(text: string): boolean {
   const lines = text.split('\n');
-  const nonEmpty = lines.filter(l => l.trim().length > 0);
+  const nonEmpty = lines.filter((l) => l.trim().length > 0);
   if (nonEmpty.length < 6) return false;
 
   const newlineDensity = (text.match(/\n/g) ?? []).length / text.length;
@@ -161,7 +178,7 @@ function isStructuredOutput(text: string): boolean {
 
 function summarizeStructured(text: string, maxBudget: number): string {
   const lines = text.split('\n');
-  const nonEmpty = lines.filter(l => l.trim().length > 0);
+  const nonEmpty = lines.filter((l) => l.trim().length > 0);
 
   // Extract file paths from grep-style output (file.ext:line:)
   const filePaths = new Set<string>();
@@ -210,7 +227,10 @@ function summarizeStructured(text: string, maxBudget: number): string {
   }
 
   // Fallback: head/tail with line count
-  const head = nonEmpty.slice(0, 3).map(l => l.trim()).join(' | ');
+  const head = nonEmpty
+    .slice(0, 3)
+    .map((l) => l.trim())
+    .join(' | ');
   const tail = nonEmpty[nonEmpty.length - 1].trim();
   let result = `${head} | ... | ${tail} (${nonEmpty.length} lines)`;
   if (result.length > maxBudget) {
@@ -220,17 +240,94 @@ function summarizeStructured(text: string, maxBudget: number): string {
 }
 
 const COMMON_STARTERS = new Set([
-  'The', 'This', 'That', 'These', 'Those', 'When', 'Where', 'What',
-  'Which', 'Who', 'How', 'Why', 'Here', 'There', 'Now', 'Then',
-  'But', 'And', 'Or', 'So', 'If', 'It', 'Its', 'My', 'Your',
-  'His', 'Her', 'Our', 'They', 'We', 'You', 'He', 'She', 'In',
-  'On', 'At', 'To', 'For', 'With', 'From', 'As', 'By', 'An',
-  'Each', 'Every', 'Some', 'All', 'Most', 'Many', 'Much', 'Any',
-  'No', 'Not', 'Also', 'Just', 'Only', 'Even', 'Still', 'Yet',
-  'Let', 'See', 'Note', 'Yes', 'Sure', 'Great', 'Thanks', 'Well',
-  'First', 'Second', 'Third', 'Next', 'Last', 'Finally', 'However',
-  'After', 'Before', 'Since', 'Once', 'While', 'Although', 'Because',
-  'Unless', 'Until', 'About', 'Over', 'Under', 'Between', 'Into',
+  'The',
+  'This',
+  'That',
+  'These',
+  'Those',
+  'When',
+  'Where',
+  'What',
+  'Which',
+  'Who',
+  'How',
+  'Why',
+  'Here',
+  'There',
+  'Now',
+  'Then',
+  'But',
+  'And',
+  'Or',
+  'So',
+  'If',
+  'It',
+  'Its',
+  'My',
+  'Your',
+  'His',
+  'Her',
+  'Our',
+  'They',
+  'We',
+  'You',
+  'He',
+  'She',
+  'In',
+  'On',
+  'At',
+  'To',
+  'For',
+  'With',
+  'From',
+  'As',
+  'By',
+  'An',
+  'Each',
+  'Every',
+  'Some',
+  'All',
+  'Most',
+  'Many',
+  'Much',
+  'Any',
+  'No',
+  'Not',
+  'Also',
+  'Just',
+  'Only',
+  'Even',
+  'Still',
+  'Yet',
+  'Let',
+  'See',
+  'Note',
+  'Yes',
+  'Sure',
+  'Great',
+  'Thanks',
+  'Well',
+  'First',
+  'Second',
+  'Third',
+  'Next',
+  'Last',
+  'Finally',
+  'However',
+  'After',
+  'Before',
+  'Since',
+  'Once',
+  'While',
+  'Although',
+  'Because',
+  'Unless',
+  'Until',
+  'About',
+  'Over',
+  'Under',
+  'Between',
+  'Into',
 ]);
 
 function extractEntities(text: string): string[] {
@@ -272,7 +369,9 @@ function extractEntities(text: string): string[] {
   }
 
   // Numbers with context
-  const numbersCtx = text.match(/\b\d+(?:\.\d+)?\s*(?:seconds?|retries?|attempts?|MB|GB|TB|KB|ms|minutes?|hours?|days?|bytes?|workers?|threads?|nodes?|replicas?|instances?|users?|requests?|errors?|percent|%)\b/gi);
+  const numbersCtx = text.match(
+    /\b\d+(?:\.\d+)?\s*(?:seconds?|retries?|attempts?|MB|GB|TB|KB|ms|minutes?|hours?|days?|bytes?|workers?|threads?|nodes?|replicas?|instances?|users?|requests?|errors?|percent|%)\b/gi,
+  );
   if (numbersCtx) {
     for (const n of numbersCtx) entities.add(n.trim());
   }
@@ -328,7 +427,12 @@ export function defaultTokenCounter(msg: Message): number {
 // Shared helpers extracted for sync / async reuse
 // ---------------------------------------------------------------------------
 
-type Classified = { msg: Message; preserved: boolean; codeSplit?: boolean; dedup?: DedupAnnotation };
+type Classified = {
+  msg: Message;
+  preserved: boolean;
+  codeSplit?: boolean;
+  dedup?: DedupAnnotation;
+};
 
 /** Build a compressed message with _cce_original provenance metadata. */
 function buildCompressedMessage(
@@ -341,7 +445,9 @@ function buildCompressedMessage(
 ): Message {
   const summaryId = makeSummaryId(ids);
   const parents = collectParentIds(sourceMessages);
-  for (const m of sourceMessages) { verbatim[m.id] = m; }
+  for (const m of sourceMessages) {
+    verbatim[m.id] = m;
+  }
   return {
     ...base,
     content: summaryContent,
@@ -367,7 +473,10 @@ function formatSummary(
 ): string {
   const entitySuffix = skipEntities
     ? ''
-    : (() => { const e = extractEntities(rawText); return e.length > 0 ? ` | entities: ${e.join(', ')}` : ''; })();
+    : (() => {
+        const e = extractEntities(rawText);
+        return e.length > 0 ? ` | entities: ${e.join(', ')}` : '';
+      })();
   const mergeSuffix = mergeCount && mergeCount > 1 ? ` (${mergeCount} messages merged)` : '';
   const prefix = summaryId ? `[summary#${summaryId}: ` : '[summary: ';
   return `${prefix}${summaryText}${mergeSuffix}${entitySuffix}]`;
@@ -381,7 +490,13 @@ function collectGroup(
   const group: Classified[] = [];
   const role = classified[startIdx].msg.role;
   let i = startIdx;
-  while (i < classified.length && !classified[i].preserved && !classified[i].codeSplit && !classified[i].dedup && classified[i].msg.role === role) {
+  while (
+    i < classified.length &&
+    !classified[i].preserved &&
+    !classified[i].codeSplit &&
+    !classified[i].dedup &&
+    classified[i].msg.role === role
+  ) {
     group.push(classified[i]);
     i++;
   }
@@ -392,9 +507,17 @@ function collectGroup(
 // Soft T0 reasons (file_path, url, version_number, etc.): incidental
 // references in prose — entities capture them, prose is still compressible.
 const HARD_T0_REASONS = new Set([
-  'code_fence', 'indented_code', 'json_structure', 'yaml_structure',
-  'high_special_char_ratio', 'high_line_length_variance', 'api_key',
-  'latex_math', 'unicode_math', 'sql_content', 'verse_pattern',
+  'code_fence',
+  'indented_code',
+  'json_structure',
+  'yaml_structure',
+  'high_special_char_ratio',
+  'high_line_length_variance',
+  'api_key',
+  'latex_math',
+  'unicode_math',
+  'sql_content',
+  'verse_pattern',
 ]);
 
 function classifyAll(
@@ -420,7 +543,11 @@ function classifyAll(
     if (content.length < 120) {
       return { msg, preserved: true };
     }
-    if (content.startsWith('[summary:') || content.startsWith('[summary#') || content.startsWith('[truncated')) {
+    if (
+      content.startsWith('[summary:') ||
+      content.startsWith('[summary#') ||
+      content.startsWith('[truncated')
+    ) {
       return { msg, preserved: true };
     }
     if (dedupAnnotations?.has(idx)) {
@@ -429,7 +556,7 @@ function classifyAll(
     if (content.includes('```')) {
       const segments = splitCodeAndProse(content);
       const totalProse = segments
-        .filter(s => s.type === 'prose')
+        .filter((s) => s.type === 'prose')
         .reduce((sum, s) => sum + s.content.length, 0);
       if (totalProse >= 80) {
         return { msg, preserved: false, codeSplit: true };
@@ -439,7 +566,7 @@ function classifyAll(
     if (content) {
       const cls = classifyMessage(content);
       if (cls.decision === 'T0') {
-        const hasHardReason = cls.reasons.some(r => HARD_T0_REASONS.has(r));
+        const hasHardReason = cls.reasons.some((r) => HARD_T0_REASONS.has(r));
         if (hasHardReason) {
           return { msg, preserved: true };
         }
@@ -480,7 +607,9 @@ function computeStats(
     messages_compressed: messagesCompressed,
     messages_preserved: messagesPreserved,
     ...(messagesDeduped && messagesDeduped > 0 ? { messages_deduped: messagesDeduped } : {}),
-    ...(messagesFuzzyDeduped && messagesFuzzyDeduped > 0 ? { messages_fuzzy_deduped: messagesFuzzyDeduped } : {}),
+    ...(messagesFuzzyDeduped && messagesFuzzyDeduped > 0
+      ? { messages_fuzzy_deduped: messagesFuzzyDeduped }
+      : {}),
   };
 }
 
@@ -488,10 +617,7 @@ function computeStats(
 // Sync compression (internal)
 // ---------------------------------------------------------------------------
 
-function compressSync(
-  messages: Message[],
-  options: CompressOptions = {},
-): CompressResult {
+function compressSync(messages: Message[], options: CompressOptions = {}): CompressResult {
   const sourceVersion = options.sourceVersion ?? 0;
   const counter = options.tokenCounter ?? defaultTokenCounter;
 
@@ -512,13 +638,14 @@ function compressSync(
   const preserveRoles = new Set(options.preserve ?? ['system']);
   const recencyWindow = options.recencyWindow ?? 4;
   const recencyStart = Math.max(0, messages.length - (recencyWindow > 0 ? recencyWindow : 0));
-  let dedupAnnotations = (options.dedup ?? true)
-    ? analyzeDuplicates(messages, recencyStart, preserveRoles)
-    : undefined;
+  let dedupAnnotations =
+    (options.dedup ?? true) ? analyzeDuplicates(messages, recencyStart, preserveRoles) : undefined;
 
   if (options.fuzzyDedup) {
     const fuzzyAnnotations = analyzeFuzzyDuplicates(
-      messages, recencyStart, preserveRoles,
+      messages,
+      recencyStart,
+      preserveRoles,
       dedupAnnotations ?? new Map(),
       options.fuzzyThreshold ?? 0.85,
     );
@@ -554,9 +681,10 @@ function compressSync(
     if (classified[i].dedup) {
       const annotation = classified[i].dedup!;
       const keepTargetId = messages[annotation.duplicateOfIndex].id;
-      const tag = annotation.similarity != null
-        ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
-        : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
+      const tag =
+        annotation.similarity != null
+          ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
+          : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
       result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
       if (annotation.similarity != null) {
         messagesFuzzyDeduped++;
@@ -571,8 +699,11 @@ function compressSync(
     if (classified[i].codeSplit) {
       const content = typeof msg.content === 'string' ? msg.content : '';
       const segments = splitCodeAndProse(content);
-      const proseText = segments.filter(s => s.type === 'prose').map(s => s.content).join(' ');
-      const codeFences = segments.filter(s => s.type === 'code').map(s => s.content);
+      const proseText = segments
+        .filter((s) => s.type === 'prose')
+        .map((s) => s.content)
+        .join(' ');
+      const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
       const proseBudget = proseText.length < 600 ? 200 : 400;
       const summaryText = summarize(proseText, proseBudget);
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
@@ -585,7 +716,9 @@ function compressSync(
         continue;
       }
 
-      result.push(buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]));
+      result.push(
+        buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]),
+      );
       messagesCompressed++;
       i++;
       continue;
@@ -595,14 +728,16 @@ function compressSync(
     const { group, nextIdx } = collectGroup(classified, i);
     i = nextIdx;
 
-    const allContent = group.map(g => typeof g.msg.content === 'string' ? g.msg.content : '').join(' ');
+    const allContent = group
+      .map((g) => (typeof g.msg.content === 'string' ? g.msg.content : ''))
+      .join(' ');
     const contentBudget = allContent.length < 600 ? 200 : 400;
     const summaryText = isStructuredOutput(allContent)
       ? summarizeStructured(allContent, contentBudget)
       : summarize(allContent, contentBudget);
 
     if (group.length > 1) {
-      const mergeIds = group.map(g => g.msg.id);
+      const mergeIds = group.map((g) => g.msg.id);
       const embeddedId = options.embedSummaryId ? makeSummaryId(mergeIds) : undefined;
       let summary = formatSummary(summaryText, allContent, group.length, undefined, embeddedId);
       const combinedLength = group.reduce((sum, g) => sum + contentLength(g.msg), 0);
@@ -616,9 +751,11 @@ function compressSync(
           messagesPreserved++;
         }
       } else {
-        const sourceMsgs = group.map(g => g.msg);
+        const sourceMsgs = group.map((g) => g.msg);
         const base: Message = { ...sourceMsgs[0] };
-        result.push(buildCompressedMessage(base, mergeIds, summary, sourceVersion, verbatim, sourceMsgs));
+        result.push(
+          buildCompressedMessage(base, mergeIds, summary, sourceVersion, verbatim, sourceMsgs),
+        );
         messagesCompressed += group.length;
       }
     } else {
@@ -634,7 +771,9 @@ function compressSync(
         result.push(single);
         messagesPreserved++;
       } else {
-        result.push(buildCompressedMessage(single, [single.id], summary, sourceVersion, verbatim, [single]));
+        result.push(
+          buildCompressedMessage(single, [single.id], summary, sourceVersion, verbatim, [single]),
+        );
         messagesCompressed++;
       }
     }
@@ -642,7 +781,16 @@ function compressSync(
 
   return {
     messages: result,
-    compression: computeStats(messages, result, messagesCompressed, messagesPreserved, sourceVersion, counter, messagesDeduped, messagesFuzzyDeduped),
+    compression: computeStats(
+      messages,
+      result,
+      messagesCompressed,
+      messagesPreserved,
+      sourceVersion,
+      counter,
+      messagesDeduped,
+      messagesFuzzyDeduped,
+    ),
     verbatim,
   };
 }
@@ -651,12 +799,19 @@ function compressSync(
 // Async compression (internal, LLM summarizer support)
 // ---------------------------------------------------------------------------
 
-async function withFallback(text: string, userSummarizer?: Summarizer, maxBudget?: number): Promise<string> {
+async function withFallback(
+  text: string,
+  userSummarizer?: Summarizer,
+  maxBudget?: number,
+): Promise<string> {
   if (userSummarizer) {
     try {
       const result = await userSummarizer(text);
-      if (typeof result === 'string' && result.length > 0 && result.length < text.length) return result;
-    } catch { /* fall through to deterministic */ }
+      if (typeof result === 'string' && result.length > 0 && result.length < text.length)
+        return result;
+    } catch {
+      /* fall through to deterministic */
+    }
   }
   return summarize(text, maxBudget);
 }
@@ -686,13 +841,14 @@ async function compressAsync(
   const preserveRoles = new Set(options.preserve ?? ['system']);
   const recencyWindow = options.recencyWindow ?? 4;
   const recencyStart = Math.max(0, messages.length - (recencyWindow > 0 ? recencyWindow : 0));
-  let dedupAnnotations = (options.dedup ?? true)
-    ? analyzeDuplicates(messages, recencyStart, preserveRoles)
-    : undefined;
+  let dedupAnnotations =
+    (options.dedup ?? true) ? analyzeDuplicates(messages, recencyStart, preserveRoles) : undefined;
 
   if (options.fuzzyDedup) {
     const fuzzyAnnotations = analyzeFuzzyDuplicates(
-      messages, recencyStart, preserveRoles,
+      messages,
+      recencyStart,
+      preserveRoles,
       dedupAnnotations ?? new Map(),
       options.fuzzyThreshold ?? 0.85,
     );
@@ -728,9 +884,10 @@ async function compressAsync(
     if (classified[i].dedup) {
       const annotation = classified[i].dedup!;
       const keepTargetId = messages[annotation.duplicateOfIndex].id;
-      const tag = annotation.similarity != null
-        ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
-        : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
+      const tag =
+        annotation.similarity != null
+          ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
+          : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
       result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
       if (annotation.similarity != null) {
         messagesFuzzyDeduped++;
@@ -745,8 +902,11 @@ async function compressAsync(
     if (classified[i].codeSplit) {
       const content = typeof msg.content === 'string' ? msg.content : '';
       const segments = splitCodeAndProse(content);
-      const proseText = segments.filter(s => s.type === 'prose').map(s => s.content).join(' ');
-      const codeFences = segments.filter(s => s.type === 'code').map(s => s.content);
+      const proseText = segments
+        .filter((s) => s.type === 'prose')
+        .map((s) => s.content)
+        .join(' ');
+      const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
       const proseBudget = proseText.length < 600 ? 200 : 400;
       const summaryText = await withFallback(proseText, userSummarizer, proseBudget);
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
@@ -759,7 +919,9 @@ async function compressAsync(
         continue;
       }
 
-      result.push(buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]));
+      result.push(
+        buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]),
+      );
       messagesCompressed++;
       i++;
       continue;
@@ -769,14 +931,16 @@ async function compressAsync(
     const { group, nextIdx } = collectGroup(classified, i);
     i = nextIdx;
 
-    const allContent = group.map(g => typeof g.msg.content === 'string' ? g.msg.content : '').join(' ');
+    const allContent = group
+      .map((g) => (typeof g.msg.content === 'string' ? g.msg.content : ''))
+      .join(' ');
     const contentBudget = allContent.length < 600 ? 200 : 400;
     const summaryText = isStructuredOutput(allContent)
       ? summarizeStructured(allContent, contentBudget)
       : await withFallback(allContent, userSummarizer, contentBudget);
 
     if (group.length > 1) {
-      const mergeIds = group.map(g => g.msg.id);
+      const mergeIds = group.map((g) => g.msg.id);
       const embeddedId = options.embedSummaryId ? makeSummaryId(mergeIds) : undefined;
       let summary = formatSummary(summaryText, allContent, group.length, undefined, embeddedId);
       const combinedLength = group.reduce((sum, g) => sum + contentLength(g.msg), 0);
@@ -790,9 +954,11 @@ async function compressAsync(
           messagesPreserved++;
         }
       } else {
-        const sourceMsgs = group.map(g => g.msg);
+        const sourceMsgs = group.map((g) => g.msg);
         const base: Message = { ...sourceMsgs[0] };
-        result.push(buildCompressedMessage(base, mergeIds, summary, sourceVersion, verbatim, sourceMsgs));
+        result.push(
+          buildCompressedMessage(base, mergeIds, summary, sourceVersion, verbatim, sourceMsgs),
+        );
         messagesCompressed += group.length;
       }
     } else {
@@ -808,7 +974,9 @@ async function compressAsync(
         result.push(single);
         messagesPreserved++;
       } else {
-        result.push(buildCompressedMessage(single, [single.id], summary, sourceVersion, verbatim, [single]));
+        result.push(
+          buildCompressedMessage(single, [single.id], summary, sourceVersion, verbatim, [single]),
+        );
         messagesCompressed++;
       }
     }
@@ -816,7 +984,16 @@ async function compressAsync(
 
   return {
     messages: result,
-    compression: computeStats(messages, result, messagesCompressed, messagesPreserved, sourceVersion, counter, messagesDeduped, messagesFuzzyDeduped),
+    compression: computeStats(
+      messages,
+      result,
+      messagesCompressed,
+      messagesPreserved,
+      sourceVersion,
+      counter,
+      messagesDeduped,
+      messagesFuzzyDeduped,
+    ),
     verbatim,
   };
 }
@@ -855,7 +1032,12 @@ function budgetFastPath(
   return undefined;
 }
 
-function addBudgetFields(cr: CompressResult, tokenBudget: number, recencyWindow: number, counter: (msg: Message) => number): CompressResult {
+function addBudgetFields(
+  cr: CompressResult,
+  tokenBudget: number,
+  recencyWindow: number,
+  counter: (msg: Message) => number,
+): CompressResult {
   const tokens = sumTokens(cr.messages, counter);
   return { ...cr, fits: tokens <= tokenBudget, tokenCount: tokens, recencyWindow };
 }
@@ -892,9 +1074,12 @@ function forceConvergePass(
   candidates.sort((a, b) => b.contentLen - a.contentLen);
 
   // Clone messages and verbatim for mutation
-  const messages = cr.messages.map(m => ({ ...m, metadata: m.metadata ? { ...m.metadata } : {} }));
+  const messages = cr.messages.map((m) => ({
+    ...m,
+    metadata: m.metadata ? { ...m.metadata } : {},
+  }));
   const verbatim = { ...cr.verbatim };
-  let tokenCount = cr.tokenCount!;
+  let tokenCount = cr.tokenCount ?? 0;
 
   for (const cand of candidates) {
     if (tokenCount <= tokenBudget) break;
@@ -907,7 +1092,7 @@ function forceConvergePass(
     const oldTokens = counter(m);
 
     // If already compressed (has _cce_original), just replace content in-place
-    const hasOriginal = !!(m.metadata?._cce_original);
+    const hasOriginal = !!m.metadata?._cce_original;
     if (hasOriginal) {
       messages[cand.idx] = { ...m, content: tag };
     } else {
@@ -928,7 +1113,7 @@ function forceConvergePass(
     }
 
     const newTokens = counter(messages[cand.idx]);
-    tokenCount -= (oldTokens - newTokens);
+    tokenCount -= oldTokens - newTokens;
   }
 
   const fits = tokenCount <= tokenBudget;
@@ -954,7 +1139,12 @@ function compressSyncWithBudget(
 
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    const cr = compressSync(messages, { ...options, recencyWindow: mid, summarizer: undefined, tokenBudget: undefined });
+    const cr = compressSync(messages, {
+      ...options,
+      recencyWindow: mid,
+      summarizer: undefined,
+      tokenBudget: undefined,
+    });
     lastResult = addBudgetFields(cr, tokenBudget, mid, counter);
     lastRw = mid;
 
@@ -969,7 +1159,12 @@ function compressSyncWithBudget(
   if (lastRw === lo && lastResult) {
     result = lastResult;
   } else {
-    const cr = compressSync(messages, { ...options, recencyWindow: lo, summarizer: undefined, tokenBudget: undefined });
+    const cr = compressSync(messages, {
+      ...options,
+      recencyWindow: lo,
+      summarizer: undefined,
+      tokenBudget: undefined,
+    });
     result = addBudgetFields(cr, tokenBudget, lo, counter);
   }
 
@@ -1000,7 +1195,11 @@ async function compressAsyncWithBudget(
 
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    const cr = await compressAsync(messages, { ...options, recencyWindow: mid, tokenBudget: undefined });
+    const cr = await compressAsync(messages, {
+      ...options,
+      recencyWindow: mid,
+      tokenBudget: undefined,
+    });
     lastResult = addBudgetFields(cr, tokenBudget, mid, counter);
     lastRw = mid;
 
@@ -1015,7 +1214,11 @@ async function compressAsyncWithBudget(
   if (lastRw === lo && lastResult) {
     result = lastResult;
   } else {
-    const cr = await compressAsync(messages, { ...options, recencyWindow: lo, tokenBudget: undefined });
+    const cr = await compressAsync(messages, {
+      ...options,
+      recencyWindow: lo,
+      tokenBudget: undefined,
+    });
     result = addBudgetFields(cr, tokenBudget, lo, counter);
   }
 
@@ -1039,10 +1242,7 @@ async function compressAsyncWithBudget(
  * verbatim originals) will cause data loss that `uncompress()`
  * surfaces via `missing_ids`.
  */
-export function compress(
-  messages: Message[],
-  options?: CompressOptions,
-): CompressResult;
+export function compress(messages: Message[], options?: CompressOptions): CompressResult;
 export function compress(
   messages: Message[],
   options: CompressOptions & { summarizer: Summarizer },

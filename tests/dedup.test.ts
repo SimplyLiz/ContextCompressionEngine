@@ -8,9 +8,18 @@ function msg(overrides: Partial<Message> & { id: string; index: number }): Messa
   return { role: 'user', content: '', metadata: {}, ...overrides };
 }
 
-const LONG_CONTENT = 'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
-const LONG_CODE_BLOCK = '```typescript\nconst x = 1;\nconst y = 2;\nconst z = x + y;\nconsole.log(z);\n// more code\nconst a = [1,2,3];\na.forEach(i => console.log(i));\nconst obj = { key: "value", nested: { deep: true } };\nconsole.log(JSON.stringify(obj));\n```';
-const LONG_JSON = JSON.stringify({ users: Array.from({ length: 20 }, (_, i) => ({ id: i, name: `user_${i}`, email: `user${i}@example.com`, active: true })) });
+const LONG_CONTENT =
+  'This is a repeated message with enough content to exceed the two hundred character minimum threshold for dedup eligibility so we can test dedup properly across multiple messages in the conversation. Extra padding here.';
+const LONG_CODE_BLOCK =
+  '```typescript\nconst x = 1;\nconst y = 2;\nconst z = x + y;\nconsole.log(z);\n// more code\nconst a = [1,2,3];\na.forEach(i => console.log(i));\nconst obj = { key: "value", nested: { deep: true } };\nconsole.log(JSON.stringify(obj));\n```';
+const LONG_JSON = JSON.stringify({
+  users: Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    name: `user_${i}`,
+    email: `user${i}@example.com`,
+    active: true,
+  })),
+});
 
 describe('analyzeDuplicates', () => {
   it('marks earlier occurrence as duplicate, keeps latest', () => {
@@ -40,7 +49,8 @@ describe('analyzeDuplicates', () => {
   });
 
   it('different pairs handled independently', () => {
-    const other = 'A completely different message that is also long enough to exceed the two hundred character threshold for dedup analysis. We need enough text here to satisfy the minimum requirement for processing. Adding extra text.';
+    const other =
+      'A completely different message that is also long enough to exceed the two hundred character threshold for dedup analysis. We need enough text here to satisfy the minimum requirement for processing. Adding extra text.';
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: LONG_CONTENT }),
       msg({ id: '2', index: 1, content: other }),
@@ -75,8 +85,18 @@ describe('analyzeDuplicates', () => {
 
   it('skips already-compressed messages', () => {
     const messages: Message[] = [
-      msg({ id: '1', index: 0, content: '[summary: previously compressed content that exceeds two hundred characters because we need it to be long enough for the dedup eligibility check to pass the minimum threshold requirement.]' }),
-      msg({ id: '2', index: 1, content: '[summary: previously compressed content that exceeds two hundred characters because we need it to be long enough for the dedup eligibility check to pass the minimum threshold requirement.]' }),
+      msg({
+        id: '1',
+        index: 0,
+        content:
+          '[summary: previously compressed content that exceeds two hundred characters because we need it to be long enough for the dedup eligibility check to pass the minimum threshold requirement.]',
+      }),
+      msg({
+        id: '2',
+        index: 1,
+        content:
+          '[summary: previously compressed content that exceeds two hundred characters because we need it to be long enough for the dedup eligibility check to pass the minimum threshold requirement.]',
+      }),
     ];
     const result = analyzeDuplicates(messages, messages.length, new Set(['system']));
     expect(result.size).toBe(0);
@@ -178,8 +198,20 @@ describe('compress with dedup', () => {
 
   it('tool_calls messages never deduped', () => {
     const messages: Message[] = [
-      msg({ id: '1', index: 0, role: 'assistant', content: LONG_CONTENT, tool_calls: [{ id: 'tc1' }] }),
-      msg({ id: '2', index: 1, role: 'assistant', content: LONG_CONTENT, tool_calls: [{ id: 'tc2' }] }),
+      msg({
+        id: '1',
+        index: 0,
+        role: 'assistant',
+        content: LONG_CONTENT,
+        tool_calls: [{ id: 'tc1' }],
+      }),
+      msg({
+        id: '2',
+        index: 1,
+        role: 'assistant',
+        content: LONG_CONTENT,
+        tool_calls: [{ id: 'tc2' }],
+      }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
     expect(result.messages[0].content).not.toMatch(/^\[cce:dup/);
@@ -188,10 +220,17 @@ describe('compress with dedup', () => {
 
   it('code blocks get deduped (content prose summarizer skips)', () => {
     // Code block content that would normally be T0-preserved
-    const codeContent = LONG_CODE_BLOCK + '\n\nHere is some code that was read from the file system during tool execution.';
+    const codeContent =
+      LONG_CODE_BLOCK +
+      '\n\nHere is some code that was read from the file system during tool execution.';
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'tool', content: codeContent }),
-      msg({ id: '2', index: 1, content: 'something else entirely with enough characters to not be short preserved by the one hundred twenty char threshold check.' }),
+      msg({
+        id: '2',
+        index: 1,
+        content:
+          'something else entirely with enough characters to not be short preserved by the one hundred twenty char threshold check.',
+      }),
       msg({ id: '3', index: 2, role: 'tool', content: codeContent }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
@@ -202,7 +241,12 @@ describe('compress with dedup', () => {
   it('JSON content gets deduped', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, role: 'tool', content: LONG_JSON }),
-      msg({ id: '2', index: 1, content: 'some other message with enough text here to not be auto-preserved by the short message rule which is one hundred twenty chars. Extra padding needed.' }),
+      msg({
+        id: '2',
+        index: 1,
+        content:
+          'some other message with enough text here to not be auto-preserved by the short message rule which is one hundred twenty chars. Extra padding needed.',
+      }),
       msg({ id: '3', index: 2, role: 'tool', content: LONG_JSON }),
     ];
     const result = compress(messages, { recencyWindow: 0, dedup: true });
@@ -240,7 +284,10 @@ describe('compress with dedup', () => {
   });
 
   it('dedup + prose summarization coexist', () => {
-    const prose = 'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(5);
+    const prose =
+      'This is a long message about general topics that could be compressed since it has no verbatim content. '.repeat(
+        5,
+      );
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: LONG_CONTENT }),
       msg({ id: '2', index: 1, role: 'assistant', content: prose }),
@@ -258,8 +305,10 @@ describe('compress with dedup', () => {
   });
 
   it('dedup + code-split coexist', () => {
-    const proseWithCode = 'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(3)
-      + '\n\n```ts\nconst x = await auth.getToken();\n```';
+    const proseWithCode =
+      'This is a detailed explanation of how the authentication system works and integrates with the session manager. '.repeat(
+        3,
+      ) + '\n\n```ts\nconst x = await auth.getToken();\n```';
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: LONG_CONTENT }),
       msg({ id: '2', index: 1, role: 'assistant', content: proseWithCode }),
@@ -334,7 +383,11 @@ describe('compress with dedup', () => {
       msg({ id: '1', index: 0, content: LONG_CONTENT }),
       msg({ id: '2', index: 1, content: LONG_CONTENT }),
     ];
-    const result = await compress(messages, { recencyWindow: 0, dedup: true, summarizer: mockSummarizer });
+    const result = await compress(messages, {
+      recencyWindow: 0,
+      dedup: true,
+      summarizer: mockSummarizer,
+    });
     expect(result.messages[0].content).toMatch(/^\[cce:dup/);
     expect(result.compression.messages_deduped).toBe(1);
   });
@@ -346,7 +399,11 @@ describe('compress with dedup', () => {
       msg({ id: '2', index: 1, content: LONG_CONTENT }),
       msg({ id: '3', index: 2, content: LONG_CONTENT }),
     ];
-    const result = await compress(messages, { tokenBudget: 200, dedup: true, summarizer: mockSummarizer });
+    const result = await compress(messages, {
+      tokenBudget: 200,
+      dedup: true,
+      summarizer: mockSummarizer,
+    });
     expect(typeof result.fits).toBe('boolean');
     expect(typeof result.tokenCount).toBe('number');
   });
@@ -533,10 +590,20 @@ describe('analyzeFuzzyDuplicates', () => {
   it('near-duplicate detected (90% overlap)', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
-      msg({ id: '2', index: 1, content: 'something else entirely that is different from the file content.' }),
+      msg({
+        id: '2',
+        index: 1,
+        content: 'something else entirely that is different from the file content.',
+      }),
       msg({ id: '3', index: 2, content: MULTILINE_FILE_V2 }),
     ];
-    const result = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.85);
+    const result = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.85,
+    );
     expect(result.size).toBe(1);
     expect(result.has(0)).toBe(true);
     expect(result.get(0)!.duplicateOfIndex).toBe(2);
@@ -549,7 +616,13 @@ describe('analyzeFuzzyDuplicates', () => {
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
       msg({ id: '2', index: 1, content: MULTILINE_FILE_DIFFERENT }),
     ];
-    const result = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.85);
+    const result = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.85,
+    );
     expect(result.size).toBe(0);
   });
 
@@ -561,7 +634,13 @@ describe('analyzeFuzzyDuplicates', () => {
     // Simulate that index 0 is already in exactAnnotations
     const exactAnnotations = new Map<number, { duplicateOfIndex: number; contentLength: number }>();
     exactAnnotations.set(0, { duplicateOfIndex: 1, contentLength: MULTILINE_FILE.length });
-    const result = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), exactAnnotations, 0.85);
+    const result = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      exactAnnotations,
+      0.85,
+    );
     // Index 0 is already exact-deduped, index 1 is the only remaining eligible → no pair
     expect(result.size).toBe(0);
   });
@@ -573,7 +652,13 @@ describe('analyzeFuzzyDuplicates', () => {
       msg({ id: '1', index: 0, content: shortA }),
       msg({ id: '2', index: 1, content: shortB }),
     ];
-    const result = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.85);
+    const result = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.85,
+    );
     expect(result.size).toBe(0);
   });
 
@@ -583,9 +668,21 @@ describe('analyzeFuzzyDuplicates', () => {
       msg({ id: '2', index: 1, content: MULTILINE_FILE_MODERATE }),
     ];
     // Default 0.85 won't match these (~50% similar), but 0.4 will
-    const noMatch = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.85);
+    const noMatch = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.85,
+    );
     expect(noMatch.size).toBe(0);
-    const match = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.4);
+    const match = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.4,
+    );
     expect(match.size).toBe(1);
   });
 });
@@ -696,7 +793,13 @@ describe('transitive fuzzy similarity reports real Jaccard', () => {
       msg({ id: '2', index: 1, content: TRANSITIVE_B }),
       msg({ id: '3', index: 2, content: TRANSITIVE_C }),
     ];
-    const result = analyzeFuzzyDuplicates(messages, messages.length, new Set(['system']), new Map(), 0.85);
+    const result = analyzeFuzzyDuplicates(
+      messages,
+      messages.length,
+      new Set(['system']),
+      new Map(),
+      0.85,
+    );
     // Both A and B should be annotated; C is the keep target
     expect(result.size).toBe(2);
 
@@ -719,7 +822,12 @@ describe('compress with fuzzy dedup', () => {
   it('near-duplicate → earlier replaced with [cce:near-dup ...]', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
-      msg({ id: '2', index: 1, content: 'something different in between that has enough length to avoid the short message threshold check.  Extra padding here.' }),
+      msg({
+        id: '2',
+        index: 1,
+        content:
+          'something different in between that has enough length to avoid the short message threshold check.  Extra padding here.',
+      }),
       msg({ id: '3', index: 2, content: MULTILINE_FILE_V2 }),
     ];
     const result = compress(messages, { recencyWindow: 0, fuzzyDedup: true });
@@ -733,7 +841,12 @@ describe('compress with fuzzy dedup', () => {
   it('fuzzy dedup off by default', () => {
     const messages: Message[] = [
       msg({ id: '1', index: 0, content: MULTILINE_FILE }),
-      msg({ id: '2', index: 1, content: 'filler message with enough length to pass the threshold check that is required for dedup eligibility in the system. Extra padding here.' }),
+      msg({
+        id: '2',
+        index: 1,
+        content:
+          'filler message with enough length to pass the threshold check that is required for dedup eligibility in the system. Extra padding here.',
+      }),
       msg({ id: '3', index: 2, content: MULTILINE_FILE_V2 }),
     ];
     const result = compress(messages, { recencyWindow: 0 });

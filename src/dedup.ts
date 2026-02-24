@@ -31,7 +31,12 @@ export function analyzeDuplicates(
     // Skip ineligible messages
     if (msg.role && preserveRoles.has(msg.role)) continue;
     if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) continue;
-    if (content.startsWith('[summary:') || content.startsWith('[summary#') || content.startsWith('[truncated')) continue;
+    if (
+      content.startsWith('[summary:') ||
+      content.startsWith('[summary#') ||
+      content.startsWith('[truncated')
+    )
+      continue;
     if (content.length < 200) continue;
 
     const hash = djb2(content);
@@ -108,8 +113,8 @@ export function analyzeFuzzyDuplicates(
   type Eligible = {
     index: number;
     contentLength: number;
-    lines: string[];           // normalized lines for Jaccard
-    fingerprint: string[];     // first 5 non-empty normalized lines
+    lines: string[]; // normalized lines for Jaccard
+    fingerprint: string[]; // first 5 non-empty normalized lines
   };
 
   const eligible: Eligible[] = [];
@@ -121,7 +126,12 @@ export function analyzeFuzzyDuplicates(
     // Same skip criteria as analyzeDuplicates
     if (msg.role && preserveRoles.has(msg.role)) continue;
     if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) continue;
-    if (content.startsWith('[summary:') || content.startsWith('[summary#') || content.startsWith('[truncated')) continue;
+    if (
+      content.startsWith('[summary:') ||
+      content.startsWith('[summary#') ||
+      content.startsWith('[truncated')
+    )
+      continue;
     if (content.length < 200) continue;
 
     // Skip indices already handled by exact dedup
@@ -208,11 +218,15 @@ export function analyzeFuzzyDuplicates(
   // Use union-find to group transitively connected fuzzy-duplicates
   const parent = new Array(eligible.length).fill(0).map((_, i) => i);
   function find(x: number): number {
-    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
     return x;
   }
   function union(a: number, b: number): void {
-    const ra = find(a), rb = find(b);
+    const ra = find(a),
+      rb = find(b);
     if (ra !== rb) parent[ra] = rb;
   }
 
@@ -264,7 +278,10 @@ export function analyzeFuzzyDuplicates(
       if (ei === keepEi) continue;
       const msgIdx = eligible[ei].index;
       // Find similarity to the keep target
-      const sim = simLookup.get(`${ei}:${keepEi}`) ?? simLookup.get(`${keepEi}:${ei}`) ?? jaccardLines(eligible[ei].lines, eligible[keepEi].lines);
+      const sim =
+        simLookup.get(`${ei}:${keepEi}`) ??
+        simLookup.get(`${keepEi}:${ei}`) ??
+        jaccardLines(eligible[ei].lines, eligible[keepEi].lines);
       annotations.set(msgIdx, {
         duplicateOfIndex: keepIdx,
         contentLength: eligible[ei].contentLength,

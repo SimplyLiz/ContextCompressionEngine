@@ -69,7 +69,9 @@ export async function detectProviders(): Promise<LlmProvider[]> {
         },
       });
     } catch (err) {
-      console.log(`  OpenAI SDK not installed (needed for Ollama), skipping (${(err as Error).message})`);
+      console.log(
+        `  OpenAI SDK not installed (needed for Ollama), skipping (${(err as Error).message})`,
+      );
     }
   }
 

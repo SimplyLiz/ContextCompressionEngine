@@ -41,7 +41,7 @@ describe('classifyMessage', () => {
 
     it('detects multiline SQL JOIN', () => {
       const r = classifyMessage(
-        'SELECT u.id, o.total\nFROM users u\nJOIN orders o ON u.id = o.user_id\nWHERE o.total > 100'
+        'SELECT u.id, o.total\nFROM users u\nJOIN orders o ON u.id = o.user_id\nWHERE o.total > 100',
       );
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('sql_content');
@@ -60,7 +60,9 @@ describe('classifyMessage', () => {
     });
 
     it('detects CTE (WITH RECURSIVE)', () => {
-      const r = classifyMessage('WITH RECURSIVE cte AS (SELECT 1 UNION SELECT n+1 FROM cte WHERE n < 10) SELECT * FROM cte');
+      const r = classifyMessage(
+        'WITH RECURSIVE cte AS (SELECT 1 UNION SELECT n+1 FROM cte WHERE n < 10) SELECT * FROM cte',
+      );
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('sql_content');
     });
@@ -72,18 +74,24 @@ describe('classifyMessage', () => {
     });
 
     it('detects GRANT/REVOKE', () => {
-      const r = classifyMessage('GRANT SELECT, INSERT ON users TO readonly_role; REVOKE DELETE ON users FROM guest_role');
+      const r = classifyMessage(
+        'GRANT SELECT, INSERT ON users TO readonly_role; REVOKE DELETE ON users FROM guest_role',
+      );
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('sql_content');
     });
 
     it('does not false-positive on single SQL keyword in prose', () => {
-      const r = classifyMessage('Please select your option from the dropdown menu on the left side of the screen.');
+      const r = classifyMessage(
+        'Please select your option from the dropdown menu on the left side of the screen.',
+      );
       expect(r.reasons).not.toContain('sql_content');
     });
 
     it('does not false-positive on prose with "update" and non-SQL context', () => {
-      const r = classifyMessage('We need to update the documentation and delete the old drafts from the shared drive.');
+      const r = classifyMessage(
+        'We need to update the documentation and delete the old drafts from the shared drive.',
+      );
       expect(r.reasons).not.toContain('sql_content');
     });
 
@@ -233,7 +241,9 @@ describe('classifyMessage', () => {
     });
 
     it('detects direct quotes', () => {
-      const r = classifyMessage('He said \u201cThis is a very important statement about policy\u201d to the committee');
+      const r = classifyMessage(
+        'He said \u201cThis is a very important statement about policy\u201d to the committee',
+      );
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('direct_quote');
     });
@@ -287,7 +297,7 @@ describe('classifyMessage', () => {
 
     it('detects high line-length variance', () => {
       const r = classifyMessage(
-        'x\nThis is a much longer line that creates significant variance compared to the short ones around it\ny\nz'
+        'x\nThis is a much longer line that creates significant variance compared to the short ones around it\ny\nz',
       );
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('high_line_length_variance');
@@ -308,7 +318,7 @@ describe('classifyMessage', () => {
     it('caps confidence at 0.95', () => {
       // Lots of signals stacked
       const r = classifyMessage(
-        '```python\nimport os\npath = "/usr/local/bin"\nurl = "https://example.com"\nemail = "a@b.com"\nversion = "v1.2.3"\n```'
+        '```python\nimport os\npath = "/usr/local/bin"\nurl = "https://example.com"\nemail = "a@b.com"\nversion = "v1.2.3"\n```',
       );
       expect(r.confidence).toBeLessThanOrEqual(0.95);
     });
@@ -317,33 +327,37 @@ describe('classifyMessage', () => {
   describe('false-positive resistance', () => {
     it('prose mentioning "from" and "select" in non-SQL context stays T3', () => {
       const r = classifyMessage(
-        'You can select any option from the settings panel. The team will update the config and create a new deployment pipeline for the staging environment.'
+        'You can select any option from the settings panel. The team will update the config and create a new deployment pipeline for the staging environment.',
       );
       expect(r.reasons).not.toContain('sql_content');
     });
 
     it('prose with "delete from" in conversational context stays non-SQL', () => {
-      const r = classifyMessage('I need to delete the old images from my camera roll and update my storage plan.');
+      const r = classifyMessage(
+        'I need to delete the old images from my camera roll and update my storage plan.',
+      );
       expect(r.reasons).not.toContain('sql_content');
     });
 
     it('prose with "where" and "values" in English does not trigger sql_content', () => {
       const r = classifyMessage(
-        'The system processes entries where defaults are established. Users should adjust these values to match their specific requirements.'
+        'The system processes entries where defaults are established. Users should adjust these values to match their specific requirements.',
       );
       expect(r.reasons).not.toContain('sql_content');
     });
 
     it('prose with "schema" in tech context does not trigger sql_content', () => {
       const r = classifyMessage(
-        'When moving from the old schema to the new architecture, teams should carefully plan the migration path.'
+        'When moving from the old schema to the new architecture, teams should carefully plan the migration path.',
       );
       expect(r.reasons).not.toContain('sql_content');
     });
 
     it('CSS hex color does not trigger hash_or_sha', () => {
       // #ff00ff is only 6 hex chars, well below the 40-char minimum
-      const r = classifyMessage('Set the background to #ff00ff and the text to #333333 for the header component.');
+      const r = classifyMessage(
+        'Set the background to #ff00ff and the text to #333333 for the header component.',
+      );
       expect(r.reasons).not.toContain('hash_or_sha');
     });
 
@@ -363,12 +377,16 @@ describe('classifyMessage', () => {
     });
 
     it('verbose CSS BEM class does not trigger api_key', () => {
-      const r = classifyMessage('Apply the class billing-dashboard-wrapper-outer-container-v2 to the root element.');
+      const r = classifyMessage(
+        'Apply the class billing-dashboard-wrapper-outer-container-v2 to the root element.',
+      );
       expect(r.reasons).not.toContain('api_key');
     });
 
     it('npm scope-like name does not trigger api_key', () => {
-      const r = classifyMessage('Install the package my-org-internal-service-name-production from the registry.');
+      const r = classifyMessage(
+        'Install the package my-org-internal-service-name-production from the registry.',
+      );
       expect(r.reasons).not.toContain('api_key');
     });
 
@@ -397,25 +415,31 @@ describe('classifyMessage', () => {
     });
 
     it('prose starting with "[" does not trigger json_structure', () => {
-      const r = classifyMessage('[Note: please review the attached document before the meeting tomorrow.]');
+      const r = classifyMessage(
+        '[Note: please review the attached document before the meeting tomorrow.]',
+      );
       expect(r.reasons).not.toContain('json_structure');
     });
   });
 
   describe('real-world variations', () => {
     it('detects API key embedded in a JSON config', () => {
-      const r = classifyMessage('{"apiKey": "sk-proj-abc123def456ghi789jkl012mno345pqr", "model": "gpt-4"}');
+      const r = classifyMessage(
+        '{"apiKey": "sk-proj-abc123def456ghi789jkl012mno345pqr", "model": "gpt-4"}',
+      );
       expect(r.reasons).toContain('api_key');
     });
 
     it('detects API key pasted with surrounding quotes', () => {
-      const r = classifyMessage("Set OPENAI_API_KEY='sk-ant-api03-abc123def456ghi789jkl' in your .env file.");
+      const r = classifyMessage(
+        "Set OPENAI_API_KEY='sk-ant-api03-abc123def456ghi789jkl' in your .env file.",
+      );
       expect(r.reasons).toContain('api_key');
     });
 
     it('detects API key in a multi-line env block', () => {
       const r = classifyMessage(
-        'DATABASE_URL=postgres://localhost/mydb\nSTRIPE_KEY=sk_test_4eC39HqLyjWDarjtT1zdp7dc0123456789\nPORT=3000'
+        'DATABASE_URL=postgres://localhost/mydb\nSTRIPE_KEY=sk_test_4eC39HqLyjWDarjtT1zdp7dc0123456789\nPORT=3000',
       );
       expect(r.reasons).toContain('api_key');
     });
@@ -423,20 +447,22 @@ describe('classifyMessage', () => {
     it('detects SQL in an error message', () => {
       const r = classifyMessage(
         'ERROR: relation "users" does not exist at character 15\n' +
-        'STATEMENT: SELECT id, email FROM users WHERE active = true ORDER BY created_at DESC LIMIT 10'
+          'STATEMENT: SELECT id, email FROM users WHERE active = true ORDER BY created_at DESC LIMIT 10',
       );
       expect(r.reasons).toContain('sql_content');
     });
 
     it('detects SQL embedded in ORM debug output', () => {
       const r = classifyMessage(
-        '[2024-03-15 10:23:45] DEBUG: Executing query: INSERT INTO audit_log (user_id, action, timestamp) VALUES ($1, $2, NOW()) RETURNING id'
+        '[2024-03-15 10:23:45] DEBUG: Executing query: INSERT INTO audit_log (user_id, action, timestamp) VALUES ($1, $2, NOW()) RETURNING id',
       );
       expect(r.reasons).toContain('sql_content');
     });
 
     it('detects lowercase SQL (common in ORM output)', () => {
-      const r = classifyMessage('select u.id, u.name from users u inner join orders o on u.id = o.user_id where o.total > 100');
+      const r = classifyMessage(
+        'select u.id, u.name from users u inner join orders o on u.id = o.user_id where o.total > 100',
+      );
       expect(r.reasons).toContain('sql_content');
     });
 
@@ -447,7 +473,7 @@ describe('classifyMessage', () => {
 
     it('detects EXPLAIN ANALYZE output', () => {
       const r = classifyMessage(
-        'EXPLAIN ANALYZE SELECT * FROM orders WHERE created_at > NOW() - INTERVAL \'7 days\' ORDER BY total DESC LIMIT 50'
+        "EXPLAIN ANALYZE SELECT * FROM orders WHERE created_at > NOW() - INTERVAL '7 days' ORDER BY total DESC LIMIT 50",
       );
       expect(r.reasons).toContain('sql_content');
     });
@@ -455,7 +481,7 @@ describe('classifyMessage', () => {
     it('detects schema migration SQL', () => {
       const r = classifyMessage(
         'ALTER TABLE users ADD COLUMN last_login TIMESTAMP NOT NULL DEFAULT NOW();\n' +
-        'CREATE INDEX idx_users_last_login ON users (last_login);'
+          'CREATE INDEX idx_users_last_login ON users (last_login);',
       );
       expect(r.reasons).toContain('sql_content');
     });
@@ -473,19 +499,24 @@ describe('classifyMessage', () => {
 
   describe('cross-pattern and multi-signal', () => {
     it('SQL inside a code fence triggers both code_fence and sql_content', () => {
-      const r = classifyMessage('```sql\nSELECT * FROM users WHERE active = true ORDER BY name\n```');
+      const r = classifyMessage(
+        '```sql\nSELECT * FROM users WHERE active = true ORDER BY name\n```',
+      );
       expect(r.reasons).toContain('code_fence');
       expect(r.reasons).toContain('sql_content');
     });
 
     it('API key + URL in the same message triggers both', () => {
-      const r = classifyMessage('curl -H "Authorization: Bearer sk-proj-abc123def456ghi789jkl012mno345pqr" https://api.openai.com/v1/chat');
+      const r = classifyMessage(
+        'curl -H "Authorization: Bearer sk-proj-abc123def456ghi789jkl012mno345pqr" https://api.openai.com/v1/chat',
+      );
       expect(r.reasons).toContain('api_key');
       expect(r.reasons).toContain('url');
     });
 
     it('long prose with a single URL is still T0 (URL preserves it)', () => {
-      const prose = 'The system handles request routing and load balancing across multiple regions. '.repeat(5);
+      const prose =
+        'The system handles request routing and load balancing across multiple regions. '.repeat(5);
       const r = classifyMessage(prose + ' See https://docs.example.com/architecture for details.');
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('url');
@@ -494,7 +525,7 @@ describe('classifyMessage', () => {
     it('message with SQL + file paths + version triggers all three', () => {
       const r = classifyMessage(
         'Running migration v2.3.1 from /db/migrations/003.sql:\n' +
-        'ALTER TABLE sessions ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) CASCADE'
+          'ALTER TABLE sessions ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) CASCADE',
       );
       expect(r.reasons).toContain('sql_content');
       expect(r.reasons).toContain('file_path');
@@ -506,7 +537,7 @@ describe('classifyMessage', () => {
       const r1 = classifyMessage('Check https://example.com for updates');
       // Multiple signals
       const r2 = classifyMessage(
-        'Check https://example.com, contact admin@example.com, version v3.2.1'
+        'Check https://example.com, contact admin@example.com, version v3.2.1',
       );
       expect(r2.confidence).toBeGreaterThan(r1.confidence);
     });
@@ -526,7 +557,7 @@ describe('classifyMessage', () => {
     it('classifies 19-word prose as T2 (boundary)', () => {
       // Exactly 19 words — below the 20-word T3 threshold
       const r = classifyMessage(
-        'The quick brown fox jumps over the lazy dog near the old oak tree by the river bank today'
+        'The quick brown fox jumps over the lazy dog near the old oak tree by the river bank today',
       );
       expect(r.decision).toBe('T2');
     });
@@ -542,14 +573,14 @@ describe('classifyMessage', () => {
     it('classifies clean prose as T3', () => {
       const r = classifyMessage(
         'The system processes incoming requests and routes them to the appropriate handler. ' +
-        'Each request is validated before processing begins. Errors are logged centrally.'
+          'Each request is validated before processing begins. Errors are logged centrally.',
       );
       expect(r.decision).toBe('T3');
     });
 
     it('has lower confidence for non-T0 content', () => {
       const r = classifyMessage(
-        'This is simple informational text about a process that handles various operations in the system and continues with more detail about the workflow.'
+        'This is simple informational text about a process that handles various operations in the system and continues with more detail about the workflow.',
       );
       expect(r.decision).toBe('T3');
       expect(r.confidence).toBeLessThan(0.75);
@@ -558,7 +589,7 @@ describe('classifyMessage', () => {
     it('classifies medium-length prose as T3', () => {
       const r = classifyMessage(
         'When designing a microservice architecture, it is important to consider the boundaries between services. ' +
-        'Each service should own its data and expose well-defined APIs.'
+          'Each service should own its data and expose well-defined APIs.',
       );
       expect(r.decision).toBe('T3');
     });
@@ -566,7 +597,7 @@ describe('classifyMessage', () => {
     it('classifies 20-word prose as T3 (boundary)', () => {
       // Exactly 20 words — at the T3 threshold
       const r = classifyMessage(
-        'The quick brown fox jumps over the lazy dog near the old oak tree by the river bank today again'
+        'The quick brown fox jumps over the lazy dog near the old oak tree by the river bank today again',
       );
       expect(r.decision).toBe('T3');
     });
@@ -575,13 +606,16 @@ describe('classifyMessage', () => {
   describe('performance', () => {
     it('completes in under 5ms', () => {
       const start = performance.now();
-      classifyMessage('A reasonably sized paragraph of text content here. It talks about various things.');
+      classifyMessage(
+        'A reasonably sized paragraph of text content here. It talks about various things.',
+      );
       const elapsed = performance.now() - start;
       expect(elapsed).toBeLessThan(5);
     });
 
     it('handles 1000 calls under 500ms', () => {
-      const input = 'A reasonably sized paragraph of text content here. It talks about various things and keeps going for a while.';
+      const input =
+        'A reasonably sized paragraph of text content here. It talks about various things and keeps going for a while.';
       const start = performance.now();
       for (let i = 0; i < 1000; i++) classifyMessage(input);
       const elapsed = performance.now() - start;

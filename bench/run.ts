@@ -3,20 +3,16 @@ import { uncompress } from '../src/expand.js';
 import { createSummarizer, createEscalatingSummarizer } from '../src/summarizer.js';
 import type { CompressResult, Message } from '../src/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { detectProviders, type LlmProvider } from './llm.js';
+import { detectProviders } from './llm.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 let nextId = 1;
-function msg(
-  role: string,
-  content: string,
-  extra?: Partial<Message>,
-): Message {
+function msg(role: string, content: string, extra?: Partial<Message>): Message {
   const id = String(nextId++);
   return { id, index: nextId - 1, role, content, metadata: {}, ...extra };
 }
@@ -127,12 +123,19 @@ function toolHeavy(): Scenario {
       msg('user', 'Find all TypeScript files with auth in the name'),
       // Tool call 1: glob → JSON array (preserved: short JSON)
       msg('assistant', 'I will search for those files now.', {
-        tool_calls: [{ id: 'tc1', function: { name: 'glob', arguments: '{"pattern":"**/*auth*.ts"}' } }],
+        tool_calls: [
+          { id: 'tc1', function: { name: 'glob', arguments: '{"pattern":"**/*auth*.ts"}' } },
+        ],
       }),
-      msg('tool', '["src/auth.ts","src/middleware/auth.ts","tests/auth.test.ts","docs/auth-guide.md"]'),
+      msg(
+        'tool',
+        '["src/auth.ts","src/middleware/auth.ts","tests/auth.test.ts","docs/auth-guide.md"]',
+      ),
       // Tool call 2: read docs → long prose (compressed: T3)
       msg('assistant', 'Found 4 files. Let me read the documentation first.', {
-        tool_calls: [{ id: 'tc2', function: { name: 'read', arguments: '{"path":"docs/auth-guide.md"}' } }],
+        tool_calls: [
+          { id: 'tc2', function: { name: 'read', arguments: '{"path":"docs/auth-guide.md"}' } },
+        ],
       }),
       msg('tool', longProse),
       // Tool call 3: read SQL → SQL query (preserved: T0 sql_content)
@@ -150,7 +153,9 @@ function toolHeavy(): Scenario {
       ),
       // Tool call 4: read env → API keys in plaintext config (preserved: T0 api_key + url)
       msg('assistant', 'Let me check the configuration.', {
-        tool_calls: [{ id: 'tc4', function: { name: 'read', arguments: '{"path":".env.example"}' } }],
+        tool_calls: [
+          { id: 'tc4', function: { name: 'read', arguments: '{"path":".env.example"}' } },
+        ],
       }),
       msg(
         'tool',
@@ -161,7 +166,9 @@ function toolHeavy(): Scenario {
       ),
       // Tool call 5: read code → code snippet (preserved: T0 structural)
       msg('assistant', 'Let me read the main auth module.', {
-        tool_calls: [{ id: 'tc5', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } }],
+        tool_calls: [
+          { id: 'tc5', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } },
+        ],
       }),
       msg(
         'tool',
@@ -170,7 +177,9 @@ function toolHeavy(): Scenario {
       // Tool call 6: edit → short status (preserved: short)
       msg('user', 'Can you add a test for expired tokens?'),
       msg('assistant', 'I will add an expiration test.', {
-        tool_calls: [{ id: 'tc6', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } }],
+        tool_calls: [
+          { id: 'tc6', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } },
+        ],
       }),
       msg('tool', 'File updated successfully.'),
       msg('assistant', 'Done. The test file now includes an expiration test case.'),
@@ -242,7 +251,9 @@ function deepConversation(): Scenario {
         'assistant',
         `For ${topic}, I recommend the following approach based on industry best practices and patterns I have seen succeed at scale. ` +
           `The key consideration is balancing complexity against the actual traffic patterns your service will encounter. ` +
-          `You should start with a simpler architecture and evolve it as your requirements become clearer through production usage. `.repeat(4) +
+          `You should start with a simpler architecture and evolve it as your requirements become clearer through production usage. `.repeat(
+            4,
+          ) +
           ` This approach has proven effective across multiple production deployments.`,
       ),
     );
@@ -445,82 +456,145 @@ function agenticCodingSession(): Scenario {
       // --- Phase 1: Initial exploration (file reads) ---
       msg('user', 'Read the auth module and tell me what it does.'),
       msg('assistant', 'Let me read that file.', {
-        tool_calls: [{ id: 'tc1', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } }],
+        tool_calls: [
+          { id: 'tc1', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } },
+        ],
       }),
-      msg('tool', authModule),  // 1st read of auth.ts
-      msg('assistant', 'This is an AuthService class that handles JWT authentication with access and refresh tokens, plus Express middleware.'),
+      msg('tool', authModule), // 1st read of auth.ts
+      msg(
+        'assistant',
+        'This is an AuthService class that handles JWT authentication with access and refresh tokens, plus Express middleware.',
+      ),
 
       // --- Phase 2: Grep for usages ---
       msg('user', 'Search the codebase for all usages of validateToken.'),
       msg('assistant', 'Searching for validateToken references.', {
-        tool_calls: [{ id: 'tc2', function: { name: 'grep', arguments: '{"pattern":"validateToken|verify.*token","path":"src/"}' } }],
+        tool_calls: [
+          {
+            id: 'tc2',
+            function: {
+              name: 'grep',
+              arguments: '{"pattern":"validateToken|verify.*token","path":"src/"}',
+            },
+          },
+        ],
       }),
-      msg('tool', grepResults),  // 1st grep
-      msg('assistant', 'Found 9 references across auth.ts, validate.ts middleware, admin routes, and tests.'),
+      msg('tool', grepResults), // 1st grep
+      msg(
+        'assistant',
+        'Found 9 references across auth.ts, validate.ts middleware, admin routes, and tests.',
+      ),
 
       // --- Phase 3: Edit and test (first cycle) ---
       msg('user', 'Add a test for refresh token rotation.'),
       msg('assistant', 'Let me re-read the auth module to check the method signature.', {
-        tool_calls: [{ id: 'tc3', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } }],
+        tool_calls: [
+          { id: 'tc3', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } },
+        ],
       }),
-      msg('tool', authModuleV2),  // 2nd read of auth.ts — NEAR-DUPLICATE (method renamed)
+      msg('tool', authModuleV2), // 2nd read of auth.ts — NEAR-DUPLICATE (method renamed)
       msg('assistant', 'The signRefresh method takes { sub: string }. Adding the rotation test.', {
-        tool_calls: [{ id: 'tc4', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } }],
+        tool_calls: [
+          { id: 'tc4', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } },
+        ],
       }),
-      msg('tool', 'File updated successfully.'),  // short — stays below dedup threshold
+      msg('tool', 'File updated successfully.'), // short — stays below dedup threshold
 
       // --- Phase 4: Run tests (fail) ---
       msg('user', 'Run the tests.'),
       msg('assistant', 'Running the test suite.', {
-        tool_calls: [{ id: 'tc5', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } }],
+        tool_calls: [
+          { id: 'tc5', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } },
+        ],
       }),
-      msg('tool', testOutput),  // 1st test output — shows failure
+      msg('tool', testOutput), // 1st test output — shows failure
 
       // --- Phase 5: Fix and re-test ---
-      msg('assistant', 'The rotation test failed — decoded payload is undefined. Let me check the verify call in the test.', {
-        tool_calls: [{ id: 'tc6', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } }],
-      }),
-      msg('tool', authModuleV3),  // 3rd read of auth.ts — NEAR-DUPLICATE (method added)
-      msg('assistant', 'Found it. The test was calling verify with the refresh token but using the access secret. Fixing.', {
-        tool_calls: [{ id: 'tc7', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } }],
-      }),
-      msg('tool', 'Updated tests/auth.test.ts'),  // short
+      msg(
+        'assistant',
+        'The rotation test failed — decoded payload is undefined. Let me check the verify call in the test.',
+        {
+          tool_calls: [
+            { id: 'tc6', function: { name: 'read', arguments: '{"path":"src/auth.ts"}' } },
+          ],
+        },
+      ),
+      msg('tool', authModuleV3), // 3rd read of auth.ts — NEAR-DUPLICATE (method added)
+      msg(
+        'assistant',
+        'Found it. The test was calling verify with the refresh token but using the access secret. Fixing.',
+        {
+          tool_calls: [
+            { id: 'tc7', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } },
+          ],
+        },
+      ),
+      msg('tool', 'Updated tests/auth.test.ts'), // short
 
       // --- Phase 6: Lint check ---
       msg('user', 'Run the linter before we test again.'),
       msg('assistant', 'Running eslint.', {
-        tool_calls: [{ id: 'tc8', function: { name: 'exec', arguments: '{"cmd":"npx eslint src/ tests/"}' } }],
+        tool_calls: [
+          { id: 'tc8', function: { name: 'exec', arguments: '{"cmd":"npx eslint src/ tests/"}' } },
+        ],
       }),
-      msg('tool', lintOutput),  // 1st lint output
+      msg('tool', lintOutput), // 1st lint output
 
       // --- Phase 7: Re-run tests (still failing differently) ---
       msg('assistant', 'There are 5 warnings but no errors. Running tests again.', {
-        tool_calls: [{ id: 'tc9', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } }],
+        tool_calls: [
+          { id: 'tc9', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } },
+        ],
       }),
-      msg('tool', testOutput),  // 2nd test output — DUPLICATE (same results)
+      msg('tool', testOutput), // 2nd test output — DUPLICATE (same results)
 
       // --- Phase 8: Another grep to find related code ---
-      msg('assistant', 'Still failing. Let me search for verify references again to check the middleware path.', {
-        tool_calls: [{ id: 'tc10', function: { name: 'grep', arguments: '{"pattern":"validateToken|verify.*token","path":"src/"}' } }],
-      }),
-      msg('tool', grepResults),  // 2nd grep — DUPLICATE
+      msg(
+        'assistant',
+        'Still failing. Let me search for verify references again to check the middleware path.',
+        {
+          tool_calls: [
+            {
+              id: 'tc10',
+              function: {
+                name: 'grep',
+                arguments: '{"pattern":"validateToken|verify.*token","path":"src/"}',
+              },
+            },
+          ],
+        },
+      ),
+      msg('tool', grepResults), // 2nd grep — DUPLICATE
 
       // --- Phase 9: Fix, lint, and final test ---
-      msg('assistant', 'The issue is in the middleware — it also calls verify. Let me fix the test to use the correct secret.', {
-        tool_calls: [{ id: 'tc11', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } }],
-      }),
-      msg('tool', 'File updated successfully.'),  // short
+      msg(
+        'assistant',
+        'The issue is in the middleware — it also calls verify. Let me fix the test to use the correct secret.',
+        {
+          tool_calls: [
+            { id: 'tc11', function: { name: 'edit', arguments: '{"path":"tests/auth.test.ts"}' } },
+          ],
+        },
+      ),
+      msg('tool', 'File updated successfully.'), // short
       msg('user', 'Lint and test again.'),
       msg('assistant', 'Running lint.', {
-        tool_calls: [{ id: 'tc12', function: { name: 'exec', arguments: '{"cmd":"npx eslint src/ tests/"}' } }],
+        tool_calls: [
+          { id: 'tc12', function: { name: 'exec', arguments: '{"cmd":"npx eslint src/ tests/"}' } },
+        ],
       }),
-      msg('tool', lintOutput),  // 2nd lint output — DUPLICATE
+      msg('tool', lintOutput), // 2nd lint output — DUPLICATE
 
       msg('assistant', 'Same warnings, no new issues. Running tests.', {
-        tool_calls: [{ id: 'tc13', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } }],
+        tool_calls: [
+          { id: 'tc13', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } },
+        ],
       }),
-      msg('tool', testOutput),  // 3rd test output — DUPLICATE
-      msg('assistant', 'All 5 tests passing now. The rotation test verifies the new token contains the original subject claim.'),
+      msg('tool', testOutput), // 3rd test output — DUPLICATE
+      msg(
+        'assistant',
+        'All 5 tests passing now. The rotation test verifies the new token contains the original subject claim.',
+      ),
       msg('user', 'Nice, looks good.'),
     ],
   };
@@ -560,9 +634,7 @@ async function run(): Promise<void> {
     const originalJson = JSON.stringify(scenario.messages);
     const expandedJson = JSON.stringify(er.messages);
     const roundTrip =
-      originalJson === expandedJson && er.missing_ids.length === 0
-        ? 'PASS'
-        : 'FAIL';
+      originalJson === expandedJson && er.missing_ids.length === 0 ? 'PASS' : 'FAIL';
 
     results.push({
       name: scenario.name,
@@ -648,10 +720,7 @@ async function run(): Promise<void> {
   // ---------------------------------------------------------------------------
 
   const tokenBudget = 2000;
-  const budgetScenarios: Scenario[] = [
-    deepConversation(),
-    agenticCodingSession(),
-  ];
+  const budgetScenarios: Scenario[] = [deepConversation(), agenticCodingSession()];
 
   console.log();
   console.log('tokenBudget Benchmark');
@@ -686,7 +755,8 @@ async function run(): Promise<void> {
 
       const er = uncompress(cr.messages, cr.verbatim);
       const rt =
-        JSON.stringify(scenario.messages) === JSON.stringify(er.messages) && er.missing_ids.length === 0
+        JSON.stringify(scenario.messages) === JSON.stringify(er.messages) &&
+        er.missing_ids.length === 0
           ? 'PASS'
           : 'FAIL';
       if (rt === 'FAIL') tbFails++;
@@ -751,7 +821,8 @@ async function run(): Promise<void> {
     // Round-trip check on the rw=4 dedup result
     const er2 = uncompress(dedupRw4.messages, dedupRw4.verbatim);
     const rt2 =
-      JSON.stringify(scenario.messages) === JSON.stringify(er2.messages) && er2.missing_ids.length === 0
+      JSON.stringify(scenario.messages) === JSON.stringify(er2.messages) &&
+      er2.missing_ids.length === 0
         ? 'PASS'
         : 'FAIL';
     if (rt2 === 'FAIL') dedupFails++;
@@ -810,7 +881,8 @@ async function run(): Promise<void> {
 
     const er = uncompress(cr.messages, cr.verbatim);
     const rt =
-      JSON.stringify(scenario.messages) === JSON.stringify(er.messages) && er.missing_ids.length === 0
+      JSON.stringify(scenario.messages) === JSON.stringify(er.messages) &&
+      er.missing_ids.length === 0
         ? 'PASS'
         : 'FAIL';
     if (rt === 'FAIL') fuzzyFails++;
@@ -854,7 +926,8 @@ async function run(): Promise<void> {
 function roundTrip(messages: Message[], cr: CompressResult): 'PASS' | 'FAIL' {
   const er = uncompress(cr.messages, cr.verbatim);
   return JSON.stringify(messages) === JSON.stringify(er.messages) && er.missing_ids.length === 0
-    ? 'PASS' : 'FAIL';
+    ? 'PASS'
+    : 'FAIL';
 }
 
 async function runLlmBenchmark(): Promise<void> {
@@ -862,11 +935,13 @@ async function runLlmBenchmark(): Promise<void> {
 
   if (providers.length === 0) {
     console.log();
-    console.log('LLM Summarization Benchmark — skipped (no OPENAI_API_KEY, OLLAMA_MODEL, or ANTHROPIC_API_KEY set)');
+    console.log(
+      'LLM Summarization Benchmark — skipped (no OPENAI_API_KEY, OLLAMA_MODEL, or ANTHROPIC_API_KEY set)',
+    );
     return;
   }
 
-  const scenarios = buildScenarios().filter(s => s.name !== 'Short conversation');
+  const scenarios = buildScenarios().filter((s) => s.name !== 'Short conversation');
 
   for (const provider of providers) {
     console.log();
@@ -951,18 +1026,31 @@ function printLlmRow(
   cr: CompressResult,
   rt: string,
   timeMs: number,
-  cols: { name: number; method: number; chr: number; tkr: number; comp: number; pres: number; rt: number; time: number },
+  cols: {
+    name: number;
+    method: number;
+    chr: number;
+    tkr: number;
+    comp: number;
+    pres: number;
+    rt: number;
+    time: number;
+  },
 ): void {
-  console.log([
-    name.padEnd(cols.name),
-    method.padStart(cols.method),
-    cr.compression.ratio.toFixed(2).padStart(cols.chr),
-    cr.compression.token_ratio.toFixed(2).padStart(cols.tkr),
-    String(cr.compression.messages_compressed).padStart(cols.comp),
-    String(cr.compression.messages_preserved).padStart(cols.pres),
-    rt.padStart(cols.rt),
-    (timeMs < 1000 ? timeMs.toFixed(0) + 'ms' : (timeMs / 1000).toFixed(1) + 's').padStart(cols.time),
-  ].join('  '));
+  console.log(
+    [
+      name.padEnd(cols.name),
+      method.padStart(cols.method),
+      cr.compression.ratio.toFixed(2).padStart(cols.chr),
+      cr.compression.token_ratio.toFixed(2).padStart(cols.tkr),
+      String(cr.compression.messages_compressed).padStart(cols.comp),
+      String(cr.compression.messages_preserved).padStart(cols.pres),
+      rt.padStart(cols.rt),
+      (timeMs < 1000 ? timeMs.toFixed(0) + 'ms' : (timeMs / 1000).toFixed(1) + 's').padStart(
+        cols.time,
+      ),
+    ].join('  '),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -991,13 +1079,17 @@ function flattenContent(content: string | ContentBlock[]): string {
       case 'thinking':
         break; // skip chain-of-thought
       case 'tool_use':
-        parts.push(`[tool_call: ${block.name}(${JSON.stringify(block.input ?? {}).slice(0, 200)})]`);
+        parts.push(
+          `[tool_call: ${block.name}(${JSON.stringify(block.input ?? {}).slice(0, 200)})]`,
+        );
         break;
       case 'tool_result': {
         const rc = block.content;
         if (typeof rc === 'string') parts.push(rc);
         else if (Array.isArray(rc)) {
-          for (const rb of rc) { if (rb.text) parts.push(rb.text); }
+          for (const rb of rc) {
+            if (rb.text) parts.push(rb.text);
+          }
         }
         break;
       }
@@ -1010,7 +1102,10 @@ function flattenContent(content: string | ContentBlock[]): string {
 
 function loadClaudeSession(jsonlPath: string): Message[] {
   const raw = readFileSync(jsonlPath, 'utf-8');
-  const lines = raw.trim().split('\n').map(line => JSON.parse(line));
+  const lines = raw
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
   const messages: Message[] = [];
   let index = 0;
 
@@ -1023,8 +1118,10 @@ function loadClaudeSession(jsonlPath: string): Message[] {
     let role: string;
     if (line.type === 'user') {
       const blocks = line.message.content;
-      role = (Array.isArray(blocks) && blocks.every((b: ContentBlock) => b.type === 'tool_result'))
-        ? 'tool' : 'user';
+      role =
+        Array.isArray(blocks) && blocks.every((b: ContentBlock) => b.type === 'tool_result')
+          ? 'tool'
+          : 'user';
     } else {
       role = 'assistant';
     }
@@ -1060,7 +1157,9 @@ function discoverClaudeSessions(limit: number): { path: string; label: string; s
     const dirPath = join(claudeDir, dir);
     try {
       if (!statSync(dirPath).isDirectory()) continue;
-    } catch { continue; }
+    } catch {
+      continue;
+    }
 
     for (const file of readdirSync(dirPath)) {
       if (!file.endsWith('.jsonl')) continue;
@@ -1075,28 +1174,13 @@ function discoverClaudeSessions(limit: number): { path: string; label: string; s
   return results.sort((a, b) => b.size - a.size).slice(0, limit);
 }
 
-interface RealResult {
-  label: string;
-  msgCount: number;
-  roles: string;
-  originalChars: number;
-  compressedChars: number;
-  ratio: string;
-  saved: string;
-  preserved: number;
-  codeSplit: number;
-  summarized: number;
-  asstFences: string;
-  negatives: number;
-  roundTrip: 'PASS' | 'FAIL';
-  timeMs: string;
-}
-
 function runRealSessions(): void {
   const sessions = discoverClaudeSessions(10);
   if (sessions.length === 0) {
     console.log();
-    console.log('Real Session Benchmark — skipped (no Claude Code sessions found in ~/.claude/projects/)');
+    console.log(
+      'Real Session Benchmark — skipped (no Claude Code sessions found in ~/.claude/projects/)',
+    );
     return;
   }
 
@@ -1124,57 +1208,71 @@ function runRealSessions(): void {
   console.log(rrHeader);
   console.log(rrSep);
 
-  let totOrig = 0, totBase = 0, totDedup = 0, totFuzzy = 0, totMsgs = 0;
-  let totAFOrig = 0, totAFComp = 0, totNeg = 0;
-  let totExact = 0, totFuzzyCount = 0;
-  let totPreserved = 0, totCodeSplit = 0, totSummarized = 0;
+  let totOrig = 0,
+    totBase = 0,
+    totDedup = 0,
+    totFuzzy = 0,
+    totMsgs = 0;
+  let totAFOrig = 0,
+    totAFComp = 0,
+    totNeg = 0;
+  let totExact = 0,
+    totFuzzyCount = 0;
+  let totPreserved = 0,
+    totCodeSplit = 0,
+    totSummarized = 0;
   let rtFails = 0;
 
   for (const session of sessions) {
     try {
       const messages = loadClaudeSession(session.path);
       const t0 = performance.now();
-      const crBase  = compress(messages, { recencyWindow: 4, dedup: false });
-      const crDedup = compress(messages, { recencyWindow: 4 });           // dedup defaults true
+      const crBase = compress(messages, { recencyWindow: 4, dedup: false });
+      const crDedup = compress(messages, { recencyWindow: 4 }); // dedup defaults true
       const crFuzzy = compress(messages, { recencyWindow: 4, fuzzyDedup: true });
       const t1 = performance.now();
 
       // Round-trip on most aggressive config
       const er = uncompress(crFuzzy.messages, crFuzzy.verbatim);
-      const rtOk = JSON.stringify(messages) === JSON.stringify(er.messages) && er.missing_ids.length === 0;
+      const rtOk =
+        JSON.stringify(messages) === JSON.stringify(er.messages) && er.missing_ids.length === 0;
       if (!rtOk) rtFails++;
 
-      const origC  = chars(messages);
-      const baseC  = chars(crBase.messages);
+      const origC = chars(messages);
+      const baseC = chars(crBase.messages);
       const dedupC = chars(crDedup.messages);
       const fuzzyC = chars(crFuzzy.messages);
-      totOrig  += origC;
-      totBase  += baseC;
+      totOrig += origC;
+      totBase += baseC;
       totDedup += dedupC;
       totFuzzy += fuzzyC;
-      totMsgs  += messages.length;
+      totMsgs += messages.length;
 
       // Dedup counts
       const exact = crDedup.compression.messages_deduped ?? 0;
       const fuzzy = crFuzzy.compression.messages_fuzzy_deduped ?? 0;
-      totExact      += exact;
+      totExact += exact;
       totFuzzyCount += fuzzy;
 
       // Classify compressed messages (on fuzzy result for aggregate)
-      let preserved = 0, codeSplit = 0, summarized = 0;
+      let preserved = 0,
+        codeSplit = 0,
+        summarized = 0;
       for (const m of crFuzzy.messages) {
         if (!m.metadata?._cce_original) preserved++;
         else if ((m.content ?? '').includes('```')) codeSplit++;
         else summarized++;
       }
-      totPreserved  += preserved;
-      totCodeSplit  += codeSplit;
+      totPreserved += preserved;
+      totCodeSplit += codeSplit;
       totSummarized += summarized;
 
       // Assistant fence integrity (on fuzzy result)
-      const afOrig = messages.filter(m => m.role === 'assistant')
+      const afOrig = messages
+        .filter((m) => m.role === 'assistant')
         .reduce((s, m) => s + ((m.content ?? '').match(fenceRe) ?? []).length, 0);
-      const afComp = crFuzzy.messages.filter(m => m.role === 'assistant')
+      const afComp = crFuzzy.messages
+        .filter((m) => m.role === 'assistant')
         .reduce((s, m) => s + ((m.content ?? '').match(fenceRe) ?? []).length, 0);
       totAFOrig += afOrig;
       totAFComp += afComp;
@@ -1186,30 +1284,32 @@ function runRealSessions(): void {
         if (!meta) continue;
         const ids = meta.ids ?? [m.id];
         const combinedLen = ids.reduce((sum, id) => {
-          const orig = messages.find(o => o.id === id);
+          const orig = messages.find((o) => o.id === id);
           return sum + (orig?.content?.length ?? 0);
         }, 0);
         if ((m.content ?? '').length > combinedLen) negatives++;
       }
       totNeg += negatives;
 
-      const baseR  = origC > 0 ? (origC / baseC).toFixed(2)  : '-';
+      const baseR = origC > 0 ? (origC / baseC).toFixed(2) : '-';
       const dedupR = origC > 0 ? (origC / dedupC).toFixed(2) : '-';
       const fuzzyR = origC > 0 ? (origC / fuzzyC).toFixed(2) : '-';
 
-      console.log([
-        session.label.slice(0, 24).padEnd(24),
-        String(messages.length).padStart(6),
-        origC.toLocaleString().padStart(10),
-        baseR.padStart(7),
-        dedupR.padStart(7),
-        fuzzyR.padStart(7),
-        String(exact).padStart(6),
-        String(fuzzy).padStart(6),
-        String(negatives).padStart(4),
-        (rtOk ? 'PASS' : 'FAIL').padStart(5),
-        ((t1 - t0).toFixed(0) + 'ms').padStart(8),
-      ].join('  '));
+      console.log(
+        [
+          session.label.slice(0, 24).padEnd(24),
+          String(messages.length).padStart(6),
+          origC.toLocaleString().padStart(10),
+          baseR.padStart(7),
+          dedupR.padStart(7),
+          fuzzyR.padStart(7),
+          String(exact).padStart(6),
+          String(fuzzy).padStart(6),
+          String(negatives).padStart(4),
+          (rtOk ? 'PASS' : 'FAIL').padStart(5),
+          ((t1 - t0).toFixed(0) + 'ms').padStart(8),
+        ].join('  '),
+      );
     } catch (err) {
       console.log(`  ${session.label.padEnd(24)}  ERROR: ${(err as Error).message.slice(0, 60)}`);
     }
@@ -1218,19 +1318,26 @@ function runRealSessions(): void {
   console.log(rrSep);
 
   // Aggregate
-  const aggBaseR  = totBase  > 0 ? (totOrig / totBase).toFixed(2)  : '-';
+  const aggBaseR = totBase > 0 ? (totOrig / totBase).toFixed(2) : '-';
   const aggDedupR = totDedup > 0 ? (totOrig / totDedup).toFixed(2) : '-';
   const aggFuzzyR = totFuzzy > 0 ? (totOrig / totFuzzy).toFixed(2) : '-';
   const afOk = totAFComp >= totAFOrig;
 
   console.log(`  Aggregate: ${totMsgs.toLocaleString()} msgs  ${totOrig.toLocaleString()} chars`);
   console.log(`  Ratios: base ${aggBaseR}x → dedup ${aggDedupR}x → fuzzy ${aggFuzzyR}x`);
-  console.log(`  Deduped: ${totExact} exact, ${totFuzzyCount} fuzzy  |  P/CS/S: ${totPreserved}/${totCodeSplit}/${totSummarized}`);
-  console.log(`  Asst fences: ${totAFComp}/${totAFOrig} ${afOk ? '✓' : '✗ LOSS'}  Negatives: ${totNeg}${totNeg === 0 ? ' ✓' : ' ✗'}`);
+  console.log(
+    `  Deduped: ${totExact} exact, ${totFuzzyCount} fuzzy  |  P/CS/S: ${totPreserved}/${totCodeSplit}/${totSummarized}`,
+  );
+  console.log(
+    `  Asst fences: ${totAFComp}/${totAFOrig} ${afOk ? '✓' : '✗ LOSS'}  Negatives: ${totNeg}${totNeg === 0 ? ' ✓' : ' ✗'}`,
+  );
 
   if (rtFails > 0) {
     console.log(`  WARNING: ${rtFails} session(s) failed round-trip verification`);
   }
 }
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

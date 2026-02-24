@@ -92,7 +92,9 @@ describe('createSummarizer', () => {
       await summarizer('some text');
 
       const prompt = callLlm.mock.calls[0][0] as string;
-      expect(prompt.startsWith('This is a legal contract. Preserve all clause numbers.')).toBe(true);
+      expect(prompt.startsWith('This is a legal contract. Preserve all clause numbers.')).toBe(
+        true,
+      );
     });
 
     it('built-in rules still present when systemPrompt is set', async () => {
@@ -270,7 +272,8 @@ describe('createEscalatingSummarizer', () => {
 
   it('Level 1 returns longer text — escalates to Level 2', async () => {
     const input = 'Short.';
-    const callLlm = vi.fn()
+    const callLlm = vi
+      .fn()
       .mockResolvedValueOnce('This summary is actually longer than the original input text.')
       .mockResolvedValueOnce('Bullet result.');
     const summarizer = createEscalatingSummarizer(callLlm);
@@ -286,9 +289,7 @@ describe('createEscalatingSummarizer', () => {
 
   it('Level 1 returns empty string — escalates to Level 2', async () => {
     const input = 'Some input text that needs summarizing for the test to make sense.';
-    const callLlm = vi.fn()
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('Aggressive result.');
+    const callLlm = vi.fn().mockResolvedValueOnce('').mockResolvedValueOnce('Aggressive result.');
     const summarizer = createEscalatingSummarizer(callLlm);
 
     const result = await summarizer(input);
@@ -299,7 +300,8 @@ describe('createEscalatingSummarizer', () => {
 
   it('Level 1 throws — escalates to Level 2', async () => {
     const input = 'Some input text that needs summarizing for the test to make sense.';
-    const callLlm = vi.fn()
+    const callLlm = vi
+      .fn()
       .mockRejectedValueOnce(new Error('Rate limited'))
       .mockResolvedValueOnce('Fallback result.');
     const summarizer = createEscalatingSummarizer(callLlm);
@@ -312,7 +314,8 @@ describe('createEscalatingSummarizer', () => {
 
   it('Level 2 throws — error propagates', async () => {
     const input = 'Some input text that needs summarizing for the test to make sense.';
-    const callLlm = vi.fn()
+    const callLlm = vi
+      .fn()
       .mockRejectedValueOnce(new Error('Rate limited'))
       .mockRejectedValueOnce(new Error('Service down'));
     const summarizer = createEscalatingSummarizer(callLlm);
@@ -322,7 +325,8 @@ describe('createEscalatingSummarizer', () => {
 
   it('systemPrompt and preserveTerms appear in both Level 1 and Level 2 prompts', async () => {
     const input = 'Short.';
-    const callLlm = vi.fn()
+    const callLlm = vi
+      .fn()
       .mockResolvedValueOnce('This is longer than the original short text input.')
       .mockResolvedValueOnce('Done.');
     const summarizer = createEscalatingSummarizer(callLlm, {
@@ -333,7 +337,7 @@ describe('createEscalatingSummarizer', () => {
     await summarizer(input);
 
     expect(callLlm).toHaveBeenCalledTimes(2);
-    const [prompt1, prompt2] = callLlm.mock.calls.map(c => c[0] as string);
+    const [prompt1, prompt2] = callLlm.mock.calls.map((c) => c[0] as string);
     // Both prompts include systemPrompt
     expect(prompt1.startsWith('Legal domain.')).toBe(true);
     expect(prompt2.startsWith('Legal domain.')).toBe(true);

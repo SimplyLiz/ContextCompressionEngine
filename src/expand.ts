@@ -6,7 +6,9 @@ function lookup(store: StoreLookup, id: string): Message | undefined {
   return typeof store === 'function' ? store(id) : store[id];
 }
 
-function hasOriginal(msg: Message): msg is Message & { metadata: { _cce_original: { ids: string[] } } } {
+function hasOriginal(
+  msg: Message,
+): msg is Message & { metadata: { _cce_original: { ids: string[] } } } {
   const orig = msg.metadata?._cce_original as Record<string, unknown> | undefined;
   return Array.isArray(orig?.ids) && (orig!.ids as unknown[]).length > 0;
 }
@@ -71,12 +73,19 @@ export function uncompress(
   store: StoreLookup,
   options?: UncompressOptions,
 ): UncompressResult {
+  if (!Array.isArray(messages)) {
+    throw new TypeError('uncompress(): messages must be an array');
+  }
+  if (store == null || (typeof store !== 'function' && typeof store !== 'object')) {
+    throw new TypeError('uncompress(): store must be a VerbatimMap or lookup function');
+  }
+
   let result = expandOnce(messages, store);
 
   if (options?.recursive) {
     const MAX_DEPTH = 10;
     let depth = 0;
-    let hasMore = result.messages.some(m => hasOriginal(m));
+    let hasMore = result.messages.some((m) => hasOriginal(m));
     while (hasMore && depth < MAX_DEPTH) {
       const next = expandOnce(result.messages, store);
       result = {
@@ -85,7 +94,7 @@ export function uncompress(
         messages_passthrough: next.messages_passthrough,
         missing_ids: [...result.missing_ids, ...next.missing_ids],
       };
-      hasMore = next.messages_expanded > 0 && next.messages.some(m => hasOriginal(m));
+      hasMore = next.messages_expanded > 0 && next.messages.some((m) => hasOriginal(m));
       depth++;
     }
   }

@@ -1,9 +1,12 @@
 # context-compression-engine
 
+[![CI](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/context-compression-engine.svg)](https://www.npmjs.com/package/context-compression-engine)
 [![license](https://img.shields.io/npm/l/context-compression-engine.svg)](LICENSE)
 
 Lossless context compression for LLMs. Zero dependencies. Zero API calls. Works everywhere JavaScript runs.
+
+> **1.3-6.1x compression** on synthetic scenarios, **1.5x on real Claude Code sessions** (11.7M chars across 8,004 messages) — fully deterministic, no LLM needed. Largest session: 4,257 messages / 5.8M chars compressed in 651ms with zero negatives. Every compression is losslessly reversible.
 
 ## The problem
 
@@ -35,7 +38,7 @@ The engine ships with a full benchmark suite that pits deterministic compression
 
 **The deterministic engine achieves 1.3-6.1x compression with zero latency and zero cost.** It scores sentences, packs a budget, strips filler — and in most scenarios, it compresses tighter than an LLM.
 
-Why? LLMs try to be *helpful*. They write fuller summaries that happen to be longer. The deterministic engine is optimized purely for compression — it doesn't care about readability, just signal density.
+Why? LLMs try to be _helpful_. They write fuller summaries that happen to be longer. The deterministic engine is optimized purely for compression — it doesn't care about readability, just signal density.
 
 **LLM summarization is opt-in for cases where semantic understanding improves summary quality** — long, prose-heavy conversations where the LLM's ability to paraphrase and merge concepts across many messages genuinely helps. The engine supports this via a pluggable `summarizer` option with a built-in fallback chain that automatically rejects LLM output when it's longer than the deterministic result.
 
@@ -80,9 +83,13 @@ Works in Node 18+, Deno, Bun, and edge runtimes. This is an ESM-only package —
 import { compress, uncompress } from 'context-compression-engine';
 
 // compress — prose gets summarized, code stays verbatim
-const { messages: compressed, verbatim, compression } = compress(messages, {
-  preserve: ['system'],  // roles to never compress
-  recencyWindow: 4,      // protect the last N messages
+const {
+  messages: compressed,
+  verbatim,
+  compression,
+} = compress(messages, {
+  preserve: ['system'], // roles to never compress
+  recencyWindow: 4, // protect the last N messages
 });
 
 // uncompress — restore originals from the verbatim store
@@ -114,30 +121,30 @@ const result = await compress(messages, {
   },
 });
 
-result.messages;                              // compressed message array
-result.verbatim;                              // original messages keyed by ID
-result.compression.ratio;                     // char compression ratio (>1 = savings)
-result.compression.token_ratio;               // token compression ratio (>1 = savings)
-result.compression.messages_compressed;       // how many were compressed
-result.compression.messages_preserved;        // how many were kept as-is
-result.compression.messages_deduped;          // exact duplicates replaced (when dedup: true)
-result.compression.messages_fuzzy_deduped;    // near-duplicates replaced (when fuzzyDedup: true)
+result.messages; // compressed message array
+result.verbatim; // original messages keyed by ID
+result.compression.ratio; // char compression ratio (>1 = savings)
+result.compression.token_ratio; // token compression ratio (>1 = savings)
+result.compression.messages_compressed; // how many were compressed
+result.compression.messages_preserved; // how many were kept as-is
+result.compression.messages_deduped; // exact duplicates replaced (when dedup: true)
+result.compression.messages_fuzzy_deduped; // near-duplicates replaced (when fuzzyDedup: true)
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `preserve` | `string[]` | `['system']` | Roles to never compress |
-| `recencyWindow` | `number` | `4` | Protect the last N messages from compression |
-| `sourceVersion` | `number` | `0` | Version tag for provenance tracking |
-| `summarizer` | `Summarizer` | — | LLM-powered summarizer. When provided, `compress()` returns a `Promise` |
-| `tokenBudget` | `number` | — | Target token count. When set, binary-searches `recencyWindow` to fit |
-| `minRecencyWindow` | `number` | `0` | Floor for `recencyWindow` when using `tokenBudget` |
-| `dedup` | `boolean` | `true` | Replace earlier exact-duplicate messages with a compact reference |
-| `fuzzyDedup` | `boolean` | `false` | Detect near-duplicate messages using line-level similarity |
-| `fuzzyThreshold` | `number` | `0.85` | Similarity threshold for fuzzy dedup (0-1) |
-| `embedSummaryId` | `boolean` | `false` | Embed `summary_id` in compressed content for downstream reference |
-| `forceConverge` | `boolean` | `false` | Hard-truncate non-recency messages when binary search bottoms out and budget still exceeded |
-| `tokenCounter` | `(msg: Message) => number` | `defaultTokenCounter` | Custom token counter per message. Default: `ceil(content.length / 3.5)` |
+| Option             | Type                       | Default               | Description                                                                                 |
+| ------------------ | -------------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
+| `preserve`         | `string[]`                 | `['system']`          | Roles to never compress                                                                     |
+| `recencyWindow`    | `number`                   | `4`                   | Protect the last N messages from compression                                                |
+| `sourceVersion`    | `number`                   | `0`                   | Version tag for provenance tracking                                                         |
+| `summarizer`       | `Summarizer`               | —                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`                     |
+| `tokenBudget`      | `number`                   | —                     | Target token count. When set, binary-searches `recencyWindow` to fit                        |
+| `minRecencyWindow` | `number`                   | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                          |
+| `dedup`            | `boolean`                  | `true`                | Replace earlier exact-duplicate messages with a compact reference                           |
+| `fuzzyDedup`       | `boolean`                  | `false`               | Detect near-duplicate messages using line-level similarity                                  |
+| `fuzzyThreshold`   | `number`                   | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                  |
+| `embedSummaryId`   | `boolean`                  | `false`               | Embed `summary_id` in compressed content for downstream reference                           |
+| `forceConverge`    | `boolean`                  | `false`               | Hard-truncate non-recency messages when binary search bottoms out and budget still exceeded |
+| `tokenCounter`     | `(msg: Message) => number` | `defaultTokenCounter` | Custom token counter per message. Default: `ceil(content.length / 3.5)`                     |
 
 #### Summarizer fallback
 
@@ -163,7 +170,7 @@ const result = compress(messages, {
   minRecencyWindow: 2,
 });
 
-result.fits;       // true if result fits within budget
+result.fits; // true if result fits within budget
 result.tokenCount; // token count (via tokenCounter)
 
 // Plug in a real tokenizer
@@ -237,16 +244,17 @@ For domain-specific compression, use `systemPrompt` to inject context:
 
 ```ts
 const summarizer = createSummarizer(callLlm, {
-  systemPrompt: 'This is a legal contract. Preserve all clause numbers, party names, and defined terms.',
+  systemPrompt:
+    'This is a legal contract. Preserve all clause numbers, party names, and defined terms.',
 });
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `maxResponseTokens` | `number` | `300` | Hint for maximum tokens in the LLM response |
-| `systemPrompt` | `string` | — | Domain-specific instructions prepended to the built-in rules |
-| `mode` | `'normal' \| 'aggressive'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget |
-| `preserveTerms` | `string[]` | — | Domain-specific terms appended to the built-in preserve list |
+| Option              | Type                       | Default    | Description                                                          |
+| ------------------- | -------------------------- | ---------- | -------------------------------------------------------------------- |
+| `maxResponseTokens` | `number`                   | `300`      | Hint for maximum tokens in the LLM response                          |
+| `systemPrompt`      | `string`                   | —          | Domain-specific instructions prepended to the built-in rules         |
+| `mode`              | `'normal' \| 'aggressive'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget |
+| `preserveTerms`     | `string[]`                 | —          | Domain-specific terms appended to the built-in preserve list         |
 
 ### createEscalatingSummarizer
 
@@ -259,23 +267,20 @@ Three-level escalation summarizer (normal → aggressive → deterministic fallb
 ```ts
 import { createEscalatingSummarizer, compress } from 'context-compression-engine';
 
-const summarizer = createEscalatingSummarizer(
-  async (prompt) => myLlm.complete(prompt),
-  {
-    maxResponseTokens: 300,
-    systemPrompt: 'This is a legal contract. Preserve all clause numbers.',
-    preserveTerms: ['clause numbers', 'party names'],
-  },
-);
+const summarizer = createEscalatingSummarizer(async (prompt) => myLlm.complete(prompt), {
+  maxResponseTokens: 300,
+  systemPrompt: 'This is a legal contract. Preserve all clause numbers.',
+  preserveTerms: ['clause numbers', 'party names'],
+});
 
 const result = await compress(messages, { summarizer });
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `maxResponseTokens` | `number` | `300` | Hint for maximum tokens in the LLM response |
-| `systemPrompt` | `string` | — | Domain-specific instructions prepended to the built-in rules |
-| `preserveTerms` | `string[]` | — | Domain-specific terms appended to the built-in preserve list |
+| Option              | Type       | Default | Description                                                  |
+| ------------------- | ---------- | ------- | ------------------------------------------------------------ |
+| `maxResponseTokens` | `number`   | `300`   | Hint for maximum tokens in the LLM response                  |
+| `systemPrompt`      | `string`   | —       | Domain-specific instructions prepended to the built-in rules |
+| `preserveTerms`     | `string[]` | —       | Domain-specific terms appended to the built-in preserve list |
 
 Note: `mode` is not accepted — the escalating summarizer manages both modes internally.
 
@@ -300,6 +305,7 @@ const result = compress(messages, { fuzzyDedup: true });
 Detects near-duplicates using line-level Jaccard similarity. Useful when the same file is read across edit cycles — the content evolves slightly but remains largely the same.
 
 The algorithm:
+
 1. **Fingerprint bucketing** — groups candidates by their first 5 non-empty normalized lines (requires 3+ shared)
 2. **Length-ratio pre-filter** — skips pairs where `min/max < 0.7`
 3. **Line-level Jaccard** — `|A ∩ B| / |A ∪ B|` using multiset frequency maps of normalized lines
@@ -445,19 +451,19 @@ If the summarizer throws or returns text longer than the input, the engine falls
 
 The classifier automatically preserves content that should never be summarized:
 
-| Content Type | Example | Preserved? |
-|---|---|---|
-| Code fences | `` ```ts const x = 1; ``` `` | Yes |
-| SQL | `SELECT * FROM users WHERE ...` | Yes |
-| JSON | `{"key": "value"}` | Yes |
-| API keys | `sk-proj-abc123...` | Yes |
-| URLs | `https://docs.example.com/api` | Yes |
-| File paths | `/etc/config.json` | Yes |
-| Short messages | `< 120 chars` | Yes |
-| Tool calls | Messages with `tool_calls` array | Yes |
-| System messages | `role: 'system'` (default) | Yes |
-| Duplicates | Repeated content (exact or fuzzy) | **Replaced with reference** |
-| Long prose | General discussion, explanations | **Compressed** |
+| Content Type    | Example                           | Preserved?                  |
+| --------------- | --------------------------------- | --------------------------- |
+| Code fences     | ` ```ts const x = 1; ``` `        | Yes                         |
+| SQL             | `SELECT * FROM users WHERE ...`   | Yes                         |
+| JSON            | `{"key": "value"}`                | Yes                         |
+| API keys        | `sk-proj-abc123...`               | Yes                         |
+| URLs            | `https://docs.example.com/api`    | Yes                         |
+| File paths      | `/etc/config.json`                | Yes                         |
+| Short messages  | `< 120 chars`                     | Yes                         |
+| Tool calls      | Messages with `tool_calls` array  | Yes                         |
+| System messages | `role: 'system'` (default)        | Yes                         |
+| Duplicates      | Repeated content (exact or fuzzy) | **Replaced with reference** |
+| Long prose      | General discussion, explanations  | **Compressed**              |
 
 Code-mixed messages get split: prose is summarized, code fences stay verbatim.
 
@@ -514,11 +520,11 @@ The benchmark covers seven conversation scenarios (coding assistant, long Q&A, t
 
 The benchmark runner includes an opt-in LLM section that compares deterministic compression against real LLM-powered summarization head-to-head. Set one or more environment variables to enable it:
 
-| Variable | Provider | Default model |
-|---|---|---|
-| `OPENAI_API_KEY` | OpenAI | `gpt-4.1-mini` (override: `OPENAI_MODEL`) |
+| Variable            | Provider  | Default model                                             |
+| ------------------- | --------- | --------------------------------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI    | `gpt-4.1-mini` (override: `OPENAI_MODEL`)                 |
 | `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` (override: `ANTHROPIC_MODEL`) |
-| `OLLAMA_MODEL` | Ollama | `llama3.2` (host override: `OLLAMA_HOST`) |
+| `OLLAMA_MODEL`      | Ollama    | `llama3.2` (host override: `OLLAMA_HOST`)                 |
 
 ```bash
 # Run with OpenAI

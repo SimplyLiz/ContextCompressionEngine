@@ -33,35 +33,35 @@ function test(name: string, fn: () => { pass: boolean; detail: string }) {
 
 test('A1: prose with "select" + "from" — no sql_content', () => {
   const r = classifyMessage(
-    'Please select your preferred option from the dropdown menu. The team will update the configuration and create a new deployment pipeline for the staging environment.'
+    'Please select your preferred option from the dropdown menu. The team will update the configuration and create a new deployment pipeline for the staging environment.',
   );
   return { pass: !r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
 test('A2: prose with "where" + "values" — no sql_content', () => {
   const r = classifyMessage(
-    'The system processes entries where defaults are established across all tenants. Users should adjust these values to match their specific operational requirements and constraints.'
+    'The system processes entries where defaults are established across all tenants. Users should adjust these values to match their specific operational requirements and constraints.',
   );
   return { pass: !r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
 test('A3: prose with "schema" + "from" — no sql_content', () => {
   const r = classifyMessage(
-    'When moving from the old schema to the new architecture, teams should carefully plan the migration path to minimize downtime and ensure data integrity across all services.'
+    'When moving from the old schema to the new architecture, teams should carefully plan the migration path to minimize downtime and ensure data integrity across all services.',
   );
   return { pass: !r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
 test('A4: prose with "update" + "delete" + "from" — no sql_content (3 kw, 0 anchors)', () => {
   const r = classifyMessage(
-    'We need to update the documentation and delete the old drafts from the shared drive before the quarterly review next Monday.'
+    'We need to update the documentation and delete the old drafts from the shared drive before the quarterly review next Monday.',
   );
   return { pass: !r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
 test('A5: prose with "select" + "from" + "schema" + "view" — no sql_content (4 kw, 2 weak, < strong)', () => {
   const r = classifyMessage(
-    'You can select the appropriate view from the schema browser to inspect the data model. The dashboard shows the current configuration state for all active environments.'
+    'You can select the appropriate view from the schema browser to inspect the data model. The dashboard shows the current configuration state for all active environments.',
   );
   return { pass: !r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
@@ -72,7 +72,7 @@ test('A6: real SQL still detected — SELECT FROM WHERE', () => {
 });
 
 test('A7: real SQL still detected — INSERT INTO VALUES', () => {
-  const r = classifyMessage("INSERT INTO audit_log (user_id, action) VALUES ($1, $2) RETURNING id");
+  const r = classifyMessage('INSERT INTO audit_log (user_id, action) VALUES ($1, $2) RETURNING id');
   return { pass: r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
@@ -82,7 +82,9 @@ test('A8: real SQL still detected — UPDATE SET WHERE', () => {
 });
 
 test('A9: real SQL still detected — CREATE TABLE with PRIMARY KEY', () => {
-  const r = classifyMessage('CREATE TABLE sessions (id SERIAL PRIMARY KEY, token VARCHAR(255) NOT NULL)');
+  const r = classifyMessage(
+    'CREATE TABLE sessions (id SERIAL PRIMARY KEY, token VARCHAR(255) NOT NULL)',
+  );
   return { pass: r.reasons.includes('sql_content'), detail: `reasons: ${r.reasons}` };
 });
 
@@ -92,28 +94,28 @@ test('A9: real SQL still detected — CREATE TABLE with PRIMARY KEY', () => {
 
 test('B1: CSS BEM class — no api_key', () => {
   const r = classifyMessage(
-    'Apply the class billing-dashboard-wrapper-outer-container-v2 to the root element for the new layout.'
+    'Apply the class billing-dashboard-wrapper-outer-container-v2 to the root element for the new layout.',
   );
   return { pass: !r.reasons.includes('api_key'), detail: `reasons: ${r.reasons}` };
 });
 
 test('B2: long kebab-case identifier — no api_key', () => {
   const r = classifyMessage(
-    'The component uses user-profile-settings-panel-container-main-v3 as its root class.'
+    'The component uses user-profile-settings-panel-container-main-v3 as its root class.',
   );
   return { pass: !r.reasons.includes('api_key'), detail: `reasons: ${r.reasons}` };
 });
 
 test('B3: npm scope-like name — no api_key', () => {
   const r = classifyMessage(
-    'Install the package my-org-internal-service-name-production from the private registry.'
+    'Install the package my-org-internal-service-name-production from the private registry.',
   );
   return { pass: !r.reasons.includes('api_key'), detail: `reasons: ${r.reasons}` };
 });
 
 test('B4: Tailwind-style utility classes — no api_key', () => {
   const r = classifyMessage(
-    'Use the classes flex-col-reverse-items-center-justify-between-gap-4 and bg-gradient-to-r for the hero section.'
+    'Use the classes flex-col-reverse-items-center-justify-between-gap-4 and bg-gradient-to-r for the hero section.',
   );
   return { pass: !r.reasons.includes('api_key'), detail: `reasons: ${r.reasons}` };
 });
@@ -245,12 +247,16 @@ test('E1: compress → expand round-trip on mixed tool conversation', () => {
 // ---------------------------------------------------------------------------
 
 test('F1: "Note: this is important" — no yaml_structure', () => {
-  const r = classifyMessage('Note: this is an important reminder about the upcoming sprint deadline.');
+  const r = classifyMessage(
+    'Note: this is an important reminder about the upcoming sprint deadline.',
+  );
   return { pass: !r.reasons.includes('yaml_structure'), detail: `reasons: ${r.reasons}` };
 });
 
 test('F2: "Error: something broke" — no yaml_structure', () => {
-  const r = classifyMessage('Error: the build failed because of a missing dependency in the pipeline.');
+  const r = classifyMessage(
+    'Error: the build failed because of a missing dependency in the pipeline.',
+  );
   return { pass: !r.reasons.includes('yaml_structure'), detail: `reasons: ${r.reasons}` };
 });
 
@@ -260,7 +266,9 @@ test('F3: real YAML still detected (multi-line)', () => {
 });
 
 test('F4: "[Action required]" prose — no json_structure', () => {
-  const r = classifyMessage('[Action required] Please update your local environment variables before deploying.');
+  const r = classifyMessage(
+    '[Action required] Please update your local environment variables before deploying.',
+  );
   return { pass: !r.reasons.includes('json_structure'), detail: `reasons: ${r.reasons}` };
 });
 
@@ -275,17 +283,23 @@ test('F6: JSON array still detected', () => {
 });
 
 test('F7: "must" in tech prose — no legal_term', () => {
-  const r = classifyMessage('The server must respond within 200ms for all health check endpoints under normal load.');
+  const r = classifyMessage(
+    'The server must respond within 200ms for all health check endpoints under normal load.',
+  );
   return { pass: !r.reasons.includes('legal_term'), detail: `reasons: ${r.reasons}` };
 });
 
 test('F8: "shall" in legal text — still triggers legal_term', () => {
-  const r = classifyMessage('The licensee shall not redistribute the software without written consent.');
+  const r = classifyMessage(
+    'The licensee shall not redistribute the software without written consent.',
+  );
   return { pass: r.reasons.includes('legal_term'), detail: `reasons: ${r.reasons}` };
 });
 
 test('F9: single indented line — no indented_code', () => {
-  const r = classifyMessage('As discussed:\n    Thank you for your patience during the migration process.');
+  const r = classifyMessage(
+    'As discussed:\n    Thank you for your patience during the migration process.',
+  );
   return { pass: !r.reasons.includes('indented_code'), detail: `reasons: ${r.reasons}` };
 });
 
@@ -337,8 +351,8 @@ test('G5: Slack token', () => {
 // Print results
 // ---------------------------------------------------------------------------
 
-const passed = results.filter(r => r.pass).length;
-const failed = results.filter(r => !r.pass).length;
+const passed = results.filter((r) => r.pass).length;
+const failed = results.filter((r) => !r.pass).length;
 
 console.log();
 console.log('Real-World Stress Tests');
