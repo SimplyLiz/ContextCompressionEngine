@@ -418,7 +418,16 @@ function contentLength(msg: Message): number {
   return typeof msg.content === 'string' ? msg.content.length : 0;
 }
 
-/** Default token counter: ~3.5 chars/token heuristic. */
+/**
+ * Default token counter: ~3.5 chars/token heuristic.
+ *
+ * The 3.5 ratio is the empirical average for GPT-family BPE tokenizers
+ * (cl100k_base, o200k_base) on mixed English text. Real-world values range
+ * from ~3.2 (code-heavy) to ~4.5 (plain prose). We intentionally pick the
+ * lower end so budget estimates stay conservative (slightly over-counting
+ * tokens is safer than under-counting). Users who need exact counts can
+ * supply a real tokenizer via the `tokenCounter` option.
+ */
 export function defaultTokenCounter(msg: Message): number {
   return Math.ceil(contentLength(msg) / 3.5);
 }

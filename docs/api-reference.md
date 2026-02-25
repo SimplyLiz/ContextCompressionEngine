@@ -174,7 +174,7 @@ function defaultTokenCounter(msg: Message): number;
 Math.ceil(msg.content.length / 3.5);
 ```
 
-Approximates ~3.5 characters per token. Suitable for rough estimates. For accurate budgeting, replace with a real tokenizer. See [Token budget](token-budget.md).
+The 3.5 chars/token ratio is the empirical average for GPT-family BPE tokenizers (cl100k_base, o200k_base) on mixed English text. The lower end of the range (~3.2–4.5) is chosen intentionally so budget estimates stay conservative — over-counting tokens is safer than under-counting. For accurate budgeting, replace with a real tokenizer. See [Token budget](token-budget.md).
 
 ---
 

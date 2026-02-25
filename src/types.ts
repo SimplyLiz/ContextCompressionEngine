@@ -32,7 +32,7 @@ export type CompressOptions = {
   embedSummaryId?: boolean;
   /** Hard-truncate non-recency messages when binary search bottoms out and budget still exceeded. Default: false. */
   forceConverge?: boolean;
-  /** Custom token counter per message. Default: ceil(content.length / 3.5). */
+  /** Custom token counter per message. Default: ceil(content.length / 3.5) — see defaultTokenCounter for rationale. */
   tokenCounter?: (msg: Message) => number;
 };
 

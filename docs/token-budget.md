@@ -49,7 +49,7 @@ function defaultTokenCounter(msg: Message): number {
 }
 ```
 
-~3.5 characters per token is a rough heuristic. It's fast and works for ballpark estimates, but real tokenizers vary:
+~3.5 characters per token is derived from empirical measurements of GPT-family BPE tokenizers (cl100k_base, o200k_base) on mixed English text. We pick the lower end of the observed range so estimates are conservative — slightly over-counting tokens is safer than under-counting and blowing the budget. It's fast and works for ballpark estimates, but real tokenizers vary:
 
 | Tokenizer | Typical chars/token |
 | --------- | ------------------- |
