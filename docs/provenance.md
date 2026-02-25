@@ -25,10 +25,14 @@ When multiple consecutive same-role messages are merged into one summary, `ids` 
 
 ```ts
 // Single message compressed
-{ ids: ['msg_5'] }
+{
+  ids: ['msg_5'];
+}
 
 // Three consecutive user messages merged
-{ ids: ['msg_3', 'msg_4', 'msg_5'] }
+{
+  ids: ['msg_3', 'msg_4', 'msg_5'];
+}
 ```
 
 ## `summary_id`
@@ -71,6 +75,7 @@ When `embedSummaryId: true` is set in [CompressOptions](api-reference.md), the `
 ```
 
 Without `embedSummaryId` (default):
+
 ```
 [summary: This message discussed the authentication flow...]
 ```
@@ -111,6 +116,7 @@ Only present when there are parents (empty array is omitted).
 Mirrors `CompressOptions.sourceVersion`. Defaults to `0`.
 
 Use this to track which version of your context was compressed. Useful for:
+
 - Knowing when a summary was created
 - Debugging stale summaries
 - Versioned compression strategies

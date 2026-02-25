@@ -18,6 +18,7 @@ const { messages: restored } = uncompress(compressed, verbatim);
 ```
 
 This works because:
+
 - Each compressed message's `metadata._cce_original.ids` lists the original message IDs
 - Those IDs are keys into the `verbatim` map
 - `uncompress` looks up each ID and replaces the summary with the original(s)
@@ -72,8 +73,8 @@ await db.transaction(async (tx) => {
 });
 
 // WRONG — non-atomic write
-await db.saveMessages(result.messages);  // succeeds
-await db.saveVerbatim(result.verbatim);  // crashes here = data loss
+await db.saveMessages(result.messages); // succeeds
+await db.saveVerbatim(result.verbatim); // crashes here = data loss
 ```
 
 If compressed messages are written without their verbatim originals, the originals are **irrecoverably lost**. The summaries remain readable but the byte-identical originals cannot be restored.
@@ -102,6 +103,7 @@ const { messages } = uncompress(compressed, store, { recursive: true });
 ```
 
 Recursive expansion:
+
 1. Expands the first layer of compressed messages
 2. Checks if any expanded messages are themselves compressed
 3. Repeats until no more compressed messages are found or 10 levels deep (safety limit)
@@ -139,6 +141,7 @@ if (missing_ids.length > 0) {
 ```
 
 This catches:
+
 - Partial writes (non-atomic persistence)
 - Corrupted stores (missing keys)
 - Schema migration issues

@@ -28,7 +28,7 @@
   "files": [
     "dist"
   ],
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "AGPL-3.0-only",
   "keywords": [
     "llm",
     "context",

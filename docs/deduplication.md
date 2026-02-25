@@ -41,6 +41,7 @@ const result = compress(messages, { dedup: true }); // default
 ### Eligibility rules
 
 A message is eligible for exact dedup when:
+
 - Role is not in the `preserve` list
 - No `tool_calls` array
 - Content doesn't start with `[summary:`, `[summary#`, or `[truncated`
@@ -59,6 +60,7 @@ Detects near-duplicates using line-level Jaccard similarity. Useful when the sam
 **Phase 1: Build eligible list**
 
 Same eligibility as exact dedup, plus:
+
 - Skip indices already handled by exact dedup
 - Normalize lines: trim, lowercase, filter empty
 - Extract fingerprint: first 5 non-empty normalized lines
@@ -73,6 +75,7 @@ Same eligibility as exact dedup, plus:
 **Phase 3: Jaccard comparison**
 
 For each candidate pair:
+
 1. **Length-ratio pre-filter** — skip pairs where `min/max length ratio < 0.7`
 2. **Line-level Jaccard** — `|A intersection B| / |A union B|` using multiset frequency maps
 3. Accept pairs above the `fuzzyThreshold` (default: 0.85)
@@ -93,7 +96,8 @@ For each candidate pair:
 
 ### Complexity
 
-Worst case O(n^2), but effectively O(n * k) in practice due to:
+Worst case O(n^2), but effectively O(n \* k) in practice due to:
+
 - Length-ratio pre-filter discards obvious non-matches
 - Fingerprint bucketing requires >= 3 shared first-5-lines to even compare
 
@@ -110,11 +114,11 @@ compress(messages, { fuzzyDedup: true, fuzzyThreshold: 0.7 });
 compress(messages, { fuzzyDedup: true, fuzzyThreshold: 0.6 });
 ```
 
-| Threshold | Use case |
-| --------- | -------- |
+| Threshold | Use case                                                                       |
+| --------- | ------------------------------------------------------------------------------ |
 | `0.85`+   | Safe default. Catches near-identical content (whitespace changes, minor edits) |
-| `0.7`     | Catches file reads across small edit cycles |
-| `0.6`     | Aggressive. May group content that shares structure but differs in specifics |
+| `0.7`     | Catches file reads across small edit cycles                                    |
+| `0.6`     | Aggressive. May group content that shares structure but differs in specifics   |
 
 Lower thresholds increase dedup rate but risk grouping content that a human would consider distinct.
 

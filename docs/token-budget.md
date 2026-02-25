@@ -34,8 +34,8 @@ const result = compress(messages, {
   minRecencyWindow: 2,
 });
 
-result.fits;          // true if result fits within budget
-result.tokenCount;    // token count (via tokenCounter)
+result.fits; // true if result fits within budget
+result.tokenCount; // token count (via tokenCounter)
 result.recencyWindow; // the recencyWindow the binary search settled on
 ```
 
@@ -54,7 +54,7 @@ function defaultTokenCounter(msg: Message): number {
 | Tokenizer | Typical chars/token |
 | --------- | ------------------- |
 | GPT-4/4o  | ~3.5-4.0            |
-| Claude     | ~3.5-4.0            |
+| Claude    | ~3.5-4.0            |
 | Llama 3   | ~3.0-3.5            |
 
 For accurate budgeting, replace it.

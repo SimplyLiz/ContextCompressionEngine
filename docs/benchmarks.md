@@ -26,15 +26,15 @@ npm run bench
 
 The benchmark covers 7 conversation types:
 
-| Scenario | Description |
-| -------- | ----------- |
-| Coding assistant | Mixed code fences and prose discussion |
-| Long Q&A | Extended question-and-answer with detailed explanations |
-| Tool-heavy | Messages with `tool_calls` arrays (preserved by default) |
-| Short conversation | Brief exchanges, mostly under 120 chars |
-| Deep conversation | Long, multi-paragraph prose exchanges |
-| Structured content | JSON, YAML, SQL, test output |
-| Agentic coding session | Repeated file reads, grep results, test runs |
+| Scenario               | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| Coding assistant       | Mixed code fences and prose discussion                   |
+| Long Q&A               | Extended question-and-answer with detailed explanations  |
+| Tool-heavy             | Messages with `tool_calls` arrays (preserved by default) |
+| Short conversation     | Brief exchanges, mostly under 120 chars                  |
+| Deep conversation      | Long, multi-paragraph prose exchanges                    |
+| Structured content     | JSON, YAML, SQL, test output                             |
+| Agentic coding session | Repeated file reads, grep results, test runs             |
 
 ### What gets measured
 
@@ -64,11 +64,11 @@ This provides the most realistic performance numbers since synthetic scenarios c
 
 Compare deterministic compression against real LLM-powered summarization. Set one or more environment variables to enable:
 
-| Variable            | Provider  | Default model |
-| ------------------- | --------- | ------------- |
-| `OPENAI_API_KEY`    | OpenAI    | `gpt-4.1-mini` (override: `OPENAI_MODEL`) |
+| Variable            | Provider  | Default model                                             |
+| ------------------- | --------- | --------------------------------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI    | `gpt-4.1-mini` (override: `OPENAI_MODEL`)                 |
 | `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` (override: `ANTHROPIC_MODEL`) |
-| `OLLAMA_MODEL`      | Ollama    | `llama3.2` (host override: `OLLAMA_HOST`) |
+| `OLLAMA_MODEL`      | Ollama    | `llama3.2` (host override: `OLLAMA_HOST`)                 |
 
 ```bash
 # Run with OpenAI
@@ -85,11 +85,11 @@ OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=sk-ant-... npm run bench
 
 Each scenario runs three methods side-by-side:
 
-| Method | Description |
-| ------ | ----------- |
-| `deterministic` | No LLM, pure sentence scoring + entity extraction |
-| `llm-basic` | `createSummarizer` with the detected provider |
-| `llm-escalate` | `createEscalatingSummarizer` (normal -> aggressive -> deterministic) |
+| Method          | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `deterministic` | No LLM, pure sentence scoring + entity extraction                    |
+| `llm-basic`     | `createSummarizer` with the detected provider                        |
+| `llm-escalate`  | `createEscalatingSummarizer` (normal -> aggressive -> deterministic) |
 
 All methods verify round-trip integrity — `uncompress()` is called to confirm originals are restored.
 
@@ -103,6 +103,7 @@ All methods verify round-trip integrity — `uncompress()` is called to confirm 
 ### SDK requirements
 
 LLM providers require their SDKs:
+
 - OpenAI: `openai` package
 - Anthropic: `@anthropic-ai/sdk` package
 - Ollama: `openai` package (uses OpenAI-compatible API)
@@ -128,12 +129,14 @@ Token ratio is more meaningful for LLM context budgeting since tokens are what m
 ### When LLM wins
 
 LLM summarization can outperform deterministic in:
+
 - Very long prose-heavy conversations where paraphrasing and concept merging genuinely helps
 - Domain-specific content where the LLM understands what's important
 
 ### When deterministic wins
 
 Deterministic typically wins when:
+
 - Messages contain mixed code and prose (code-aware splitting is already optimal)
 - Messages are structured (test output, grep results)
 - The LLM writes helpful but verbose summaries

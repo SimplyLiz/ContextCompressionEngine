@@ -59,6 +59,7 @@ Duplicates are replaced with compact references like `[cce:dup of msg_42 - 1234 
 Non-preserved, non-dedup messages with the **same role** are collected into groups. This merges consecutive messages from the same speaker before summarization, producing tighter summaries.
 
 The `collectGroup` function walks forward from the current position, collecting messages that are:
+
 - Not preserved
 - Not code-split
 - Not dedup-annotated
@@ -97,7 +98,7 @@ The `summarize` function uses sentence scoring:
 3. Mark the highest-scored sentence per paragraph as "primary"
 4. Greedy budget packing: primary sentences first (by score), then secondary
 5. Re-sort selected sentences by original position to preserve reading order
-6. Join with ` ... ` separator
+6. Join with `...` separator
 
 Budget: 200 chars if input < 600 chars, 400 chars otherwise.
 
@@ -138,6 +139,7 @@ This three-level fallback (LLM -> deterministic -> size guard) ensures compressi
 After summarization, the engine checks if the summary (with formatting, entities, merge count) is shorter than the original. If it isn't, the original message is preserved unchanged.
 
 This check happens for:
+
 - Single compressed messages
 - Merged groups
 - Code-split messages
@@ -155,6 +157,7 @@ This check happens for:
 - `{entity_suffix}` - ` | entities: foo, bar, baz` (omitted for code-split messages)
 
 With `embedSummaryId: true`:
+
 ```
 [summary#{cce_sum_abc123}: {text}{merge_suffix}{entity_suffix}]
 ```

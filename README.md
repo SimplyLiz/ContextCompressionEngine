@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/context-compression-engine.svg)](https://www.npmjs.com/package/context-compression-engine)
-[![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 Lossless context compression for LLMs. Zero dependencies. Zero API calls. Works everywhere JavaScript runs.
 
@@ -135,6 +135,7 @@ Built-in estimator: `ceil(content.length / 3.5)`. Replace with a real tokenizer 
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal use, open-source projects, and non-commercial purposes.
+This project is dual-licensed:
 
-**Commercial use** requires a separate license. Contact [lisa@tastehub.io](mailto:lisa@tastehub.io) — happy to discuss collaboration and licensing options.
+- **Open source** — [AGPL-3.0](LICENSE). You can use, modify, and distribute this library freely, provided your project is also open-sourced under AGPL-3.0 or a compatible license.
+- **Commercial** — If you want to use this library in proprietary software without open-sourcing your project, a commercial license is available. Contact [lisa@tastehub.io](mailto:lisa@tastehub.io) for terms.

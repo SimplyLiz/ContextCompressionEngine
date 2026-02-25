@@ -46,44 +46,44 @@ function compress(
 
 ### Parameters
 
-| Parameter  | Type              | Description        |
-| ---------- | ----------------- | ------------------ |
-| `messages` | `Message[]`       | Messages to compress |
+| Parameter  | Type              | Description                     |
+| ---------- | ----------------- | ------------------------------- |
+| `messages` | `Message[]`       | Messages to compress            |
 | `options`  | `CompressOptions` | Compression options (see below) |
 
 ### CompressOptions
 
-| Option             | Type                       | Default               | Description                                                                                 |
-| ------------------ | -------------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
-| `preserve`         | `string[]`                 | `['system']`          | Roles to never compress                                                                     |
-| `recencyWindow`    | `number`                   | `4`                   | Protect the last N messages from compression                                                |
-| `sourceVersion`    | `number`                   | `0`                   | Version tag for [provenance tracking](provenance.md)                                        |
+| Option             | Type                       | Default               | Description                                                                                                        |
+| ------------------ | -------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `preserve`         | `string[]`                 | `['system']`          | Roles to never compress                                                                                            |
+| `recencyWindow`    | `number`                   | `4`                   | Protect the last N messages from compression                                                                       |
+| `sourceVersion`    | `number`                   | `0`                   | Version tag for [provenance tracking](provenance.md)                                                               |
 | `summarizer`       | `Summarizer`               | -                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md) |
-| `tokenBudget`      | `number`                   | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md) |
-| `minRecencyWindow` | `number`                   | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                          |
-| `dedup`            | `boolean`                  | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md) |
-| `fuzzyDedup`       | `boolean`                  | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md) |
-| `fuzzyThreshold`   | `number`                   | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                  |
-| `embedSummaryId`   | `boolean`                  | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md) |
-| `forceConverge`    | `boolean`                  | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md) |
-| `tokenCounter`     | `(msg: Message) => number` | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                       |
+| `tokenBudget`      | `number`                   | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md)                    |
+| `minRecencyWindow` | `number`                   | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                                                 |
+| `dedup`            | `boolean`                  | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md)           |
+| `fuzzyDedup`       | `boolean`                  | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md)                  |
+| `fuzzyThreshold`   | `number`                   | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                                         |
+| `embedSummaryId`   | `boolean`                  | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md)                 |
+| `forceConverge`    | `boolean`                  | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md)             |
+| `tokenCounter`     | `(msg: Message) => number` | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                                              |
 
 ### CompressResult
 
-| Field                                | Type                    | Description                                                              |
-| ------------------------------------ | ----------------------- | ------------------------------------------------------------------------ |
-| `messages`                           | `Message[]`             | Compressed message array                                                 |
-| `verbatim`                           | `VerbatimMap`           | Original messages keyed by ID. Must be persisted atomically with `messages` |
-| `compression.original_version`       | `number`                | Mirrors `sourceVersion`                                                  |
-| `compression.ratio`                  | `number`                | Character-based compression ratio. >1 means savings                      |
-| `compression.token_ratio`            | `number`                | Token-based compression ratio. >1 means savings                          |
-| `compression.messages_compressed`    | `number`                | Messages that were compressed                                            |
-| `compression.messages_preserved`     | `number`                | Messages kept as-is                                                      |
-| `compression.messages_deduped`       | `number \| undefined`   | Exact duplicates replaced (when `dedup: true`)                           |
-| `compression.messages_fuzzy_deduped` | `number \| undefined`   | Near-duplicates replaced (when `fuzzyDedup: true`)                       |
-| `fits`                               | `boolean \| undefined`  | Whether result fits within `tokenBudget`. Present when `tokenBudget` is set |
-| `tokenCount`                         | `number \| undefined`   | Estimated token count. Present when `tokenBudget` is set                 |
-| `recencyWindow`                      | `number \| undefined`   | The `recencyWindow` the binary search settled on. Present when `tokenBudget` is set |
+| Field                                | Type                   | Description                                                                         |
+| ------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------- |
+| `messages`                           | `Message[]`            | Compressed message array                                                            |
+| `verbatim`                           | `VerbatimMap`          | Original messages keyed by ID. Must be persisted atomically with `messages`         |
+| `compression.original_version`       | `number`               | Mirrors `sourceVersion`                                                             |
+| `compression.ratio`                  | `number`               | Character-based compression ratio. >1 means savings                                 |
+| `compression.token_ratio`            | `number`               | Token-based compression ratio. >1 means savings                                     |
+| `compression.messages_compressed`    | `number`               | Messages that were compressed                                                       |
+| `compression.messages_preserved`     | `number`               | Messages kept as-is                                                                 |
+| `compression.messages_deduped`       | `number \| undefined`  | Exact duplicates replaced (when `dedup: true`)                                      |
+| `compression.messages_fuzzy_deduped` | `number \| undefined`  | Near-duplicates replaced (when `fuzzyDedup: true`)                                  |
+| `fits`                               | `boolean \| undefined` | Whether result fits within `tokenBudget`. Present when `tokenBudget` is set         |
+| `tokenCount`                         | `number \| undefined`  | Estimated token count. Present when `tokenBudget` is set                            |
+| `recencyWindow`                      | `number \| undefined`  | The `recencyWindow` the binary search settled on. Present when `tokenBudget` is set |
 
 ### Example
 
@@ -121,26 +121,26 @@ function uncompress(
 
 ### Parameters
 
-| Parameter  | Type               | Description |
-| ---------- | ------------------ | ----------- |
-| `messages` | `Message[]`        | Compressed messages to expand |
-| `store`    | `StoreLookup`      | `VerbatimMap` object or `(id: string) => Message \| undefined` function |
-| `options`  | `UncompressOptions` | Expansion options (see below) |
+| Parameter  | Type                | Description                                                             |
+| ---------- | ------------------- | ----------------------------------------------------------------------- |
+| `messages` | `Message[]`         | Compressed messages to expand                                           |
+| `store`    | `StoreLookup`       | `VerbatimMap` object or `(id: string) => Message \| undefined` function |
+| `options`  | `UncompressOptions` | Expansion options (see below)                                           |
 
 ### UncompressOptions
 
-| Option      | Type      | Default | Description |
-| ----------- | --------- | ------- | ----------- |
+| Option      | Type      | Default | Description                                                                       |
+| ----------- | --------- | ------- | --------------------------------------------------------------------------------- |
 | `recursive` | `boolean` | `false` | Recursively expand messages whose originals are also compressed (up to 10 levels) |
 
 ### UncompressResult
 
-| Field                 | Type       | Description |
-| --------------------- | ---------- | ----------- |
-| `messages`            | `Message[]` | Expanded messages |
-| `messages_expanded`   | `number`   | How many compressed messages were restored |
-| `messages_passthrough` | `number`  | How many messages passed through unchanged |
-| `missing_ids`         | `string[]` | IDs looked up but not found. Non-empty = data loss |
+| Field                  | Type        | Description                                        |
+| ---------------------- | ----------- | -------------------------------------------------- |
+| `messages`             | `Message[]` | Expanded messages                                  |
+| `messages_expanded`    | `number`    | How many compressed messages were restored         |
+| `messages_passthrough` | `number`    | How many messages passed through unchanged         |
+| `missing_ids`          | `string[]`  | IDs looked up but not found. Non-empty = data loss |
 
 ### Example
 
@@ -171,7 +171,7 @@ function defaultTokenCounter(msg: Message): number;
 ### Formula
 
 ```ts
-Math.ceil(msg.content.length / 3.5)
+Math.ceil(msg.content.length / 3.5);
 ```
 
 Approximates ~3.5 characters per token. Suitable for rough estimates. For accurate budgeting, replace with a real tokenizer. See [Token budget](token-budget.md).
@@ -195,7 +195,7 @@ function createSummarizer(
 
 | Option              | Type                       | Default    | Description                                                          |
 | ------------------- | -------------------------- | ---------- | -------------------------------------------------------------------- |
-| `maxResponseTokens` | `number`                   | `300`      | Hint for maximum tokens in the LLM response                         |
+| `maxResponseTokens` | `number`                   | `300`      | Hint for maximum tokens in the LLM response                          |
 | `systemPrompt`      | `string`                   | -          | Domain-specific instructions prepended to the built-in rules         |
 | `mode`              | `'normal' \| 'aggressive'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget |
 | `preserveTerms`     | `string[]`                 | -          | Domain-specific terms appended to the built-in preserve list         |
@@ -209,14 +209,11 @@ The prompt always preserves: code references, file paths, function/variable name
 ```ts
 import { createSummarizer, compress } from 'context-compression-engine';
 
-const summarizer = createSummarizer(
-  async (prompt) => myLlm.complete(prompt),
-  {
-    maxResponseTokens: 300,
-    systemPrompt: 'This is a legal contract. Preserve all clause numbers.',
-    preserveTerms: ['clause numbers', 'party names'],
-  },
-);
+const summarizer = createSummarizer(async (prompt) => myLlm.complete(prompt), {
+  maxResponseTokens: 300,
+  systemPrompt: 'This is a legal contract. Preserve all clause numbers.',
+  preserveTerms: ['clause numbers', 'party names'],
+});
 
 const result = await compress(messages, { summarizer });
 ```

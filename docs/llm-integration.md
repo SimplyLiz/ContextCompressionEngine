@@ -19,15 +19,15 @@ Wraps your LLM call with an optimized prompt that preserves technical content:
 ```ts
 import { createSummarizer, compress } from 'context-compression-engine';
 
-const summarizer = createSummarizer(
-  async (prompt) => myLlm.complete(prompt),
-  { maxResponseTokens: 300 },
-);
+const summarizer = createSummarizer(async (prompt) => myLlm.complete(prompt), {
+  maxResponseTokens: 300,
+});
 
 const result = await compress(messages, { summarizer });
 ```
 
 The generated prompt:
+
 - Instructs the LLM to summarize concisely (or as terse bullet points in `aggressive` mode)
 - Sets a token budget hint
 - Preserves: code references, file paths, function/variable names, URLs, API keys, error messages, numbers, and technical decisions
@@ -40,7 +40,8 @@ The generated prompt:
 
 ```ts
 const summarizer = createSummarizer(callLlm, {
-  systemPrompt: 'This is a legal contract. Preserve all clause numbers, party names, and defined terms.',
+  systemPrompt:
+    'This is a legal contract. Preserve all clause numbers, party names, and defined terms.',
 });
 ```
 
@@ -65,10 +66,9 @@ Tries normal first, escalates to aggressive if the result isn't shorter:
 ```ts
 import { createEscalatingSummarizer, compress } from 'context-compression-engine';
 
-const summarizer = createEscalatingSummarizer(
-  async (prompt) => myLlm.complete(prompt),
-  { maxResponseTokens: 300 },
-);
+const summarizer = createEscalatingSummarizer(async (prompt) => myLlm.complete(prompt), {
+  maxResponseTokens: 300,
+});
 
 const result = await compress(messages, { summarizer });
 ```
@@ -219,13 +219,13 @@ const summarizer = async (text: string) => {
 
 Fast, cheap models work best for compression summarization. The task is straightforward (shorten text while preserving technical terms), so frontier models are overkill.
 
-| Provider  | Recommended model              | Why |
-| --------- | ------------------------------ | --- |
-| Anthropic | `claude-haiku-4-5-20251001`    | Fast, cheap, good at instruction following |
-| OpenAI    | `gpt-4o-mini`                  | Low latency, low cost |
-| Google    | `gemini-2.0-flash`             | Fast, generous rate limits |
-| xAI       | `grok-3-fast`                  | OpenAI-compatible, fast |
-| Ollama    | `llama3`, `llama3.2`, `phi3`   | Local, no API costs |
+| Provider  | Recommended model            | Why                                        |
+| --------- | ---------------------------- | ------------------------------------------ |
+| Anthropic | `claude-haiku-4-5-20251001`  | Fast, cheap, good at instruction following |
+| OpenAI    | `gpt-4o-mini`                | Low latency, low cost                      |
+| Google    | `gemini-2.0-flash`           | Fast, generous rate limits                 |
+| xAI       | `grok-3-fast`                | OpenAI-compatible, fast                    |
+| Ollama    | `llama3`, `llama3.2`, `phi3` | Local, no API costs                        |
 
 The fallback chain means a worse model just falls back to deterministic more often — it won't produce worse output.
 
