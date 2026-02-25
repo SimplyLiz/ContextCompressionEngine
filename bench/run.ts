@@ -6,8 +6,20 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { detectProviders } from './llm.js';
-import type { LlmBenchmarkResult, LlmMethodResult, LlmTokenBudgetResult } from './baseline.js';
-import { saveLlmResult } from './baseline.js';
+import type {
+  LlmBenchmarkResult,
+  LlmMethodResult,
+  LlmTokenBudgetResult,
+  BenchmarkResults,
+} from './baseline.js';
+import {
+  saveLlmResult,
+  saveBaseline,
+  loadCurrentBaseline,
+  compareResults,
+  formatRegressions,
+  generateBenchmarkDocs,
+} from './baseline.js';
 
 // ---------------------------------------------------------------------------
 // Auto-load .env (no dependency, won't override existing vars)
@@ -790,8 +802,23 @@ interface Result {
 }
 
 async function run(): Promise<void> {
+  const args = process.argv.slice(2);
+  const flagSave = args.includes('--save');
+  const flagCheck = args.includes('--check');
+  const flagLlm = args.includes('--llm');
+  const toleranceIdx = args.indexOf('--tolerance');
+  const tolerance = toleranceIdx >= 0 ? Number(args[toleranceIdx + 1]) / 100 : 0;
+
   const scenarios = buildScenarios();
   const results: Result[] = [];
+
+  // Structured results for baseline save/check
+  const benchResults: BenchmarkResults = {
+    basic: {},
+    tokenBudget: {},
+    dedup: {},
+    fuzzyDedup: {},
+  };
 
   for (const scenario of scenarios) {
     const t0 = performance.now();
@@ -820,6 +847,13 @@ async function run(): Promise<void> {
       roundTrip,
       timeMs: (t1 - t0).toFixed(2),
     });
+
+    benchResults.basic[scenario.name] = {
+      ratio: cr.compression.ratio,
+      tokenRatio: cr.compression.token_ratio,
+      compressed: cr.compression.messages_compressed,
+      preserved: cr.compression.messages_preserved,
+    };
   }
 
   // Print table
@@ -949,6 +983,16 @@ async function run(): Promise<void> {
           ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
         ].join('  '),
       );
+
+      const tbKey = `${scenario.name}|dedup=${dedup}`;
+      benchResults.tokenBudget[tbKey] = {
+        tokenCount: cr.tokenCount ?? 0,
+        fits: cr.fits ?? false,
+        recencyWindow: cr.recencyWindow,
+        compressed: cr.compression.messages_compressed,
+        preserved: cr.compression.messages_preserved,
+        deduped: cr.compression.messages_deduped ?? 0,
+      };
     }
   }
 
@@ -1012,6 +1056,14 @@ async function run(): Promise<void> {
         rt2.padStart(cols.rt),
       ].join('  '),
     );
+
+    benchResults.dedup[scenario.name] = {
+      rw0Base: baseRw0.compression.ratio,
+      rw0Dup: dedupRw0.compression.ratio,
+      rw4Base: baseRw4.compression.ratio,
+      rw4Dup: dedupRw4.compression.ratio,
+      deduped,
+    };
   }
 
   console.log(dedupSep);
@@ -1070,6 +1122,12 @@ async function run(): Promise<void> {
         ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
       ].join('  '),
     );
+
+    benchResults.fuzzyDedup[scenario.name] = {
+      exact: cr.compression.messages_deduped ?? 0,
+      fuzzy: cr.compression.messages_fuzzy_deduped ?? 0,
+      ratio: cr.compression.ratio,
+    };
   }
 
   console.log(fuzzySep);
@@ -1080,13 +1138,50 @@ async function run(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
+  // --save / --check
+  // ---------------------------------------------------------------------------
+
+  const baselinesDir = resolve(import.meta.dirname, 'baselines');
+  const version = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf-8'),
+  ).version;
+
+  if (flagSave) {
+    saveBaseline(baselinesDir, version, benchResults);
+    generateBenchmarkDocs(
+      baselinesDir,
+      resolve(import.meta.dirname, '..', 'docs', 'benchmarks.md'),
+    );
+    console.log();
+    console.log(`Baseline saved (v${version}) and docs/benchmarks.md regenerated.`);
+  }
+
+  if (flagCheck) {
+    const current = loadCurrentBaseline(baselinesDir);
+    if (!current) {
+      console.error(
+        'No baseline found at bench/baselines/current.json — run `npm run bench:save` first.',
+      );
+      process.exit(1);
+    }
+    const regressions = compareResults(current.results, benchResults, tolerance);
+    if (regressions.length > 0) {
+      console.error();
+      console.error(formatRegressions(regressions));
+      process.exit(1);
+    }
+    console.log();
+    console.log(`Baseline check passed (v${current.version}, tolerance ${tolerance * 100}%).`);
+  }
+
+  // ---------------------------------------------------------------------------
   // Real Claude Code sessions (if available locally)
   // ---------------------------------------------------------------------------
 
   runRealSessions();
 
   // LLM benchmarks require explicit --llm flag (they cost money and take minutes)
-  if (process.argv.includes('--llm')) {
+  if (flagLlm) {
     await runLlmBenchmark();
   }
 

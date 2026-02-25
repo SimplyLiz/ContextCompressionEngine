@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,22 +90,34 @@ export interface LlmBenchmarkResult {
 // Save / Load
 // ---------------------------------------------------------------------------
 
-export function saveBaseline(path: string, version: string, results: BenchmarkResults): void {
+export function saveBaseline(
+  baselinesDir: string,
+  version: string,
+  results: BenchmarkResults,
+): void {
   const baseline: Baseline = {
     version,
     generated: new Date().toISOString(),
     results,
   };
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(baselinesDir, { recursive: true });
   const json = JSON.stringify(baseline, null, 2) + '\n';
-  writeFileSync(path, json);
-  // Also save a versioned copy for history
-  writeFileSync(join(dir, `v${version}.json`), json);
+  // Active baseline at root
+  writeFileSync(join(baselinesDir, 'current.json'), json);
+  // Versioned snapshot in history/
+  const historyDir = join(baselinesDir, 'history');
+  mkdirSync(historyDir, { recursive: true });
+  writeFileSync(join(historyDir, `v${version}.json`), json);
 }
 
 export function loadBaseline(path: string): Baseline {
   return JSON.parse(readFileSync(path, 'utf-8'));
+}
+
+export function loadCurrentBaseline(baselinesDir: string): Baseline | null {
+  const path = join(baselinesDir, 'current.json');
+  if (!existsSync(path)) return null;
+  return loadBaseline(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,26 +329,30 @@ export function formatRegressions(regressions: Regression[]): string {
 // Doc generation
 // ---------------------------------------------------------------------------
 
-function loadAllBaselines(baselinesDir: string): Baseline[] {
-  const files = readdirSync(baselinesDir)
-    .filter((f) => f.startsWith('v') && f.endsWith('.json'))
-    .sort((a, b) => {
-      // Sort by semver: v1.0.0.json < v1.1.0.json < v2.0.0.json
-      const pa = a
-        .replace(/^v|\.json$/g, '')
-        .split('.')
-        .map(Number);
-      const pb = b
-        .replace(/^v|\.json$/g, '')
-        .split('.')
-        .map(Number);
-      for (let i = 0; i < 3; i++) {
-        if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
-      }
-      return 0;
-    });
+function semverSort(a: string, b: string): number {
+  const pa = a
+    .replace(/^v|\.json$/g, '')
+    .split('.')
+    .map(Number);
+  const pb = b
+    .replace(/^v|\.json$/g, '')
+    .split('.')
+    .map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  }
+  return 0;
+}
 
-  return files.map((f) => loadBaseline(join(baselinesDir, f)));
+function loadAllBaselines(baselinesDir: string): Baseline[] {
+  const historyDir = join(baselinesDir, 'history');
+  if (!existsSync(historyDir)) return [];
+
+  const files = readdirSync(historyDir)
+    .filter((f) => f.startsWith('v') && f.endsWith('.json'))
+    .sort(semverSort);
+
+  return files.map((f) => loadBaseline(join(historyDir, f)));
 }
 
 function fix(n: number, d: number = 2): string {
@@ -546,7 +562,8 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push('| File | Purpose |');
   lines.push('| --- | --- |');
   lines.push('| `bench/baselines/current.json` | Active baseline compared in CI |');
-  lines.push('| `bench/baselines/v*.json` | Versioned snapshots, one per release |');
+  lines.push('| `bench/baselines/history/v*.json` | Versioned snapshots, one per release |');
+  lines.push('| `bench/baselines/llm/*.json` | LLM benchmark reference data (non-deterministic) |');
   lines.push('');
 
   // --- LLM comparison (if result files exist) ---
