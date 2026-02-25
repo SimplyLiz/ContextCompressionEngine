@@ -1150,10 +1150,10 @@ async function run(): Promise<void> {
     saveBaseline(baselinesDir, version, benchResults);
     generateBenchmarkDocs(
       baselinesDir,
-      resolve(import.meta.dirname, '..', 'docs', 'benchmarks.md'),
+      resolve(import.meta.dirname, '..', 'docs', 'benchmark-results.md'),
     );
     console.log();
-    console.log(`Baseline saved (v${version}) and docs/benchmarks.md regenerated.`);
+    console.log(`Baseline saved (v${version}) and docs/benchmark-results.md regenerated.`);
   }
 
   if (flagCheck) {

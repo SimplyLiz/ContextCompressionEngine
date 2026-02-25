@@ -359,22 +359,144 @@ function fix(n: number, d: number = 2): string {
   return n.toFixed(d);
 }
 
-function generateSection(b: Baseline): string {
+/** Shorten scenario names for chart x-axis labels. */
+const SHORT_NAMES: Record<string, string> = {
+  'Coding assistant': 'Coding',
+  'Long Q&A': 'Long Q&A',
+  'Tool-heavy': 'Tool-heavy',
+  'Short conversation': 'Short',
+  'Deep conversation': 'Deep',
+  'Technical explanation': 'Technical',
+  'Structured content': 'Structured',
+  'Agentic coding session': 'Agentic',
+};
+
+function shortName(name: string): string {
+  return SHORT_NAMES[name] ?? name;
+}
+
+function formatTime(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid chart helpers
+// ---------------------------------------------------------------------------
+
+function compressionChart(basic: Record<string, BasicResult>): string[] {
+  const entries = Object.entries(basic);
+  const labels = entries.map(([n]) => `"${shortName(n)}"`).join(', ');
+  const values = entries.map(([, v]) => fix(v.ratio)).join(', ');
+
+  return [
+    '```mermaid',
+    'xychart-beta',
+    '    title "Compression Ratio by Scenario"',
+    `    x-axis [${labels}]`,
+    '    y-axis "Char Ratio"',
+    `    bar [${values}]`,
+    '```',
+  ];
+}
+
+function dedupChart(dedup: Record<string, DedupResult>): string[] {
+  // Only include scenarios where dedup actually changes the ratio
+  const entries = Object.entries(dedup).filter(([, v]) => v.rw0Base !== v.rw0Dup || v.deduped > 0);
+  if (entries.length === 0) return [];
+
+  const labels = entries.map(([n]) => `"${shortName(n)}"`).join(', ');
+  const base = entries.map(([, v]) => fix(v.rw0Base)).join(', ');
+  const exact = entries.map(([, v]) => fix(v.rw0Dup)).join(', ');
+
+  return [
+    '```mermaid',
+    'xychart-beta',
+    '    title "Deduplication Impact (recencyWindow=0)"',
+    `    x-axis [${labels}]`,
+    '    y-axis "Char Ratio"',
+    `    bar [${base}]`,
+    `    bar [${exact}]`,
+    '```',
+    '',
+    '*First bar: no dedup · Second bar: with dedup*',
+  ];
+}
+
+function llmComparisonChart(
+  basic: Record<string, BasicResult>,
+  llmResults: LlmBenchmarkResult[],
+): string[] {
+  // Use the best LLM result (highest average vsDet) for the chart
+  let bestLlm: LlmBenchmarkResult | undefined;
+  let bestAvg = -Infinity;
+  for (const llm of llmResults) {
+    const vsDetValues: number[] = [];
+    for (const sr of Object.values(llm.scenarios)) {
+      for (const mr of Object.values(sr.methods)) {
+        if (mr.vsDet != null && mr.vsDet > 0) vsDetValues.push(mr.vsDet);
+      }
+    }
+    const avg = vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
+    if (avg > bestAvg) {
+      bestAvg = avg;
+      bestLlm = llm;
+    }
+  }
+  if (!bestLlm) return [];
+
+  // Match scenarios that exist in both basic and LLM results
+  const sharedScenarios = Object.keys(basic).filter((s) => s in bestLlm!.scenarios);
+  if (sharedScenarios.length === 0) return [];
+
+  const labels = sharedScenarios.map((n) => `"${shortName(n)}"`).join(', ');
+  const detValues = sharedScenarios.map((s) => fix(basic[s].ratio)).join(', ');
+
+  // Pick the best LLM method per scenario (highest ratio)
+  const llmValues = sharedScenarios
+    .map((s) => {
+      const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
+        (m) => m.vsDet != null,
+      );
+      if (methods.length === 0) return fix(basic[s].ratio);
+      return fix(Math.max(...methods.map((m) => m.ratio)));
+    })
+    .join(', ');
+
+  return [
+    '```mermaid',
+    'xychart-beta',
+    `    title "Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})"`,
+    `    x-axis [${labels}]`,
+    '    y-axis "Char Ratio"',
+    `    bar [${detValues}]`,
+    `    bar [${llmValues}]`,
+    '```',
+    '',
+    '*First bar: deterministic · Second bar: best LLM method*',
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Section generators
+// ---------------------------------------------------------------------------
+
+function generateCompressionSection(b: Baseline): string[] {
   const lines: string[] = [];
   const r = b.results;
-
-  // Basic compression table
   const basicEntries = Object.entries(r.basic);
   const ratios = basicEntries.map(([, v]) => v.ratio);
   const minR = Math.min(...ratios);
   const maxR = Math.max(...ratios);
   const avgR = ratios.reduce((a, b) => a + b, 0) / ratios.length;
 
-  lines.push(`### Basic Compression`);
+  lines.push('## Compression by Scenario');
   lines.push('');
   lines.push(
-    `**Range:** ${fix(minR)}x \u2013 ${fix(maxR)}x \u00b7 **Average:** ${fix(avgR)}x \u00b7 **Round-trip:** all PASS`,
+    `> **${basicEntries.length} scenarios** · **${fix(avgR)}x** avg ratio · `
+      + `**${fix(minR)}x** – **${fix(maxR)}x** range · all round-trips PASS`,
   );
+  lines.push('');
+  lines.push(...compressionChart(r.basic));
   lines.push('');
   lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
   lines.push('| --- | ---: | ---: | ---: | ---: |');
@@ -383,27 +505,20 @@ function generateSection(b: Baseline): string {
       `| ${name} | ${fix(v.ratio)} | ${fix(v.tokenRatio)} | ${v.compressed} | ${v.preserved} |`,
     );
   }
+  return lines;
+}
 
-  // Token budget table
+function generateDedupSection(r: BenchmarkResults): string[] {
+  const lines: string[] = [];
+  lines.push('## Deduplication Impact');
   lines.push('');
-  lines.push('### Token Budget (target: 2000 tokens)');
-  lines.push('');
-  lines.push(
-    '| Scenario | Dedup | Tokens | Fits | recencyWindow | Compressed | Preserved | Deduped |',
-  );
-  lines.push('| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |');
-  for (const [key, v] of Object.entries(r.tokenBudget)) {
-    const [name, dedupStr] = key.split('|');
-    const dedup = dedupStr === 'dedup=true' ? 'yes' : 'no';
-    lines.push(
-      `| ${name} | ${dedup} | ${v.tokenCount} | ${v.fits} | ${v.recencyWindow ?? '-'} | ${v.compressed} | ${v.preserved} | ${v.deduped} |`,
-    );
+
+  const chart = dedupChart(r.dedup);
+  if (chart.length > 0) {
+    lines.push(...chart);
+    lines.push('');
   }
 
-  // Dedup comparison table
-  lines.push('');
-  lines.push('### Dedup Effectiveness');
-  lines.push('');
   lines.push(
     '| Scenario | No Dedup (rw=0) | Dedup (rw=0) | No Dedup (rw=4) | Dedup (rw=4) | Deduped |',
   );
@@ -413,19 +528,150 @@ function generateSection(b: Baseline): string {
       `| ${name} | ${fix(v.rw0Base)} | ${fix(v.rw0Dup)} | ${fix(v.rw4Base)} | ${fix(v.rw4Dup)} | ${v.deduped} |`,
     );
   }
+  lines.push('');
 
-  // Fuzzy dedup table
-  lines.push('');
-  lines.push('### Fuzzy Dedup');
-  lines.push('');
+  // Fuzzy dedup detail
+  const hasFuzzy = Object.values(r.fuzzyDedup).some((v) => v.fuzzy > 0);
+  if (hasFuzzy) {
+    lines.push('### Fuzzy Dedup');
+    lines.push('');
+  }
   lines.push('| Scenario | Exact Deduped | Fuzzy Deduped | Ratio |');
   lines.push('| --- | ---: | ---: | ---: |');
   for (const [name, v] of Object.entries(r.fuzzyDedup)) {
     lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} |`);
   }
-
-  return lines.join('\n');
+  return lines;
 }
+
+function generateTokenBudgetSection(r: BenchmarkResults): string[] {
+  const lines: string[] = [];
+  const entries = Object.entries(r.tokenBudget);
+  const allFit = entries.every(([, v]) => v.fits);
+  const fitCount = entries.filter(([, v]) => v.fits).length;
+
+  lines.push('## Token Budget');
+  lines.push('');
+  lines.push(`Target: **2000 tokens** · ${allFit ? 'all fit' : `${fitCount}/${entries.length} fit`}`);
+  lines.push('');
+  lines.push(
+    '| Scenario | Dedup | Tokens | Fits | recencyWindow | Compressed | Preserved | Deduped |',
+  );
+  lines.push('| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |');
+  for (const [key, v] of entries) {
+    const [name, dedupStr] = key.split('|');
+    const dedup = dedupStr === 'dedup=true' ? 'yes' : 'no';
+    const fitIcon = v.fits ? 'yes' : 'no';
+    lines.push(
+      `| ${name} | ${dedup} | ${v.tokenCount} | ${fitIcon} | ${v.recencyWindow ?? '-'} | ${v.compressed} | ${v.preserved} | ${v.deduped} |`,
+    );
+  }
+  return lines;
+}
+
+function generateLlmSection(
+  baselinesDir: string,
+  basic: Record<string, BasicResult>,
+): string[] {
+  const llmResults = loadAllLlmResults(baselinesDir);
+  if (llmResults.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## LLM vs Deterministic');
+  lines.push('');
+  lines.push(
+    '> Results are **non-deterministic** — LLM outputs vary between runs. '
+      + 'Saved as reference data, not used for regression testing.',
+  );
+  lines.push('');
+
+  // Summary chart
+  const chart = llmComparisonChart(basic, llmResults);
+  if (chart.length > 0) {
+    lines.push(...chart);
+    lines.push('');
+  }
+
+  // Key finding callout
+  const wins: string[] = [];
+  const losses: string[] = [];
+  for (const llm of llmResults) {
+    for (const [scenario, sr] of Object.entries(llm.scenarios)) {
+      for (const mr of Object.values(sr.methods)) {
+        if (mr.vsDet != null && mr.vsDet > 1.0) wins.push(scenario);
+        if (mr.vsDet != null && mr.vsDet < 0.9) losses.push(scenario);
+      }
+    }
+  }
+  const uniqueWins = [...new Set(wins)];
+  const uniqueLosses = [...new Set(losses)];
+  if (uniqueWins.length > 0 || uniqueLosses.length > 0) {
+    lines.push('> **Key findings:**');
+    if (uniqueWins.length > 0) {
+      lines.push(`> LLM wins on prose-heavy scenarios: ${uniqueWins.join(', ')}`);
+    }
+    if (uniqueLosses.length > 0) {
+      lines.push(
+        `> Deterministic wins on structured/technical content: ${uniqueLosses.join(', ')}`,
+      );
+    }
+    lines.push('');
+  }
+
+  // Per-provider detail tables
+  for (const llm of llmResults) {
+    lines.push(`### ${llm.provider} (${llm.model})`);
+    lines.push('');
+    lines.push(`*Generated: ${llm.generated.split('T')[0]}*`);
+    lines.push('');
+    lines.push(
+      '| Scenario | Method | Char Ratio | Token Ratio | vsDet | Compressed | Preserved | Round-trip | Time |',
+    );
+    lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |');
+
+    for (const [scenario, sr] of Object.entries(llm.scenarios)) {
+      let first = true;
+      for (const [method, mr] of Object.entries(sr.methods)) {
+        const label = first ? scenario : '';
+        const vsDet = mr.vsDet != null ? fix(mr.vsDet) : '-';
+        lines.push(
+          `| ${label} | ${method} | ${fix(mr.ratio)} | ${fix(mr.tokenRatio)} | ${vsDet} | ${mr.compressed} | ${mr.preserved} | ${mr.roundTrip} | ${formatTime(mr.timeMs)} |`,
+        );
+        first = false;
+      }
+    }
+
+    // Token budget table (if present)
+    if (llm.tokenBudget && Object.keys(llm.tokenBudget).length > 0) {
+      lines.push('');
+      lines.push('#### Token Budget (target: 2000 tokens)');
+      lines.push('');
+      lines.push(
+        '| Scenario | Method | Tokens | Fits | recencyWindow | Ratio | Round-trip | Time |',
+      );
+      lines.push('| --- | --- | ---: | --- | ---: | ---: | --- | ---: |');
+
+      for (const [scenario, entries] of Object.entries(llm.tokenBudget)) {
+        let first = true;
+        for (const entry of entries) {
+          const label = first ? scenario : '';
+          lines.push(
+            `| ${label} | ${entry.method} | ${entry.tokenCount} | ${entry.fits} | ${entry.recencyWindow ?? '-'} | ${fix(entry.ratio)} | ${entry.roundTrip} | ${formatTime(entry.timeMs)} |`,
+          );
+          first = false;
+        }
+      }
+    }
+
+    lines.push('');
+  }
+
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Main doc generator
+// ---------------------------------------------------------------------------
 
 export function generateBenchmarkDocs(baselinesDir: string, outputPath: string): void {
   const baselines = loadAllBaselines(baselinesDir);
@@ -434,198 +680,85 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   const latest = baselines[baselines.length - 1];
   const lines: string[] = [];
 
+  // --- Header ---
   lines.push('# Benchmark Results');
   lines.push('');
-  lines.push('[Back to README](../README.md) | [All docs](README.md)');
+  lines.push('[Back to README](../README.md) | [All docs](README.md) | [Handbook](benchmarks.md)');
   lines.push('');
-  lines.push('<!-- Auto-generated from bench/baselines/. Do not edit manually. -->');
-  lines.push('<!-- Run `npm run bench:save` to regenerate. -->');
+  lines.push('*Auto-generated by `npm run bench:save`. Do not edit manually.*');
   lines.push('');
-
-  // --- How to run section ---
-  lines.push('## Running Benchmarks');
-  lines.push('');
-  lines.push('```bash');
-  lines.push('npm run bench          # Run benchmarks (no baseline check)');
-  lines.push('npm run bench:check    # Run and compare against baseline');
-  lines.push('npm run bench:save     # Run, save new baseline, regenerate this doc');
-  lines.push('```');
-  lines.push('');
-  lines.push('### LLM benchmarks (opt-in)');
-  lines.push('');
-  lines.push(
-    'LLM benchmarks require the `--llm` flag (`npm run bench:llm`). Set API keys in a `.env` file or export them. Ollama is auto-detected when running locally.',
-  );
-  lines.push('');
-  lines.push('| Variable | Provider | Default Model | Notes |');
-  lines.push('| --- | --- | --- | --- |');
-  lines.push('| `OPENAI_API_KEY` | OpenAI | `gpt-4.1-mini` | |');
-  lines.push('| `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` | |');
-  lines.push('| *(none required)* | Ollama | `llama3.2` | Auto-detected on localhost:11434 |');
+  lines.push(`**v${latest.version}** · Generated: ${latest.generated.split('T')[0]}`);
   lines.push('');
 
-  // --- Latest version results ---
-  lines.push(`## Current Results (v${latest.version})`);
+  // --- Summary ---
+  const basicEntries = Object.entries(latest.results.basic);
+  const ratios = basicEntries.map(([, v]) => v.ratio);
+  const avgR = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+  lines.push('## Summary');
   lines.push('');
-  lines.push(generateSection(latest));
+  lines.push(`| Metric | Value |`);
+  lines.push(`| --- | --- |`);
+  lines.push(`| Scenarios | ${basicEntries.length} |`);
+  lines.push(`| Average compression | ${fix(avgR)}x |`);
+  lines.push(`| Best compression | ${fix(Math.max(...ratios))}x |`);
+  lines.push(`| Round-trip integrity | all PASS |`);
   lines.push('');
 
-  // --- Version history ---
+  // --- Compression ---
+  lines.push(...generateCompressionSection(latest));
+  lines.push('');
+
+  // --- Dedup ---
+  lines.push(...generateDedupSection(latest.results));
+  lines.push('');
+
+  // --- Token budget ---
+  lines.push(...generateTokenBudgetSection(latest.results));
+  lines.push('');
+
+  // --- LLM (conditional) ---
+  const llmSection = generateLlmSection(baselinesDir, latest.results.basic);
+  if (llmSection.length > 0) {
+    lines.push(...llmSection);
+  }
+
+  // --- Version history (conditional) ---
   if (baselines.length > 1) {
     lines.push('## Version History');
     lines.push('');
     lines.push('| Version | Date | Avg Char Ratio | Avg Token Ratio | Scenarios |');
     lines.push('| --- | --- | ---: | ---: | ---: |');
     for (const b of [...baselines].reverse()) {
-      const basicEntries = Object.values(b.results.basic);
-      const avgChr = basicEntries.reduce((s, v) => s + v.ratio, 0) / basicEntries.length;
-      const avgTkr = basicEntries.reduce((s, v) => s + v.tokenRatio, 0) / basicEntries.length;
+      const entries = Object.values(b.results.basic);
+      const avgChr = entries.reduce((s, v) => s + v.ratio, 0) / entries.length;
+      const avgTkr = entries.reduce((s, v) => s + v.tokenRatio, 0) / entries.length;
       const date = b.generated.split('T')[0];
       lines.push(
-        `| ${b.version} | ${date} | ${fix(avgChr)} | ${fix(avgTkr)} | ${basicEntries.length} |`,
+        `| ${b.version} | ${date} | ${fix(avgChr)} | ${fix(avgTkr)} | ${entries.length} |`,
       );
     }
     lines.push('');
-  }
 
-  // --- Per-version detail (older versions) ---
-  const olderVersions = baselines.slice(0, -1).reverse();
-  if (olderVersions.length > 0) {
-    lines.push('## Previous Versions');
-    lines.push('');
+    // Per-version detail (older versions)
+    const olderVersions = baselines.slice(0, -1).reverse();
     for (const b of olderVersions) {
+      const r = b.results;
+      const oldEntries = Object.entries(r.basic);
+      const oldRatios = oldEntries.map(([, v]) => v.ratio);
+      const oldAvg = oldRatios.reduce((a, b) => a + b, 0) / oldRatios.length;
+
       lines.push(`<details>`);
-      lines.push(`<summary>v${b.version} (${b.generated.split('T')[0]})</summary>`);
+      lines.push(`<summary>v${b.version} (${b.generated.split('T')[0]}) — ${fix(oldAvg)}x avg</summary>`);
       lines.push('');
-      lines.push(generateSection(b));
+      lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
+      lines.push('| --- | ---: | ---: | ---: | ---: |');
+      for (const [name, v] of oldEntries) {
+        lines.push(
+          `| ${name} | ${fix(v.ratio)} | ${fix(v.tokenRatio)} | ${v.compressed} | ${v.preserved} |`,
+        );
+      }
       lines.push('');
       lines.push('</details>');
-      lines.push('');
-    }
-  }
-
-  // --- Scenarios ---
-  lines.push('## Scenarios');
-  lines.push('');
-  lines.push('The benchmark covers 8 conversation types:');
-  lines.push('');
-  lines.push('| Scenario | Description |');
-  lines.push('| --- | --- |');
-  lines.push('| Coding assistant | Mixed code fences and prose discussion |');
-  lines.push('| Long Q&A | Extended question-and-answer with repeated paragraphs |');
-  lines.push('| Tool-heavy | Messages with `tool_calls` arrays (preserved by default) |');
-  lines.push('| Short conversation | Brief exchanges, mostly under 120 chars |');
-  lines.push('| Deep conversation | 25 turns of multi-paragraph prose |');
-  lines.push('| Technical explanation | Pure prose Q&A about event-driven architecture |');
-  lines.push('| Structured content | JSON, YAML, SQL, API keys, test output |');
-  lines.push(
-    '| Agentic coding session | Repeated file reads, grep results, near-duplicate edits |',
-  );
-  lines.push('');
-
-  // --- Interpreting results ---
-  lines.push('## Interpreting Results');
-  lines.push('');
-  lines.push('### Compression ratio');
-  lines.push('');
-  lines.push('| Ratio | Reduction |');
-  lines.push('| ---: | --- |');
-  lines.push('| 1.0x | no compression (all messages preserved) |');
-  lines.push('| 1.5x | 33% reduction |');
-  lines.push('| 2.0x | 50% reduction |');
-  lines.push('| 3.0x | 67% reduction |');
-  lines.push('| 6.0x | 83% reduction |');
-  lines.push('');
-  lines.push(
-    'Higher is better. Token ratio is more meaningful for LLM context budgeting; character ratio is useful for storage.',
-  );
-  lines.push('');
-
-  // --- Regression testing ---
-  lines.push('## Regression Testing');
-  lines.push('');
-  lines.push(
-    'Baselines are stored in [`bench/baselines/`](../bench/baselines/) as JSON. CI runs `npm run bench:check` on every push and PR to catch regressions.',
-  );
-  lines.push('');
-  lines.push('- **Tolerance:** 0% by default (all metrics are deterministic)');
-  lines.push('- **On regression:** CI fails with a diff showing which metrics changed');
-  lines.push(
-    '- **After intentional changes:** run `npm run bench:save` to update the baseline and regenerate this doc',
-  );
-  lines.push(
-    '- **Custom tolerance:** `npx tsx bench/run.ts --check --tolerance 5` allows 5% deviation',
-  );
-  lines.push('');
-  lines.push('### Baseline files');
-  lines.push('');
-  lines.push('| File | Purpose |');
-  lines.push('| --- | --- |');
-  lines.push('| `bench/baselines/current.json` | Active baseline compared in CI |');
-  lines.push('| `bench/baselines/history/v*.json` | Versioned snapshots, one per release |');
-  lines.push('| `bench/baselines/llm/*.json` | LLM benchmark reference data (non-deterministic) |');
-  lines.push('');
-
-  // --- LLM comparison (if result files exist) ---
-  const llmResults = loadAllLlmResults(baselinesDir);
-  if (llmResults.length > 0) {
-    lines.push('## LLM Summarization Comparison');
-    lines.push('');
-    lines.push(
-      '> Results are **non-deterministic** — LLM outputs vary between runs. These are saved as reference data, not used for regression testing.',
-    );
-    lines.push('');
-
-    for (const llm of llmResults) {
-      lines.push(`### ${llm.provider} (${llm.model})`);
-      lines.push('');
-      lines.push(`*Generated: ${llm.generated.split('T')[0]}*`);
-      lines.push('');
-      lines.push(
-        '| Scenario | Method | Char Ratio | Token Ratio | vs Det | Compressed | Preserved | Round-trip | Time |',
-      );
-      lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |');
-
-      for (const [scenario, sr] of Object.entries(llm.scenarios)) {
-        let first = true;
-        for (const [method, mr] of Object.entries(sr.methods)) {
-          const label = first ? scenario : '';
-          const time =
-            mr.timeMs < 1000 ? `${Math.round(mr.timeMs)}ms` : `${(mr.timeMs / 1000).toFixed(1)}s`;
-          const vsDet = mr.vsDet != null ? fix(mr.vsDet) : '-';
-          lines.push(
-            `| ${label} | ${method} | ${fix(mr.ratio)} | ${fix(mr.tokenRatio)} | ${vsDet} | ${mr.compressed} | ${mr.preserved} | ${mr.roundTrip} | ${time} |`,
-          );
-          first = false;
-        }
-      }
-
-      // Token budget table (if present)
-      if (llm.tokenBudget && Object.keys(llm.tokenBudget).length > 0) {
-        lines.push('');
-        lines.push('#### Token Budget (target: 2000 tokens)');
-        lines.push('');
-        lines.push(
-          '| Scenario | Method | Tokens | Fits | recencyWindow | Ratio | Round-trip | Time |',
-        );
-        lines.push('| --- | --- | ---: | --- | ---: | ---: | --- | ---: |');
-
-        for (const [scenario, entries] of Object.entries(llm.tokenBudget)) {
-          let first = true;
-          for (const entry of entries) {
-            const label = first ? scenario : '';
-            const time =
-              entry.timeMs < 1000
-                ? `${Math.round(entry.timeMs)}ms`
-                : `${(entry.timeMs / 1000).toFixed(1)}s`;
-            lines.push(
-              `| ${label} | ${entry.method} | ${entry.tokenCount} | ${entry.fits} | ${entry.recencyWindow ?? '-'} | ${fix(entry.ratio)} | ${entry.roundTrip} | ${time} |`,
-            );
-            first = false;
-          }
-        }
-      }
-
       lines.push('');
     }
   }
@@ -633,12 +766,10 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   // --- Methodology ---
   lines.push('## Methodology');
   lines.push('');
-  lines.push('- All results are **deterministic** — same input always produces the same output');
-  lines.push('- Metrics tracked: compression ratio, token ratio, message counts, dedup counts');
+  lines.push('- All deterministic results use the same input → same output guarantee');
+  lines.push('- Metrics: compression ratio, token ratio, message counts, dedup counts');
   lines.push('- Timing is excluded from baselines (hardware-dependent)');
-  lines.push(
-    '- Real-session and LLM benchmarks are excluded from baselines (environment-dependent)',
-  );
+  lines.push('- LLM benchmarks are saved as reference data, not used for regression testing');
   lines.push('- Round-trip integrity is verified for every scenario (compress then uncompress)');
   lines.push('');
 

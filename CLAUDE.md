@@ -13,6 +13,7 @@ npm run lint             # ESLint check
 npm run format           # Prettier write
 npm run format:check     # Prettier check
 npm run bench            # Run benchmark suite
+npm run bench:save       # Run, save baseline, regenerate docs/benchmark-results.md
 ```
 
 Run a single test file:
