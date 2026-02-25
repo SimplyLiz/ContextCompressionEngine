@@ -35,16 +35,16 @@ xychart-beta
     bar [1.68, 6.16, 1.30, 1.00, 2.12, 1.00, 1.93, 1.43]
 ```
 
-| Scenario | | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Coding assistant | ███░░░░░░░ | 1.68 | 41% | 1.67 | 13 | 5 | 8 |
-| Long Q&A | ██████████ | 6.16 | 84% | 6.11 | 10 | 4 | 6 |
-| Tool-heavy | ██░░░░░░░░ | 1.30 | 23% | 1.29 | 18 | 2 | 16 |
-| Short conversation | ██░░░░░░░░ | 1.00 | 0% | 1.00 | 7 | 0 | 7 |
-| Deep conversation | ███░░░░░░░ | 2.12 | 53% | 2.12 | 51 | 50 | 1 |
-| Technical explanation | ██░░░░░░░░ | 1.00 | 0% | 1.00 | 11 | 0 | 11 |
-| Structured content | ███░░░░░░░ | 1.93 | 48% | 1.92 | 12 | 2 | 10 |
-| Agentic coding session | ██░░░░░░░░ | 1.43 | 30% | 1.43 | 33 | 2 | 31 |
+| Scenario | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Coding assistant | 1.68 | 41% | 1.67 | 13 | 5 | 8 |
+| Long Q&A | 6.16 | 84% | 6.11 | 10 | 4 | 6 |
+| Tool-heavy | 1.30 | 23% | 1.29 | 18 | 2 | 16 |
+| Short conversation | 1.00 | 0% | 1.00 | 7 | 0 | 7 |
+| Deep conversation | 2.12 | 53% | 2.12 | 51 | 50 | 1 |
+| Technical explanation | 1.00 | 0% | 1.00 | 11 | 0 | 11 |
+| Structured content | 1.93 | 48% | 1.92 | 12 | 2 | 10 |
+| Agentic coding session | 1.43 | 30% | 1.43 | 33 | 2 | 31 |
 
 ## Deduplication Impact
 
@@ -103,11 +103,11 @@ xychart-beta
     title "Deterministic vs LLM (ollama/llama3.2)"
     x-axis ["Coding", "Long Q&A", "Tool-heavy", "Deep", "Technical", "Structured", "Agentic"]
     y-axis "Char Ratio"
-    bar [1.68, 6.16, 1.30, 2.12, 1.00, 1.93, 1.43]
-    bar [1.55, 4.49, 1.28, 3.28, 1.00, 1.46, 1.40]
+    bar "Deterministic" [1.68, 6.16, 1.30, 2.12, 1.00, 1.93, 1.43]
+    line "Best LLM" [1.55, 4.49, 1.28, 3.28, 1.00, 1.46, 1.40]
 ```
 
-*First bar: deterministic · Second bar: best LLM method*
+*Bars: deterministic · Line: best LLM method*
 
 > **Key findings:**
 > LLM wins on prose-heavy scenarios: Deep conversation, Technical explanation

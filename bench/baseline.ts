@@ -403,11 +403,6 @@ function badges(basic: Record<string, BasicResult>): string[] {
   ];
 }
 
-function progressBar(value: number, max: number, width: number = 10): string {
-  const filled = Math.round((value / max) * width);
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
-
 // ---------------------------------------------------------------------------
 // Mermaid chart helpers
 // ---------------------------------------------------------------------------
@@ -497,11 +492,11 @@ function llmComparisonChart(
     `    title "Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})"`,
     `    x-axis [${labels}]`,
     '    y-axis "Char Ratio"',
-    `    bar [${detValues}]`,
-    `    bar [${llmValues}]`,
+    `    bar "Deterministic" [${detValues}]`,
+    `    line "Best LLM" [${llmValues}]`,
     '```',
     '',
-    '*First bar: deterministic · Second bar: best LLM method*',
+    '*Bars: deterministic · Line: best LLM method*',
   ];
 }
 
@@ -528,15 +523,14 @@ function generateCompressionSection(b: Baseline): string[] {
   lines.push(...compressionChart(r.basic));
   lines.push('');
   lines.push(
-    '| Scenario | | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |',
+    '| Scenario | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |',
   );
-  lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const [name, v] of basicEntries) {
-    const bar = progressBar(v.ratio, maxR);
     const reduction = Math.round((1 - 1 / v.ratio) * 100);
     const messages = v.compressed + v.preserved;
     lines.push(
-      `| ${name} | ${bar} | ${fix(v.ratio)} | ${reduction}% | ${fix(v.tokenRatio)} | ${messages} | ${v.compressed} | ${v.preserved} |`,
+      `| ${name} | ${fix(v.ratio)} | ${reduction}% | ${fix(v.tokenRatio)} | ${messages} | ${v.compressed} | ${v.preserved} |`,
     );
   }
   return lines;
