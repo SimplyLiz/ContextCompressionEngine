@@ -42,5 +42,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-      - run: npm run test:coverage
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.node-version }}" = "18" ]; then
+            npm test
+          else
+            npm run test:coverage
+          fi
       - run: npx tsc --noEmit
