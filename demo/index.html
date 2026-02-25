@@ -716,6 +716,97 @@
         color: var(--text);
       }
 
+      /* ─── Help Panel ─── */
+
+      .help-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--surface-raised);
+        color: var(--text-dim);
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .help-btn:hover,
+      .help-btn.active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-glow);
+      }
+
+      .help-panel {
+        max-height: 0;
+        overflow: hidden;
+        transition:
+          max-height 0.35s ease,
+          padding 0.35s ease,
+          border-color 0.35s ease;
+        background: var(--surface);
+        border-bottom: 1px solid transparent;
+        padding: 0 28px;
+      }
+
+      .help-panel.open {
+        max-height: 500px;
+        padding: 16px 28px;
+        border-bottom-color: var(--border);
+      }
+
+      .help-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px 24px;
+      }
+
+      .help-item {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .help-item dt {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        min-width: 90px;
+        flex-shrink: 0;
+      }
+
+      .help-item dd {
+        font-size: 11px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+
+      .help-item dd code {
+        color: var(--accent);
+        font-size: 10px;
+      }
+
+      .help-section-title {
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-faint);
+        margin-bottom: 8px;
+        grid-column: 1 / -1;
+      }
+
+      .help-section-title:not(:first-child) {
+        margin-top: 8px;
+      }
+
       /* ─── Scrollbar ─── */
 
       ::-webkit-scrollbar {
@@ -836,6 +927,92 @@
           </label>
           <label>converge</label>
         </div>
+
+        <button class="help-btn" id="helpBtn" title="Explain settings">?</button>
+      </div>
+
+      <div class="help-panel" id="helpPanel">
+        <dl class="help-grid">
+          <div class="help-section-title">Compression</div>
+
+          <div class="help-item">
+            <dt>recency</dt>
+            <dd>
+              Number of most recent messages to keep untouched. Only older messages are candidates
+              for compression. <code>recencyWindow</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>budget</dt>
+            <dd>
+              Target token count. When enabled, binary-searches the recency window to fit the output
+              within this limit. <code>tokenBudget</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>preserve</dt>
+            <dd>
+              Roles that are never compressed, comma-separated. Typically <code>system</code>. These
+              messages pass through verbatim regardless of position.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>converge</dt>
+            <dd>
+              Hard-truncate non-recent messages when the binary search bottoms out and the budget is
+              still exceeded. Last resort. <code>forceConverge</code>
+            </dd>
+          </div>
+
+          <div class="help-section-title">Deduplication</div>
+
+          <div class="help-item">
+            <dt>dedup</dt>
+            <dd>
+              Replace exact duplicate messages with a compact reference to the first occurrence.
+              Compares full content via hash + equality check.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>fuzzy</dt>
+            <dd>
+              Detect near-duplicate messages using line-level Jaccard similarity. Catches messages
+              that are mostly the same but not identical. <code>fuzzyDedup</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>threshold</dt>
+            <dd>
+              Similarity cutoff for fuzzy dedup, 0&ndash;1. Higher = stricter matching. Default
+              <code>0.85</code> means 85% of lines must overlap to count as a near-duplicate.
+            </dd>
+          </div>
+
+          <div class="help-section-title">Output</div>
+
+          <div class="help-item">
+            <dt style="color: var(--accent)">preserved</dt>
+            <dd>
+              Message was kept verbatim &mdash; either in the recency window, a preserved role, or
+              classified as code/structured data (T0).
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt style="color: var(--amber)">compressed</dt>
+            <dd>
+              Prose was summarized by the deterministic scorer.
+              <span style="color: var(--red)">Red strikethrough</span> = removed text,
+              <span style="color: var(--green)">green</span> = replacement summary.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt style="color: var(--red)">removed</dt>
+            <dd>
+              Message was dropped entirely, typically by dedup replacing a duplicate with a
+              back-reference.
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <div class="panels">
@@ -1168,6 +1345,13 @@ A: Observability requires three pillars working together: metrics, logs, and tra
       const $forceConverge = document.getElementById('forceConverge');
 
       const $exampleSelect = document.getElementById('exampleSelect');
+      const $helpBtn = document.getElementById('helpBtn');
+      const $helpPanel = document.getElementById('helpPanel');
+
+      $helpBtn.addEventListener('click', () => {
+        $helpPanel.classList.toggle('open');
+        $helpBtn.classList.toggle('active');
+      });
 
       function loadExample(key) {
         $input.value = EXAMPLES[key] || '';
