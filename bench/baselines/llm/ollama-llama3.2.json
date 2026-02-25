@@ -1,0 +1,175 @@
+{
+  "provider": "ollama",
+  "model": "llama3.2",
+  "generated": "2026-02-25T09:04:08.797Z",
+  "scenarios": {
+    "Coding assistant": {
+      "methods": {
+        "deterministic": {
+          "ratio": 1.6812907904278462,
+          "tokenRatio": 1.6729559748427674,
+          "compressed": 5,
+          "preserved": 8,
+          "roundTrip": "PASS",
+          "timeMs": 0.25633400000515394
+        },
+        "llm-basic": {
+          "ratio": 1.542581503659348,
+          "tokenRatio": 1.5375722543352601,
+          "compressed": 5,
+          "preserved": 8,
+          "roundTrip": "PASS",
+          "timeMs": 4017.3837080000085
+        },
+        "llm-escalate": {
+          "ratio": 1.4490625,
+          "tokenRatio": 1.4472252448313385,
+          "compressed": 5,
+          "preserved": 8,
+          "roundTrip": "PASS",
+          "timeMs": 4231.839750000014
+        }
+      }
+    },
+    "Long Q&A": {
+      "methods": {
+        "deterministic": {
+          "ratio": 6.158536585365853,
+          "tokenRatio": 6.114164904862579,
+          "compressed": 4,
+          "preserved": 6,
+          "roundTrip": "PASS",
+          "timeMs": 0.9851250000065193
+        },
+        "llm-basic": {
+          "ratio": 4.482911673324456,
+          "tokenRatio": 4.449230769230769,
+          "compressed": 4,
+          "preserved": 6,
+          "roundTrip": "PASS",
+          "timeMs": 4514.40400000001
+        },
+        "llm-escalate": {
+          "ratio": 4.46113074204947,
+          "tokenRatio": 4.435582822085889,
+          "compressed": 4,
+          "preserved": 6,
+          "roundTrip": "PASS",
+          "timeMs": 4495.341832999984
+        }
+      }
+    },
+    "Tool-heavy": {
+      "methods": {
+        "deterministic": {
+          "ratio": 1.2991563919532771,
+          "tokenRatio": 1.2946428571428572,
+          "compressed": 2,
+          "preserved": 16,
+          "roundTrip": "PASS",
+          "timeMs": 0.43775000001187436
+        },
+        "llm-basic": {
+          "ratio": 1.1762632197414806,
+          "tokenRatio": 1.174089068825911,
+          "compressed": 2,
+          "preserved": 16,
+          "roundTrip": "PASS",
+          "timeMs": 2554.344207999995
+        },
+        "llm-escalate": {
+          "ratio": 1.0945872061235649,
+          "tokenRatio": 1.0922787193973635,
+          "compressed": 2,
+          "preserved": 16,
+          "roundTrip": "PASS",
+          "timeMs": 3072.135583000025
+        }
+      }
+    },
+    "Deep conversation": {
+      "methods": {
+        "deterministic": {
+          "ratio": 2.124913733609386,
+          "tokenRatio": 2.1241305510968433,
+          "compressed": 50,
+          "preserved": 1,
+          "roundTrip": "PASS",
+          "timeMs": 2.759959000017261
+        },
+        "llm-basic": {
+          "ratio": 3.1500511538024325,
+          "tokenRatio": 3.133385951065509,
+          "compressed": 50,
+          "preserved": 1,
+          "roundTrip": "PASS",
+          "timeMs": 24927.85712499998
+        },
+        "llm-escalate": {
+          "ratio": 3.3075913105753165,
+          "tokenRatio": 3.2891466445733224,
+          "compressed": 50,
+          "preserved": 1,
+          "roundTrip": "PASS",
+          "timeMs": 25502.586582999997
+        }
+      }
+    },
+    "Structured content": {
+      "methods": {
+        "deterministic": {
+          "ratio": 1.9338990620812864,
+          "tokenRatio": 1.9241486068111455,
+          "compressed": 2,
+          "preserved": 10,
+          "roundTrip": "PASS",
+          "timeMs": 0.7937499999825377
+        },
+        "llm-basic": {
+          "ratio": 1.338071693448702,
+          "tokenRatio": 1.3365591397849463,
+          "compressed": 2,
+          "preserved": 10,
+          "roundTrip": "PASS",
+          "timeMs": 4280.396999999997
+        },
+        "llm-escalate": {
+          "ratio": 1.338899196042053,
+          "tokenRatio": 1.3365591397849463,
+          "compressed": 2,
+          "preserved": 10,
+          "roundTrip": "PASS",
+          "timeMs": 4270.229416999995
+        }
+      }
+    },
+    "Agentic coding session": {
+      "methods": {
+        "deterministic": {
+          "ratio": 1.428351309707242,
+          "tokenRatio": 1.4258962011771001,
+          "compressed": 2,
+          "preserved": 31,
+          "roundTrip": "PASS",
+          "timeMs": 6.805083999992348
+        },
+        "llm-basic": {
+          "ratio": 1.3898050974512743,
+          "tokenRatio": 1.3880208333333333,
+          "compressed": 2,
+          "preserved": 31,
+          "roundTrip": "PASS",
+          "timeMs": 4489.758750000008
+        },
+        "llm-escalate": {
+          "ratio": 1.367660076718796,
+          "tokenRatio": 1.3659661711942594,
+          "compressed": 2,
+          "preserved": 31,
+          "roundTrip": "PASS",
+          "timeMs": 2974.9285839999793
+        }
+      }
+    }
+  }
+}

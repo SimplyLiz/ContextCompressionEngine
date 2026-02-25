@@ -3,9 +3,26 @@ import { uncompress } from '../src/expand.js';
 import { createSummarizer, createEscalatingSummarizer } from '../src/summarizer.js';
 import type { CompressResult, Message } from '../src/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { detectProviders } from './llm.js';
+import type { LlmBenchmarkResult, LlmMethodResult } from './baseline.js';
+import { saveLlmResult } from './baseline.js';
+
+// ---------------------------------------------------------------------------
+// Auto-load .env (no dependency, won't override existing vars)
+// ---------------------------------------------------------------------------
+
+const envPath = resolve(import.meta.dirname, '..', '.env');
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const match = line.match(/^\s*(?:export\s+)?([^#=]+?)\s*=\s*(.*?)\s*$/);
+    if (!match || process.env[match[1]]) continue;
+    // Strip wrapping quotes (single or double)
+    const val = match[2].replace(/^(['"])(.*)\1$/, '$2');
+    process.env[match[1]] = val;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -936,12 +953,13 @@ async function runLlmBenchmark(): Promise<void> {
   if (providers.length === 0) {
     console.log();
     console.log(
-      'LLM Summarization Benchmark — skipped (no OPENAI_API_KEY, OLLAMA_MODEL, or ANTHROPIC_API_KEY set)',
+      'LLM Summarization Benchmark — skipped (no providers detected: set OPENAI_API_KEY or ANTHROPIC_API_KEY, or start Ollama)',
     );
     return;
   }
 
   const scenarios = buildScenarios().filter((s) => s.name !== 'Short conversation');
+  const baselinesDir = resolve(import.meta.dirname, 'baselines');
 
   for (const provider of providers) {
     console.log();
@@ -978,41 +996,84 @@ async function runLlmBenchmark(): Promise<void> {
     console.log(sep);
 
     let llmFails = 0;
+    const llmResult: LlmBenchmarkResult = {
+      provider: provider.name,
+      model: provider.model,
+      generated: new Date().toISOString(),
+      scenarios: {},
+    };
 
     for (const scenario of scenarios) {
-      // Deterministic baseline
-      const t0d = performance.now();
-      const detResult = compress(scenario.messages, { recencyWindow: 0 });
-      const t1d = performance.now();
-      const detRt = roundTrip(scenario.messages, detResult);
+      try {
+        const scenarioResult: Record<string, LlmMethodResult> = {};
 
-      printLlmRow(scenario.name, 'deterministic', detResult, detRt, t1d - t0d, cols);
+        // Deterministic baseline
+        const t0d = performance.now();
+        const detResult = compress(scenario.messages, { recencyWindow: 0 });
+        const t1d = performance.now();
+        const detRt = roundTrip(scenario.messages, detResult);
 
-      // LLM basic summarizer
-      const t0b = performance.now();
-      const llmBasicResult = await compress(scenario.messages, {
-        recencyWindow: 0,
-        summarizer: basicSummarizer,
-      });
-      const t1b = performance.now();
-      const basicRt = roundTrip(scenario.messages, llmBasicResult);
-      if (basicRt === 'FAIL') llmFails++;
+        printLlmRow(scenario.name, 'deterministic', detResult, detRt, t1d - t0d, cols);
+        scenarioResult['deterministic'] = {
+          ratio: detResult.compression.ratio,
+          tokenRatio: detResult.compression.token_ratio,
+          compressed: detResult.compression.messages_compressed,
+          preserved: detResult.compression.messages_preserved,
+          roundTrip: detRt,
+          timeMs: t1d - t0d,
+        };
 
-      printLlmRow('', 'llm-basic', llmBasicResult, basicRt, t1b - t0b, cols);
+        // LLM basic summarizer
+        const t0b = performance.now();
+        const llmBasicResult = await compress(scenario.messages, {
+          recencyWindow: 0,
+          summarizer: basicSummarizer,
+        });
+        const t1b = performance.now();
+        const basicRt = roundTrip(scenario.messages, llmBasicResult);
+        if (basicRt === 'FAIL') llmFails++;
 
-      // LLM escalating summarizer
-      const t0e = performance.now();
-      const llmEscResult = await compress(scenario.messages, {
-        recencyWindow: 0,
-        summarizer: escalatingSummarizer,
-      });
-      const t1e = performance.now();
-      const escRt = roundTrip(scenario.messages, llmEscResult);
-      if (escRt === 'FAIL') llmFails++;
+        printLlmRow('', 'llm-basic', llmBasicResult, basicRt, t1b - t0b, cols);
+        scenarioResult['llm-basic'] = {
+          ratio: llmBasicResult.compression.ratio,
+          tokenRatio: llmBasicResult.compression.token_ratio,
+          compressed: llmBasicResult.compression.messages_compressed,
+          preserved: llmBasicResult.compression.messages_preserved,
+          roundTrip: basicRt,
+          timeMs: t1b - t0b,
+        };
 
-      printLlmRow('', 'llm-escalate', llmEscResult, escRt, t1e - t0e, cols);
-      console.log(sep);
+        // LLM escalating summarizer
+        const t0e = performance.now();
+        const llmEscResult = await compress(scenario.messages, {
+          recencyWindow: 0,
+          summarizer: escalatingSummarizer,
+        });
+        const t1e = performance.now();
+        const escRt = roundTrip(scenario.messages, llmEscResult);
+        if (escRt === 'FAIL') llmFails++;
+
+        printLlmRow('', 'llm-escalate', llmEscResult, escRt, t1e - t0e, cols);
+        scenarioResult['llm-escalate'] = {
+          ratio: llmEscResult.compression.ratio,
+          tokenRatio: llmEscResult.compression.token_ratio,
+          compressed: llmEscResult.compression.messages_compressed,
+          preserved: llmEscResult.compression.messages_preserved,
+          roundTrip: escRt,
+          timeMs: t1e - t0e,
+        };
+
+        console.log(sep);
+        llmResult.scenarios[scenario.name] = { methods: scenarioResult };
+      } catch (err) {
+        console.error(`  ${scenario.name}: ERROR — ${(err as Error).message}`);
+        console.log(sep);
+      }
     }
+
+    // Always save LLM results (informational, not gated behind --save)
+    saveLlmResult(baselinesDir, llmResult);
+    console.log(`  Results saved to bench/baselines/llm/`);
 
     if (llmFails > 0) {
       console.error(`  WARNING: ${llmFails} LLM scenario(s) failed round-trip`);
