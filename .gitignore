@@ -35,6 +35,9 @@ __pycache__/
 .vscode/
 *.swp
 
+# demo
+demo/bundle.js
+
 # indexing / analysis artifacts
 .ckb/
 *.scip
