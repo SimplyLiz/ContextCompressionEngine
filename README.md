@@ -32,6 +32,8 @@ const { messages: originals } = uncompress(compressed, verbatim);
 
 No API keys. No network calls. Runs synchronously by default. Under 2ms for typical conversations.
 
+The classifier is content-aware, not domain-specific. It preserves structured data (code, JSON, SQL, tables, citations, formulas) and compresses surrounding prose — making it useful anywhere dense reference material is mixed with natural language: LLM conversations, legal briefs, medical records, technical documentation, support logs.
+
 ## Key findings
 
 The deterministic engine achieves **1.3-6.1x compression with zero latency and zero cost.** It scores sentences, packs a budget, strips filler — and in most scenarios, it compresses tighter than an LLM. LLM summarization is opt-in for cases where semantic understanding improves quality. See [Benchmarks](docs/benchmarks.md) for the full comparison.
@@ -39,7 +41,7 @@ The deterministic engine achieves **1.3-6.1x compression with zero latency and z
 ## Features
 
 - **Lossless round-trip** — `compress` then `uncompress` restores byte-identical originals
-- **Code-aware** — fences, SQL, JSON, API keys, URLs, and file paths stay verbatim
+- **Structure-aware** — code fences, SQL, JSON, tables, citations, URLs, and file paths stay verbatim
 - **Deduplication** — exact and fuzzy duplicate detection eliminates repeated content
 - **LLM-powered** — plug in any summarizer (Claude, GPT, Gemini, Grok, Ollama) for semantic compression
 - **Three-level fallback** — LLM → deterministic → size guard, never makes output worse
