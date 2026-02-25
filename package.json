@@ -14,6 +14,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "bench": "npx tsx bench/run.ts",
+    "bench:save": "npx tsx bench/run.ts --save",
+    "bench:check": "npx tsx bench/run.ts --check",
+    "test:e2e": "npm run build && npm pack && npm run test:e2e:lint && npm run test:e2e:smoke; EXIT=$?; npm run test:e2e:cleanup; exit $EXIT",
+    "test:e2e:lint": "publint ./context-compression-engine-*.tgz --strict && attw ./context-compression-engine-*.tgz --ignore-rules cjs-resolves-to-esm",
+    "test:e2e:smoke": "cd e2e && npm install ../context-compression-engine-*.tgz && npm test",
+    "test:e2e:cleanup": "rm -f context-compression-engine-*.tgz && rm -rf e2e/node_modules && rm -f e2e/package-lock.json",
+    "test:e2e:published": "cd e2e && npm install context-compression-engine && npm test",
     "prepublishOnly": "npm test && tsc"
   },
   "main": "./dist/index.js",
@@ -51,10 +58,13 @@
     "url": "https://github.com/SimplyLiz/ContextCompressionEngine/issues"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^10.0.2",
+    "openai": "^6.25.0",
     "prettier": "^3.8.1",
+    "publint": "^0.3.17",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vitest": "^4.0.18"

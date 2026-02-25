@@ -5,9 +5,11 @@ venv/
 
 # build
 dist/
+coverage/
 build/
 *.egg-info/
 *.tsbuildinfo
+*.tgz
 
 # cache
 __pycache__/
