@@ -446,11 +446,11 @@ function dedupChart(dedup: Record<string, DedupResult>): string[] {
   ];
 }
 
-function llmComparisonChart(
+function llmComparisonTable(
   basic: Record<string, BasicResult>,
   llmResults: LlmBenchmarkResult[],
 ): string[] {
-  // Use the best LLM result (highest average vsDet) for the chart
+  // Use the best LLM result (highest average vsDet) for the summary table
   let bestLlm: LlmBenchmarkResult | undefined;
   let bestAvg = -Infinity;
   for (const llm of llmResults) {
@@ -460,7 +460,8 @@ function llmComparisonChart(
         if (mr.vsDet != null && mr.vsDet > 0) vsDetValues.push(mr.vsDet);
       }
     }
-    const avg = vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
+    const avg =
+      vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
     if (avg > bestAvg) {
       bestAvg = avg;
       bestLlm = llm;
@@ -468,33 +469,30 @@ function llmComparisonChart(
   }
   if (!bestLlm) return [];
 
-  // Match scenarios that exist in both basic and LLM results
   const sharedScenarios = Object.keys(basic).filter((s) => s in bestLlm!.scenarios);
   if (sharedScenarios.length === 0) return [];
 
-  // Interleave labels and values: "Coding (Det)", "Coding (LLM)", ...
-  const labels: string[] = [];
-  const values: number[] = [];
+  const lines: string[] = [];
+  lines.push(`*Best provider: ${bestLlm.provider}/${bestLlm.model}*`);
+  lines.push('');
+  lines.push('| Scenario | Det | Best LLM | Delta | Winner |');
+  lines.push('| --- | ---: | ---: | ---: | --- |');
+
   for (const s of sharedScenarios) {
-    const sn = shortName(s);
-    labels.push(`"${sn} (Det)"`, `"${sn} (LLM)"`);
     const detR = basic[s].ratio;
     const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
       (m) => m.vsDet != null,
     );
     const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
-    values.push(detR, llmR);
+    const delta = Math.round(((llmR - detR) / detR) * 100);
+    const sign = delta >= 0 ? '+' : '';
+    const winner = llmR > detR + 0.01 ? 'LLM' : detR > llmR + 0.01 ? 'Det' : 'Tie';
+    lines.push(
+      `| ${s} | ${fix(detR)}x | ${fix(llmR)}x | ${sign}${delta}% | ${winner} |`,
+    );
   }
 
-  return [
-    '```mermaid',
-    'xychart-beta',
-    `    title "Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})"`,
-    `    x-axis [${labels.join(', ')}]`,
-    '    y-axis "Char Ratio"',
-    `    bar [${values.map((v) => fix(v)).join(', ')}]`,
-    '```',
-  ];
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -610,10 +608,10 @@ function generateLlmSection(
   );
   lines.push('');
 
-  // Summary chart
-  const chart = llmComparisonChart(basic, llmResults);
-  if (chart.length > 0) {
-    lines.push(...chart);
+  // Summary comparison table
+  const table = llmComparisonTable(basic, llmResults);
+  if (table.length > 0) {
+    lines.push(...table);
     lines.push('');
   }
 

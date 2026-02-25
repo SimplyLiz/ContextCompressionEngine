@@ -98,13 +98,17 @@ Target: **2000 tokens** · 1/4 fit
 
 > Results are **non-deterministic** — LLM outputs vary between runs. Saved as reference data, not used for regression testing.
 
-```mermaid
-xychart-beta
-    title "Deterministic vs LLM (ollama/llama3.2)"
-    x-axis ["Coding (Det)", "Coding (LLM)", "Long Q&A (Det)", "Long Q&A (LLM)", "Tool-heavy (Det)", "Tool-heavy (LLM)", "Deep (Det)", "Deep (LLM)", "Technical (Det)", "Technical (LLM)", "Structured (Det)", "Structured (LLM)", "Agentic (Det)", "Agentic (LLM)"]
-    y-axis "Char Ratio"
-    bar [1.68, 1.55, 6.16, 4.49, 1.30, 1.28, 2.12, 3.28, 1.00, 1.00, 1.93, 1.46, 1.43, 1.40]
-```
+*Best provider: ollama/llama3.2*
+
+| Scenario | Det | Best LLM | Delta | Winner |
+| --- | ---: | ---: | ---: | --- |
+| Coding assistant | 1.68x | 1.55x | -8% | Det |
+| Long Q&A | 6.16x | 4.49x | -27% | Det |
+| Tool-heavy | 1.30x | 1.28x | -1% | Det |
+| Deep conversation | 2.12x | 3.28x | +54% | LLM |
+| Technical explanation | 1.00x | 1.00x | +0% | Tie |
+| Structured content | 1.93x | 1.46x | -25% | Det |
+| Agentic coding session | 1.43x | 1.40x | -2% | Det |
 
 > **Key findings:**
 > LLM wins on prose-heavy scenarios: Deep conversation, Technical explanation
