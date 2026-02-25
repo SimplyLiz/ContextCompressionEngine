@@ -4,6 +4,6 @@
   "type": "module",
   "description": "End-to-end smoke test — installs context-compression-engine from npm and exercises the public API as a real consumer would.",
   "scripts": {
-    "test": "node smoke.mjs"
+    "test": "node --test smoke.mjs"
   }
 }

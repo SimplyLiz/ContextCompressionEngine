@@ -11,13 +11,16 @@
  *   cd e2e && npm install ../context-compression-engine-*.tgz && npm test
  */
 
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+
 import {
   compress,
   uncompress,
   defaultTokenCounter,
   createSummarizer,
   createEscalatingSummarizer,
-} from "context-compression-engine";
+} from 'context-compression-engine';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -44,45 +47,45 @@ const veryLongContent = `Here is a comprehensive step-by-step plan for the authe
 This is going to be a significant change that touches many parts of the codebase.`;
 
 const messages = [
-  { id: "1", index: 0, role: "user", content: longContent },
-  { id: "2", index: 1, role: "assistant", content: veryLongContent },
+  { id: '1', index: 0, role: 'user', content: longContent },
+  { id: '2', index: 1, role: 'assistant', content: veryLongContent },
   {
-    id: "3",
+    id: '3',
     index: 2,
-    role: "user",
-    content: "That sounds good. Can you also add refresh token support?",
+    role: 'user',
+    content: 'That sounds good. Can you also add refresh token support?',
   },
   {
-    id: "4",
+    id: '4',
     index: 3,
-    role: "assistant",
-    content: veryLongContent.replace("step-by-step", "detailed"),
+    role: 'assistant',
+    content: veryLongContent.replace('step-by-step', 'detailed'),
   },
   {
-    id: "5",
+    id: '5',
     index: 4,
-    role: "user",
+    role: 'user',
     content:
-      "Perfect, lets also add rate limiting to prevent brute force attacks on the login endpoint.",
+      'Perfect, lets also add rate limiting to prevent brute force attacks on the login endpoint.',
   },
   {
-    id: "6",
+    id: '6',
     index: 5,
-    role: "assistant",
+    role: 'assistant',
     content:
-      "Good idea. I recommend using express-rate-limit with a sliding window. We can set it to 5 attempts per minute per IP address.",
+      'Good idea. I recommend using express-rate-limit with a sliding window. We can set it to 5 attempts per minute per IP address.',
   },
   {
-    id: "7",
+    id: '7',
     index: 6,
-    role: "user",
-    content: "Great, please proceed with the implementation.",
+    role: 'user',
+    content: 'Great, please proceed with the implementation.',
   },
   {
-    id: "8",
+    id: '8',
     index: 7,
-    role: "assistant",
-    content: "Starting implementation now.",
+    role: 'assistant',
+    content: 'Starting implementation now.',
   },
 ];
 
@@ -93,40 +96,39 @@ const messages = [
 function buildLargeConversation() {
   const msgs = [
     {
-      id: "L0",
+      id: 'L0',
       index: 0,
-      role: "system",
-      content:
-        "You are a senior backend engineer. Always suggest tests. Prefer TypeScript.",
+      role: 'system',
+      content: 'You are a senior backend engineer. Always suggest tests. Prefer TypeScript.',
     },
   ];
   const userPrompts = [
-    "Set up a new Express project with TypeScript and ESLint.",
-    "Add a PostgreSQL connection pool using pg.",
-    "Create a users table migration with id, email, password_hash, created_at.",
-    "Implement the POST /users signup endpoint with input validation.",
-    "Add bcrypt password hashing to the signup flow.",
-    "Write integration tests for the signup endpoint.",
-    "Implement POST /auth/login returning a JWT access token.",
-    "Add a GET /users/me endpoint that requires authentication.",
-    "Implement refresh token rotation with a tokens table.",
-    "Add rate limiting middleware to auth endpoints.",
-    "Set up a CI pipeline with GitHub Actions.",
-    "Add request logging with pino.",
-    "Implement soft-delete for users.",
-    "Add pagination to GET /users.",
-    "Write a database seeder for development.",
+    'Set up a new Express project with TypeScript and ESLint.',
+    'Add a PostgreSQL connection pool using pg.',
+    'Create a users table migration with id, email, password_hash, created_at.',
+    'Implement the POST /users signup endpoint with input validation.',
+    'Add bcrypt password hashing to the signup flow.',
+    'Write integration tests for the signup endpoint.',
+    'Implement POST /auth/login returning a JWT access token.',
+    'Add a GET /users/me endpoint that requires authentication.',
+    'Implement refresh token rotation with a tokens table.',
+    'Add rate limiting middleware to auth endpoints.',
+    'Set up a CI pipeline with GitHub Actions.',
+    'Add request logging with pino.',
+    'Implement soft-delete for users.',
+    'Add pagination to GET /users.',
+    'Write a database seeder for development.',
   ];
   let idx = 1;
   for (const prompt of userPrompts) {
-    msgs.push({ id: `L${idx}`, index: idx, role: "user", content: prompt });
+    msgs.push({ id: `L${idx}`, index: idx, role: 'user', content: prompt });
     idx++;
     // Simulate a substantive assistant response (>200 chars)
     const response = `Sure, here is how we can ${prompt.toLowerCase()}\n\nFirst, we need to install the required dependencies and configure the project structure. Then we will implement the core logic, add proper error handling, and write tests to verify everything works correctly. Let me walk you through each step in detail with code examples and explanations of the design decisions involved.`;
     msgs.push({
       id: `L${idx}`,
       index: idx,
-      role: "assistant",
+      role: 'assistant',
       content: response,
     });
     idx++;
@@ -135,478 +137,440 @@ function buildLargeConversation() {
 }
 
 // ---------------------------------------------------------------------------
-// Harness
-// ---------------------------------------------------------------------------
-
-let passed = 0;
-let failed = 0;
-
-function assert(cond, label) {
-  if (cond) {
-    passed++;
-    console.log(`  \u2713 ${label}`);
-  } else {
-    failed++;
-    console.error(`  \u2717 ${label}`);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-console.log("\n1. Basic compress (recencyWindow=2)");
-const result = compress(messages, { recencyWindow: 2 });
-assert(
-  result.messages.length === messages.length,
-  `message count preserved (${result.messages.length})`,
-);
-assert(
-  result.compression.ratio > 1,
-  `ratio > 1 (${result.compression.ratio.toFixed(2)})`,
-);
-assert(
-  result.compression.token_ratio > 1,
-  `token_ratio > 1 (${result.compression.token_ratio.toFixed(2)})`,
-);
-assert(
-  result.compression.messages_compressed > 0,
-  `some messages compressed (${result.compression.messages_compressed})`,
-);
-assert(
-  result.compression.messages_preserved > 0,
-  `some messages preserved (${result.compression.messages_preserved})`,
-);
-assert(
-  Object.keys(result.verbatim).length > 0,
-  `verbatim store populated (${Object.keys(result.verbatim).length} entries)`,
-);
+describe('basic compression', () => {
+  const result = compress(messages, { recencyWindow: 2 });
 
-console.log("\n2. Uncompress round-trip");
-const lookup = (id) => result.verbatim[id] ?? null;
-const expanded = uncompress(result.messages, lookup);
-assert(
-  expanded.messages.length === messages.length,
-  `expanded count matches (${expanded.messages.length})`,
-);
-assert(
-  expanded.messages_expanded > 0,
-  `messages expanded (${expanded.messages_expanded})`,
-);
-assert(expanded.missing_ids.length === 0, `no missing IDs`);
-assert(
-  messages.map((m) => m.content).join("|") ===
-    expanded.messages.map((m) => m.content).join("|"),
-  "content fully restored after round-trip",
-);
-
-console.log("\n3. Dedup (exact duplicates >=200 chars)");
-const dupMessages = [
-  ...messages,
-  { id: "9", index: 8, role: "user", content: longContent },
-];
-const dedupResult = compress(dupMessages, { recencyWindow: 2, dedup: true });
-assert(
-  dedupResult.compression.messages_deduped > 0,
-  `messages deduped (${dedupResult.compression.messages_deduped})`,
-);
-
-console.log("\n4. Token budget (binary search finds a fit)");
-// Use a generous budget that the binary search can actually meet
-const totalTokens = messages.reduce(
-  (sum, m) => sum + defaultTokenCounter(m),
-  0,
-);
-const fitBudget = Math.ceil(totalTokens * 0.8);
-const budgetResult = compress(messages, { tokenBudget: fitBudget });
-assert(budgetResult.fits === true, `fits within ${fitBudget} tokens`);
-assert(
-  budgetResult.tokenCount <= fitBudget,
-  `tokenCount (${budgetResult.tokenCount}) <= budget (${fitBudget})`,
-);
-assert(
-  typeof budgetResult.recencyWindow === "number",
-  `recencyWindow resolved (${budgetResult.recencyWindow})`,
-);
-
-console.log("\n5. Token budget (too tight — cannot fit)");
-const tightResult = compress(messages, { tokenBudget: 10 });
-assert(tightResult.fits === false, `correctly reports cannot fit`);
-assert(tightResult.tokenCount > 10, `tokenCount exceeds budget`);
-
-console.log("\n6. defaultTokenCounter");
-const count = defaultTokenCounter({ id: "x", index: 0, content: "Hello" });
-assert(
-  typeof count === "number" && count > 0,
-  `returns positive number (${count})`,
-);
-
-console.log("\n7. Preserve keywords");
-const preserveResult = compress(messages, {
-  recencyWindow: 1,
-  preserve: ["JWT", "refresh"],
-});
-const compressedWithPreserve = preserveResult.messages.filter(
-  (m) => m.metadata?._cce_original,
-);
-for (const cm of compressedWithPreserve) {
-  const orig = messages.find((m) => m.id === cm.id);
-  if (orig?.content?.includes("JWT")) {
-    assert(cm.content.includes("JWT"), `preserved "JWT" in message ${cm.id}`);
-  }
-}
-assert(compressedWithPreserve.length > 0, `at least one message compressed`);
-
-console.log("\n8. sourceVersion");
-const vResult = compress(messages, { recencyWindow: 2, sourceVersion: 42 });
-assert(vResult.compression.original_version === 42, `original_version = 42`);
-
-console.log("\n9. embedSummaryId");
-const embedResult = compress(messages, {
-  recencyWindow: 2,
-  embedSummaryId: true,
-});
-const compressedMsgs = embedResult.messages.filter(
-  (m) => m.metadata?._cce_original,
-);
-assert(compressedMsgs.length > 0, `some messages compressed`);
-let embedOk = 0;
-for (const cm of compressedMsgs) {
-  if (cm.content?.includes(cm.metadata._cce_original.summary_id)) embedOk++;
-}
-assert(
-  embedOk === compressedMsgs.length,
-  `summary_id embedded in all ${compressedMsgs.length} compressed msgs`,
-);
-
-console.log("\n10. Exported factory functions");
-assert(typeof createSummarizer === "function", "createSummarizer exported");
-assert(
-  typeof createEscalatingSummarizer === "function",
-  "createEscalatingSummarizer exported",
-);
-
-console.log("\n11. forceConverge (best-effort truncation)");
-const fcResult = compress(messages, { tokenBudget: 200, forceConverge: true });
-assert(
-  fcResult.tokenCount <=
-    compress(messages, { tokenBudget: 200 }).tokenCount,
-  `forceConverge tokens <= without`,
-);
-assert(fcResult.messages.length === messages.length, `message count preserved`);
-
-console.log("\n12. Fuzzy dedup");
-const fuzzyResult = compress(messages, {
-  recencyWindow: 2,
-  fuzzyDedup: true,
-  fuzzyThreshold: 0.5,
-});
-assert(
-  fuzzyResult.messages.length === messages.length,
-  `message count preserved`,
-);
-assert(fuzzyResult.compression.ratio >= 1, `ratio valid`);
-
-console.log("\n13. Provenance metadata");
-const compMsg = result.messages.find((m) => m.metadata?._cce_original);
-assert(compMsg !== undefined, `compressed message has provenance`);
-if (compMsg) {
-  const orig = compMsg.metadata._cce_original;
-  assert(
-    Array.isArray(orig.ids) && orig.ids.length > 0,
-    `_cce_original.ids is non-empty array`,
-  );
-  assert(typeof orig.summary_id === "string", `_cce_original.summary_id`);
-  assert(typeof orig.version === "number", `_cce_original.version`);
-}
-
-console.log("\n14. Uncompress with missing verbatim store");
-const missingResult = uncompress(result.messages, () => null);
-assert(
-  missingResult.missing_ids.length > 0,
-  `missing_ids reported (${missingResult.missing_ids.length})`,
-);
-
-console.log("\n15. Custom tokenCounter");
-let counterCalls = 0;
-compress(messages, {
-  recencyWindow: 2,
-  tokenCounter: (msg) => {
-    counterCalls++;
-    return Math.ceil((msg.content?.length ?? 0) / 4);
-  },
-});
-assert(counterCalls > 0, `custom counter invoked (${counterCalls} calls)`);
-
-console.log("\n16. Edge cases");
-const emptyResult = compress([], { recencyWindow: 0 });
-assert(emptyResult.messages.length === 0, `empty input -> empty output`);
-assert(emptyResult.compression.ratio === 1, `empty ratio = 1`);
-
-const singleResult = compress(
-  [{ id: "1", index: 0, role: "user", content: "Hello" }],
-  { recencyWindow: 1 },
-);
-assert(singleResult.messages.length === 1, `single message preserved`);
-assert(
-  singleResult.compression.messages_preserved === 1,
-  `single message counted as preserved`,
-);
-
-// ---------------------------------------------------------------------------
-// New coverage: async path, system role, tool_calls, re-compression,
-// recursive uncompress, minRecencyWindow, large conversation
-// ---------------------------------------------------------------------------
-
-console.log("\n17. Async path (mock summarizer)");
-{
-  let summarizerCalled = 0;
-  const mockSummarizer = async (text) => {
-    summarizerCalled++;
-    return `[mock summary of ${text.length} chars]`;
-  };
-  const asyncResult = await compress(messages, {
-    recencyWindow: 2,
-    summarizer: mockSummarizer,
+  test('preserves message count', () => {
+    assert.equal(result.messages.length, messages.length);
   });
-  assert(summarizerCalled > 0, `summarizer was called (${summarizerCalled}x)`);
-  assert(
-    asyncResult.messages.length === messages.length,
-    `message count preserved`,
-  );
-  assert(
-    asyncResult.compression.messages_compressed > 0,
-    `messages compressed via summarizer`,
-  );
-  assert(
-    Object.keys(asyncResult.verbatim).length > 0,
-    `verbatim store populated`,
-  );
-  // Round-trip the async result
-  const asyncExpanded = uncompress(
-    asyncResult.messages,
-    (id) => asyncResult.verbatim[id] ?? null,
-  );
-  assert(asyncExpanded.missing_ids.length === 0, `async round-trip: no missing IDs`);
-  assert(
-    asyncExpanded.messages.map((m) => m.content).join("|") ===
-      messages.map((m) => m.content).join("|"),
-    `async round-trip: content fully restored`,
-  );
-}
 
-console.log("\n18. Async path with token budget");
-{
-  const mockSummarizer = async (text) =>
-    `[summary: ${text.substring(0, 30)}...]`;
-  const asyncBudget = await compress(messages, {
-    tokenBudget: fitBudget,
-    summarizer: mockSummarizer,
+  test('achieves compression ratio > 1', () => {
+    assert.ok(result.compression.ratio > 1, `ratio was ${result.compression.ratio.toFixed(2)}`);
   });
-  assert(asyncBudget.fits !== undefined, `fits field present`);
-  assert(typeof asyncBudget.tokenCount === "number", `tokenCount present`);
-  assert(typeof asyncBudget.recencyWindow === "number", `recencyWindow present`);
-}
 
-console.log("\n19. System role auto-preserved");
-{
-  const withSystem = [
-    {
-      id: "s0",
-      index: 0,
-      role: "system",
-      content: "You are a helpful assistant with expertise in security.",
-    },
-    ...messages.map((m, i) => ({ ...m, id: `s${i + 1}`, index: i + 1 })),
-  ];
-  const sysResult = compress(withSystem, { recencyWindow: 1 });
-  // System message should never be compressed
-  const sysMsg = sysResult.messages.find((m) => m.role === "system");
-  assert(sysMsg !== undefined, `system message present in output`);
-  assert(
-    !sysMsg.metadata?._cce_original,
-    `system message not compressed (no _cce_original)`,
-  );
-  assert(
-    sysMsg.content === withSystem[0].content,
-    `system message content untouched`,
-  );
-}
-
-console.log("\n20. Messages with tool_calls pass through");
-{
-  const withTools = [
-    {
-      id: "t0",
-      index: 0,
-      role: "user",
-      content: "What is the weather in Berlin?",
-    },
-    {
-      id: "t1",
-      index: 1,
-      role: "assistant",
-      content: "",
-      tool_calls: [
-        { id: "call_1", type: "function", function: { name: "get_weather", arguments: '{"city":"Berlin"}' } },
-      ],
-    },
-    {
-      id: "t2",
-      index: 2,
-      role: "tool",
-      content: '{"temp": 18, "condition": "cloudy"}',
-    },
-    {
-      id: "t3",
-      index: 3,
-      role: "assistant",
-      content: "It is currently 18 degrees and cloudy in Berlin.",
-    },
-    { id: "t4", index: 4, role: "user", content: "Thanks!" },
-  ];
-  const toolResult = compress(withTools, { recencyWindow: 1 });
-  // tool_calls message should be preserved (has tool_calls array)
-  const toolMsg = toolResult.messages.find((m) => m.id === "t1");
-  assert(toolMsg !== undefined, `tool_calls message present`);
-  assert(
-    Array.isArray(toolMsg.tool_calls) && toolMsg.tool_calls.length === 1,
-    `tool_calls array preserved intact`,
-  );
-  assert(
-    toolMsg.tool_calls[0].function.name === "get_weather",
-    `tool_calls content intact`,
-  );
-}
-
-console.log("\n21. Re-compression (compress already-compressed output)");
-{
-  // First compression
-  const first = compress(messages, { recencyWindow: 2 });
-  // Second compression on the already-compressed messages
-  const second = compress(first.messages, { recencyWindow: 1 });
-  assert(
-    second.messages.length === first.messages.length,
-    `message count preserved after re-compression`,
-  );
-  // Verify we can still recover originals via chained stores
-  const chainedLookup = (id) =>
-    second.verbatim[id] ?? first.verbatim[id] ?? null;
-  const recovered = uncompress(second.messages, chainedLookup, {
-    recursive: true,
+  test('achieves token ratio > 1', () => {
+    assert.ok(
+      result.compression.token_ratio > 1,
+      `token_ratio was ${result.compression.token_ratio.toFixed(2)}`,
+    );
   });
-  assert(
-    recovered.messages_expanded > 0,
-    `recursive uncompress expanded messages`,
-  );
-  // All original content should be recoverable
-  const origContents = messages.map((m) => m.content);
-  const recoveredContents = recovered.messages.map((m) => m.content);
-  let allFound = true;
-  for (const oc of origContents) {
-    if (!recoveredContents.includes(oc)) {
-      allFound = false;
-      break;
+
+  test('compresses some messages', () => {
+    assert.ok(result.compression.messages_compressed > 0);
+  });
+
+  test('preserves some messages', () => {
+    assert.ok(result.compression.messages_preserved > 0);
+  });
+
+  test('populates verbatim store', () => {
+    assert.ok(Object.keys(result.verbatim).length > 0);
+  });
+
+  test('preserve keywords retained in compressed output', () => {
+    const preserveResult = compress(messages, {
+      recencyWindow: 1,
+      preserve: ['JWT', 'refresh'],
+    });
+    const compressedWithPreserve = preserveResult.messages.filter((m) => m.metadata?._cce_original);
+    assert.ok(compressedWithPreserve.length > 0, 'at least one message compressed');
+    for (const cm of compressedWithPreserve) {
+      const orig = messages.find((m) => m.id === cm.id);
+      if (orig?.content?.includes('JWT')) {
+        assert.ok(cm.content.includes('JWT'), `preserved "JWT" in message ${cm.id}`);
+      }
     }
-  }
-  assert(allFound, `all original content recoverable after re-compression`);
-}
-
-console.log("\n22. Recursive uncompress");
-{
-  // Compress, then compress again to create nested provenance
-  const first = compress(messages, { recencyWindow: 2 });
-  const second = compress(first.messages, { recencyWindow: 1 });
-  const allVerbatim = { ...first.verbatim, ...second.verbatim };
-  const storeFn = (id) => allVerbatim[id] ?? null;
-  // Without recursive: should still have compressed messages
-  const shallow = uncompress(second.messages, storeFn);
-  // With recursive: should fully expand
-  const deep = uncompress(second.messages, storeFn, { recursive: true });
-  assert(
-    deep.messages_expanded >= shallow.messages_expanded,
-    `recursive expands more (${deep.messages_expanded} >= ${shallow.messages_expanded})`,
-  );
-}
-
-console.log("\n23. minRecencyWindow");
-{
-  const minRWResult = compress(messages, {
-    tokenBudget: 50,
-    minRecencyWindow: 4,
   });
-  assert(
-    minRWResult.recencyWindow >= 4,
-    `recencyWindow (${minRWResult.recencyWindow}) >= minRecencyWindow (4)`,
-  );
-}
 
-console.log("\n24. Large conversation (31 messages)");
-{
+  test('sourceVersion flows into compression metadata', () => {
+    const vResult = compress(messages, { recencyWindow: 2, sourceVersion: 42 });
+    assert.equal(vResult.compression.original_version, 42);
+  });
+
+  test('embedSummaryId embeds summary_id in compressed content', () => {
+    const embedResult = compress(messages, {
+      recencyWindow: 2,
+      embedSummaryId: true,
+    });
+    const compressedMsgs = embedResult.messages.filter((m) => m.metadata?._cce_original);
+    assert.ok(compressedMsgs.length > 0, 'some messages compressed');
+    for (const cm of compressedMsgs) {
+      assert.ok(
+        cm.content?.includes(cm.metadata._cce_original.summary_id),
+        `summary_id embedded in message ${cm.id}`,
+      );
+    }
+  });
+
+  test('forceConverge reduces tokens', () => {
+    const fcResult = compress(messages, { tokenBudget: 200, forceConverge: true });
+    const noFcResult = compress(messages, { tokenBudget: 200 });
+    assert.ok(
+      fcResult.tokenCount <= noFcResult.tokenCount,
+      `forceConverge ${fcResult.tokenCount} <= without ${noFcResult.tokenCount}`,
+    );
+    assert.equal(fcResult.messages.length, messages.length);
+  });
+
+  test('provenance metadata structure', () => {
+    const compMsg = result.messages.find((m) => m.metadata?._cce_original);
+    assert.ok(compMsg !== undefined, 'compressed message has provenance');
+    const orig = compMsg.metadata._cce_original;
+    assert.ok(Array.isArray(orig.ids) && orig.ids.length > 0, '_cce_original.ids is non-empty');
+    assert.equal(typeof orig.summary_id, 'string');
+    assert.equal(typeof orig.version, 'number');
+  });
+});
+
+describe('uncompress round-trip', () => {
+  test('lossless content restoration', () => {
+    const result = compress(messages, { recencyWindow: 2 });
+    const lookup = (id) => result.verbatim[id] ?? null;
+    const expanded = uncompress(result.messages, lookup);
+
+    assert.equal(expanded.messages.length, messages.length);
+    assert.ok(expanded.messages_expanded > 0);
+    assert.equal(expanded.missing_ids.length, 0);
+    assert.equal(
+      messages.map((m) => m.content).join('|'),
+      expanded.messages.map((m) => m.content).join('|'),
+    );
+  });
+
+  test('reports missing IDs when verbatim store is empty', () => {
+    const result = compress(messages, { recencyWindow: 2 });
+    const missingResult = uncompress(result.messages, () => null);
+    assert.ok(missingResult.missing_ids.length > 0);
+  });
+
+  test('accepts plain object as verbatim store', () => {
+    const r = compress(messages, { recencyWindow: 2 });
+    const expandedObj = uncompress(r.messages, r.verbatim);
+    assert.equal(expandedObj.missing_ids.length, 0);
+    assert.equal(
+      messages.map((m) => m.content).join('|'),
+      expandedObj.messages.map((m) => m.content).join('|'),
+    );
+  });
+});
+
+describe('dedup', () => {
+  test('detects exact duplicates (>=200 char messages)', () => {
+    const dupMessages = [...messages, { id: '9', index: 8, role: 'user', content: longContent }];
+    const dedupResult = compress(dupMessages, { recencyWindow: 2, dedup: true });
+    assert.ok(
+      dedupResult.compression.messages_deduped > 0,
+      `messages deduped: ${dedupResult.compression.messages_deduped}`,
+    );
+  });
+
+  test('fuzzy dedup detects near-duplicate messages', () => {
+    const fuzzyResult = compress(messages, {
+      recencyWindow: 2,
+      fuzzyDedup: true,
+      fuzzyThreshold: 0.5,
+    });
+    assert.equal(fuzzyResult.messages.length, messages.length);
+    assert.ok(fuzzyResult.compression.ratio >= 1);
+    assert.ok(
+      fuzzyResult.compression.messages_fuzzy_deduped > 0,
+      `expected fuzzy dedup to detect near-duplicates, got messages_fuzzy_deduped=${fuzzyResult.compression.messages_fuzzy_deduped}`,
+    );
+  });
+});
+
+describe('token budget', () => {
+  const totalTokens = messages.reduce((sum, m) => sum + defaultTokenCounter(m), 0);
+  const fitBudget = Math.ceil(totalTokens * 0.8);
+
+  test('binary search finds a recencyWindow that fits', () => {
+    const budgetResult = compress(messages, { tokenBudget: fitBudget });
+    assert.equal(budgetResult.fits, true);
+    assert.ok(budgetResult.tokenCount <= fitBudget);
+    assert.equal(typeof budgetResult.recencyWindow, 'number');
+  });
+
+  test('reports fits=false when budget is impossible', () => {
+    const tightResult = compress(messages, { tokenBudget: 10 });
+    assert.equal(tightResult.fits, false);
+    assert.ok(tightResult.tokenCount > 10);
+  });
+
+  test('minRecencyWindow floor is enforced', () => {
+    const minRWResult = compress(messages, {
+      tokenBudget: 50,
+      minRecencyWindow: 4,
+    });
+    assert.ok(
+      minRWResult.recencyWindow >= 4,
+      `recencyWindow ${minRWResult.recencyWindow} should be >= 4`,
+    );
+  });
+});
+
+describe('token counter', () => {
+  test('defaultTokenCounter returns positive number', () => {
+    const count = defaultTokenCounter({ id: 'x', index: 0, content: 'Hello' });
+    assert.equal(typeof count, 'number');
+    assert.ok(count > 0);
+  });
+
+  test('custom tokenCounter is invoked', () => {
+    let counterCalls = 0;
+    compress(messages, {
+      recencyWindow: 2,
+      tokenCounter: (msg) => {
+        counterCalls++;
+        return Math.ceil((msg.content?.length ?? 0) / 4);
+      },
+    });
+    assert.ok(counterCalls > 0, `custom counter invoked ${counterCalls} times`);
+  });
+});
+
+describe('factory functions', () => {
+  test('createSummarizer is exported', () => {
+    assert.equal(typeof createSummarizer, 'function');
+  });
+
+  test('createEscalatingSummarizer is exported', () => {
+    assert.equal(typeof createEscalatingSummarizer, 'function');
+  });
+});
+
+describe('edge cases', () => {
+  test('empty input returns empty output', () => {
+    const emptyResult = compress([], { recencyWindow: 0 });
+    assert.equal(emptyResult.messages.length, 0);
+    assert.equal(emptyResult.compression.ratio, 1);
+  });
+
+  test('single message is preserved', () => {
+    const singleResult = compress([{ id: '1', index: 0, role: 'user', content: 'Hello' }], {
+      recencyWindow: 1,
+    });
+    assert.equal(singleResult.messages.length, 1);
+    assert.equal(singleResult.compression.messages_preserved, 1);
+  });
+});
+
+describe('async path', () => {
+  test('mock summarizer is called and round-trip works', async () => {
+    let summarizerCalled = 0;
+    const mockSummarizer = async (text) => {
+      summarizerCalled++;
+      return `[mock summary of ${text.length} chars]`;
+    };
+    const asyncResult = await compress(messages, {
+      recencyWindow: 2,
+      summarizer: mockSummarizer,
+    });
+    assert.ok(summarizerCalled > 0, `summarizer was called ${summarizerCalled}x`);
+    assert.equal(asyncResult.messages.length, messages.length);
+    assert.ok(asyncResult.compression.messages_compressed > 0);
+    assert.ok(Object.keys(asyncResult.verbatim).length > 0);
+
+    // Round-trip the async result
+    const asyncExpanded = uncompress(
+      asyncResult.messages,
+      (id) => asyncResult.verbatim[id] ?? null,
+    );
+    assert.equal(asyncExpanded.missing_ids.length, 0);
+    assert.equal(
+      asyncExpanded.messages.map((m) => m.content).join('|'),
+      messages.map((m) => m.content).join('|'),
+    );
+  });
+
+  test('async path with token budget', async () => {
+    const totalTokens = messages.reduce((sum, m) => sum + defaultTokenCounter(m), 0);
+    const fitBudget = Math.ceil(totalTokens * 0.8);
+    const mockSummarizer = async (text) => `[summary: ${text.substring(0, 30)}...]`;
+    const asyncBudget = await compress(messages, {
+      tokenBudget: fitBudget,
+      summarizer: mockSummarizer,
+    });
+    assert.notEqual(asyncBudget.fits, undefined);
+    assert.equal(typeof asyncBudget.tokenCount, 'number');
+    assert.equal(typeof asyncBudget.recencyWindow, 'number');
+  });
+});
+
+describe('role handling', () => {
+  test('system messages are auto-preserved', () => {
+    const withSystem = [
+      {
+        id: 's0',
+        index: 0,
+        role: 'system',
+        content: 'You are a helpful assistant with expertise in security.',
+      },
+      ...messages.map((m, i) => ({ ...m, id: `s${i + 1}`, index: i + 1 })),
+    ];
+    const sysResult = compress(withSystem, { recencyWindow: 1 });
+    const sysMsg = sysResult.messages.find((m) => m.role === 'system');
+    assert.ok(sysMsg !== undefined, 'system message present in output');
+    assert.equal(sysMsg.metadata?._cce_original, undefined, 'system message not compressed');
+    assert.equal(sysMsg.content, withSystem[0].content);
+  });
+
+  test('tool_calls messages pass through intact and other messages are compressed', () => {
+    const withTools = [
+      {
+        id: 't0',
+        index: 0,
+        role: 'user',
+        content:
+          'I need to check the weather forecast for Berlin because I am planning a trip there next week and want to know what clothes to pack. Can you look up the current conditions and the extended forecast for the next seven days so I can prepare accordingly?',
+      },
+      {
+        id: 't1',
+        index: 1,
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Berlin"}' },
+          },
+        ],
+      },
+      {
+        id: 't2',
+        index: 2,
+        role: 'tool',
+        content: '{"temp": 18, "condition": "cloudy"}',
+      },
+      {
+        id: 't3',
+        index: 3,
+        role: 'assistant',
+        content:
+          'Based on the weather data, Berlin is currently 18 degrees Celsius and cloudy. For your trip next week, I would recommend packing layers including a light jacket and an umbrella. The extended forecast shows temperatures ranging from 15 to 22 degrees with intermittent rain expected on Wednesday and Thursday.',
+      },
+      { id: 't4', index: 4, role: 'user', content: 'Thanks, that is very helpful!' },
+    ];
+    const toolResult = compress(withTools, { recencyWindow: 1 });
+
+    // tool_calls message should be preserved
+    const toolMsg = toolResult.messages.find((m) => m.id === 't1');
+    assert.ok(toolMsg !== undefined, 'tool_calls message present');
+    assert.ok(Array.isArray(toolMsg.tool_calls) && toolMsg.tool_calls.length === 1);
+    assert.equal(toolMsg.tool_calls[0].function.name, 'get_weather');
+
+    // Non-recent, non-tool messages should be compressed
+    const compressedMsgs = toolResult.messages.filter((m) => m.metadata?._cce_original);
+    assert.ok(
+      compressedMsgs.length > 0,
+      'at least one non-tool message was compressed (has _cce_original)',
+    );
+  });
+});
+
+describe('re-compression', () => {
+  test('compress already-compressed output and recover via chained stores', () => {
+    const first = compress(messages, { recencyWindow: 2 });
+    const second = compress(first.messages, { recencyWindow: 1 });
+    assert.equal(second.messages.length, first.messages.length);
+
+    const chainedLookup = (id) => second.verbatim[id] ?? first.verbatim[id] ?? null;
+    const recovered = uncompress(second.messages, chainedLookup, { recursive: true });
+    assert.ok(recovered.messages_expanded > 0);
+
+    const origContents = messages.map((m) => m.content);
+    const recoveredContents = recovered.messages.map((m) => m.content);
+    for (const oc of origContents) {
+      assert.ok(
+        recoveredContents.includes(oc),
+        `original content recoverable: ${oc.slice(0, 40)}...`,
+      );
+    }
+  });
+
+  test('recursive uncompress fully expands nested provenance', () => {
+    const first = compress(messages, { recencyWindow: 2 });
+    const second = compress(first.messages, { recencyWindow: 1 });
+    const allVerbatim = { ...first.verbatim, ...second.verbatim };
+    const storeFn = (id) => allVerbatim[id] ?? null;
+
+    const shallow = uncompress(second.messages, storeFn);
+    const deep = uncompress(second.messages, storeFn, { recursive: true });
+    assert.ok(
+      deep.messages_expanded >= shallow.messages_expanded,
+      `recursive ${deep.messages_expanded} >= shallow ${shallow.messages_expanded}`,
+    );
+  });
+});
+
+describe('large conversation', () => {
   const largeMsgs = buildLargeConversation();
-  assert(largeMsgs.length === 31, `fixture has 31 messages`);
 
-  const largeResult = compress(largeMsgs, { recencyWindow: 4 });
-  assert(
-    largeResult.messages.length === largeMsgs.length,
-    `message count preserved (${largeResult.messages.length})`,
-  );
-  assert(
-    largeResult.compression.ratio > 1,
-    `achieves compression (ratio=${largeResult.compression.ratio.toFixed(2)})`,
-  );
-  assert(
-    largeResult.compression.messages_compressed >= 10,
-    `substantial compression (${largeResult.compression.messages_compressed} msgs)`,
-  );
+  test('fixture has 31 messages', () => {
+    assert.equal(largeMsgs.length, 31);
+  });
 
-  // Round-trip
-  const largeLookup = (id) => largeResult.verbatim[id] ?? null;
-  const largeExpanded = uncompress(largeResult.messages, largeLookup);
-  assert(largeExpanded.missing_ids.length === 0, `no missing IDs`);
-  assert(
-    largeMsgs.map((m) => m.content).join("|") ===
-      largeExpanded.messages.map((m) => m.content).join("|"),
-    `full content restored`,
-  );
-}
+  test('compression + lossless round-trip at scale', () => {
+    const largeResult = compress(largeMsgs, { recencyWindow: 4 });
+    assert.equal(largeResult.messages.length, largeMsgs.length);
+    assert.ok(largeResult.compression.ratio > 1);
+    assert.ok(largeResult.compression.messages_compressed >= 10);
 
-console.log("\n25. Large conversation with token budget");
-{
-  const largeMsgs = buildLargeConversation();
-  const largeTotalTokens = largeMsgs.reduce(
-    (sum, m) => sum + defaultTokenCounter(m),
-    0,
-  );
-  const largeBudget = Math.ceil(largeTotalTokens * 0.5);
-  const largeBudgetResult = compress(largeMsgs, { tokenBudget: largeBudget });
-  assert(
-    largeBudgetResult.fits === true,
-    `fits within 50% budget (${largeBudgetResult.tokenCount} <= ${largeBudget})`,
-  );
-  assert(
-    largeBudgetResult.recencyWindow >= 0,
-    `binary search resolved recencyWindow (${largeBudgetResult.recencyWindow})`,
-  );
-}
+    const largeLookup = (id) => largeResult.verbatim[id] ?? null;
+    const largeExpanded = uncompress(largeResult.messages, largeLookup);
+    assert.equal(largeExpanded.missing_ids.length, 0);
+    assert.equal(
+      largeMsgs.map((m) => m.content).join('|'),
+      largeExpanded.messages.map((m) => m.content).join('|'),
+    );
+  });
 
-console.log("\n26. Verbatim store as plain object (not function)");
-{
-  const r = compress(messages, { recencyWindow: 2 });
-  // uncompress accepts both a function and a plain Record<string, Message>
-  const expandedObj = uncompress(r.messages, r.verbatim);
-  assert(expandedObj.missing_ids.length === 0, `works with plain object store`);
-  assert(
-    messages.map((m) => m.content).join("|") ===
-      expandedObj.messages.map((m) => m.content).join("|"),
-    `content restored via object store`,
-  );
-}
+  test('binary search converges on 50% budget target', () => {
+    const largeTotalTokens = largeMsgs.reduce((sum, m) => sum + defaultTokenCounter(m), 0);
+    const largeBudget = Math.ceil(largeTotalTokens * 0.5);
+    const largeBudgetResult = compress(largeMsgs, { tokenBudget: largeBudget });
+    assert.equal(largeBudgetResult.fits, true);
+    assert.ok(largeBudgetResult.recencyWindow >= 0);
+  });
+});
 
-// ---------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------
+describe('error handling', () => {
+  test('non-array to compress throws TypeError', () => {
+    assert.throws(() => compress('not an array', {}), TypeError);
+  });
 
-console.log(`\n${"=".repeat(40)}`);
-console.log(`Results: ${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);
+  test('null entry in messages array throws TypeError', () => {
+    assert.throws(() => compress([null], {}), TypeError);
+  });
+
+  test('message missing required "id" field throws TypeError', () => {
+    assert.throws(() => compress([{ index: 0, role: 'user', content: 'hi' }], {}), TypeError);
+  });
+
+  test('non-array to uncompress throws TypeError', () => {
+    assert.throws(() => uncompress('not an array', () => null), TypeError);
+  });
+
+  test('invalid store to uncompress throws TypeError', () => {
+    assert.throws(() => uncompress([], null), TypeError);
+  });
+
+  test('null content does not throw and returns valid result', () => {
+    const result = compress([{ id: '1', index: 0, role: 'user', content: null }], {
+      recencyWindow: 0,
+    });
+    assert.ok(Array.isArray(result.messages));
+    assert.equal(result.messages.length, 1);
+  });
+
+  test('empty string content does not throw and returns valid result', () => {
+    const result = compress([{ id: '1', index: 0, role: 'user', content: '' }], {
+      recencyWindow: 0,
+    });
+    assert.ok(Array.isArray(result.messages));
+    assert.equal(result.messages.length, 1);
+  });
+});
