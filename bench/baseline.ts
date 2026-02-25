@@ -472,31 +472,28 @@ function llmComparisonChart(
   const sharedScenarios = Object.keys(basic).filter((s) => s in bestLlm!.scenarios);
   if (sharedScenarios.length === 0) return [];
 
-  const labels = sharedScenarios.map((n) => `"${shortName(n)}"`).join(', ');
-  const detValues = sharedScenarios.map((s) => fix(basic[s].ratio)).join(', ');
-
-  // Pick the best LLM method per scenario (highest ratio)
-  const llmValues = sharedScenarios
-    .map((s) => {
-      const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
-        (m) => m.vsDet != null,
-      );
-      if (methods.length === 0) return fix(basic[s].ratio);
-      return fix(Math.max(...methods.map((m) => m.ratio)));
-    })
-    .join(', ');
+  // Interleave labels and values: "Coding (Det)", "Coding (LLM)", ...
+  const labels: string[] = [];
+  const values: number[] = [];
+  for (const s of sharedScenarios) {
+    const sn = shortName(s);
+    labels.push(`"${sn} (Det)"`, `"${sn} (LLM)"`);
+    const detR = basic[s].ratio;
+    const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
+      (m) => m.vsDet != null,
+    );
+    const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
+    values.push(detR, llmR);
+  }
 
   return [
     '```mermaid',
     'xychart-beta',
     `    title "Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})"`,
-    `    x-axis [${labels}]`,
+    `    x-axis [${labels.join(', ')}]`,
     '    y-axis "Char Ratio"',
-    `    bar "Deterministic" [${detValues}]`,
-    `    line "Best LLM" [${llmValues}]`,
+    `    bar [${values.map((v) => fix(v)).join(', ')}]`,
     '```',
-    '',
-    '*Bars: deterministic · Line: best LLM method*',
   ];
 }
 

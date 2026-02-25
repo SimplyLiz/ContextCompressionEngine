@@ -101,13 +101,10 @@ Target: **2000 tokens** · 1/4 fit
 ```mermaid
 xychart-beta
     title "Deterministic vs LLM (ollama/llama3.2)"
-    x-axis ["Coding", "Long Q&A", "Tool-heavy", "Deep", "Technical", "Structured", "Agentic"]
+    x-axis ["Coding (Det)", "Coding (LLM)", "Long Q&A (Det)", "Long Q&A (LLM)", "Tool-heavy (Det)", "Tool-heavy (LLM)", "Deep (Det)", "Deep (LLM)", "Technical (Det)", "Technical (LLM)", "Structured (Det)", "Structured (LLM)", "Agentic (Det)", "Agentic (LLM)"]
     y-axis "Char Ratio"
-    bar "Deterministic" [1.68, 6.16, 1.30, 2.12, 1.00, 1.93, 1.43]
-    line "Best LLM" [1.55, 4.49, 1.28, 3.28, 1.00, 1.46, 1.40]
+    bar [1.68, 1.55, 6.16, 4.49, 1.30, 1.28, 2.12, 3.28, 1.00, 1.00, 1.93, 1.46, 1.43, 1.40]
 ```
-
-*Bars: deterministic · Line: best LLM method*
 
 > **Key findings:**
 > LLM wins on prose-heavy scenarios: Deep conversation, Technical explanation
