@@ -380,6 +380,35 @@ function formatTime(ms: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Visual helpers
+// ---------------------------------------------------------------------------
+
+function badges(basic: Record<string, BasicResult>): string[] {
+  const entries = Object.values(basic);
+  const ratios = entries.map((v) => v.ratio);
+  const avgR = (ratios.reduce((a, b) => a + b, 0) / ratios.length).toFixed(2);
+  const bestR = Math.max(...ratios).toFixed(2);
+  const allPass = 'all_PASS';
+
+  const badge = (label: string, value: string, color: string) =>
+    `![${label}](https://img.shields.io/badge/${encodeURIComponent(label).replace(/-/g, '--')}-${encodeURIComponent(value).replace(/-/g, '--')}-${color})`;
+
+  return [
+    [
+      badge('avg ratio', `${avgR}x`, 'blue'),
+      badge('best', `${bestR}x`, 'blue'),
+      badge('scenarios', `${entries.length}`, 'blue'),
+      badge('round-trip', allPass, 'brightgreen'),
+    ].join(' '),
+  ];
+}
+
+function progressBar(value: number, max: number, width: number = 10): string {
+  const filled = Math.round((value / max) * width);
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
+}
+
+// ---------------------------------------------------------------------------
 // Mermaid chart helpers
 // ---------------------------------------------------------------------------
 
@@ -498,11 +527,16 @@ function generateCompressionSection(b: Baseline): string[] {
   lines.push('');
   lines.push(...compressionChart(r.basic));
   lines.push('');
-  lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
-  lines.push('| --- | ---: | ---: | ---: | ---: |');
+  lines.push(
+    '| Scenario | | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |',
+  );
+  lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const [name, v] of basicEntries) {
+    const bar = progressBar(v.ratio, maxR);
+    const reduction = Math.round((1 - 1 / v.ratio) * 100);
+    const messages = v.compressed + v.preserved;
     lines.push(
-      `| ${name} | ${fix(v.ratio)} | ${fix(v.tokenRatio)} | ${v.compressed} | ${v.preserved} |`,
+      `| ${name} | ${bar} | ${fix(v.ratio)} | ${reduction}% | ${fix(v.tokenRatio)} | ${messages} | ${v.compressed} | ${v.preserved} |`,
     );
   }
   return lines;
@@ -618,11 +652,14 @@ function generateLlmSection(
     lines.push('');
   }
 
-  // Per-provider detail tables
+  // Per-provider detail tables (collapsible)
   for (const llm of llmResults) {
     lines.push(`### ${llm.provider} (${llm.model})`);
     lines.push('');
     lines.push(`*Generated: ${llm.generated.split('T')[0]}*`);
+    lines.push('');
+    lines.push('<details>');
+    lines.push(`<summary>Scenario details</summary>`);
     lines.push('');
     lines.push(
       '| Scenario | Method | Char Ratio | Token Ratio | vsDet | Compressed | Preserved | Round-trip | Time |',
@@ -664,6 +701,8 @@ function generateLlmSection(
     }
 
     lines.push('');
+    lines.push('</details>');
+    lines.push('');
   }
 
   return lines;
@@ -689,6 +728,8 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push('');
   lines.push(`**v${latest.version}** · Generated: ${latest.generated.split('T')[0]}`);
   lines.push('');
+  lines.push(...badges(latest.results.basic));
+  lines.push('');
 
   // --- Summary ---
   const basicEntries = Object.entries(latest.results.basic);
@@ -702,6 +743,16 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push(`| Average compression | ${fix(avgR)}x |`);
   lines.push(`| Best compression | ${fix(Math.max(...ratios))}x |`);
   lines.push(`| Round-trip integrity | all PASS |`);
+  lines.push('');
+
+  // --- Pie chart: message outcome distribution ---
+  const totalPreserved = basicEntries.reduce((s, [, v]) => s + v.preserved, 0);
+  const totalCompressed = basicEntries.reduce((s, [, v]) => s + v.compressed, 0);
+  lines.push('```mermaid');
+  lines.push('pie title "Message Outcomes"');
+  lines.push(`    "Preserved" : ${totalPreserved}`);
+  lines.push(`    "Compressed" : ${totalCompressed}`);
+  lines.push('```');
   lines.push('');
 
   // --- Compression ---

@@ -6,6 +6,8 @@
 
 **v1.0.0** · Generated: 2026-02-25
 
+![avg ratio](https://img.shields.io/badge/avg%20ratio-2.08x-blue) ![best](https://img.shields.io/badge/best-6.16x-blue) ![scenarios](https://img.shields.io/badge/scenarios-8-blue) ![round-trip](https://img.shields.io/badge/round--trip-all_PASS-brightgreen)
+
 ## Summary
 
 | Metric | Value |
@@ -14,6 +16,12 @@
 | Average compression | 2.08x |
 | Best compression | 6.16x |
 | Round-trip integrity | all PASS |
+
+```mermaid
+pie title "Message Outcomes"
+    "Preserved" : 90
+    "Compressed" : 65
+```
 
 ## Compression by Scenario
 
@@ -27,16 +35,16 @@ xychart-beta
     bar [1.68, 6.16, 1.30, 1.00, 2.12, 1.00, 1.93, 1.43]
 ```
 
-| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |
-| --- | ---: | ---: | ---: | ---: |
-| Coding assistant | 1.68 | 1.67 | 5 | 8 |
-| Long Q&A | 6.16 | 6.11 | 4 | 6 |
-| Tool-heavy | 1.30 | 1.29 | 2 | 16 |
-| Short conversation | 1.00 | 1.00 | 0 | 7 |
-| Deep conversation | 2.12 | 2.12 | 50 | 1 |
-| Technical explanation | 1.00 | 1.00 | 0 | 11 |
-| Structured content | 1.93 | 1.92 | 2 | 10 |
-| Agentic coding session | 1.43 | 1.43 | 2 | 31 |
+| Scenario | | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Coding assistant | ███░░░░░░░ | 1.68 | 41% | 1.67 | 13 | 5 | 8 |
+| Long Q&A | ██████████ | 6.16 | 84% | 6.11 | 10 | 4 | 6 |
+| Tool-heavy | ██░░░░░░░░ | 1.30 | 23% | 1.29 | 18 | 2 | 16 |
+| Short conversation | ██░░░░░░░░ | 1.00 | 0% | 1.00 | 7 | 0 | 7 |
+| Deep conversation | ███░░░░░░░ | 2.12 | 53% | 2.12 | 51 | 50 | 1 |
+| Technical explanation | ██░░░░░░░░ | 1.00 | 0% | 1.00 | 11 | 0 | 11 |
+| Structured content | ███░░░░░░░ | 1.93 | 48% | 1.92 | 12 | 2 | 10 |
+| Agentic coding session | ██░░░░░░░░ | 1.43 | 30% | 1.43 | 33 | 2 | 31 |
 
 ## Deduplication Impact
 
@@ -109,6 +117,9 @@ xychart-beta
 
 *Generated: 2026-02-25*
 
+<details>
+<summary>Scenario details</summary>
+
 | Scenario | Method | Char Ratio | Token Ratio | vsDet | Compressed | Preserved | Round-trip | Time |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
 | Coding assistant | deterministic | 1.68 | 1.67 | - | 5 | 8 | PASS | 0ms |
@@ -142,9 +153,14 @@ xychart-beta
 | Agentic coding session | deterministic | 1957 | true | 9 | 1.36 | PASS | 2ms |
 |  | llm-escalate | 2003 | false | 9 | 1.33 | PASS | 4.1s |
 
+</details>
+
 ### openai (gpt-4.1-mini)
 
 *Generated: 2026-02-25*
+
+<details>
+<summary>Scenario details</summary>
 
 | Scenario | Method | Char Ratio | Token Ratio | vsDet | Compressed | Preserved | Round-trip | Time |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
@@ -178,6 +194,8 @@ xychart-beta
 |  | llm-escalate | 3391 | false | 0 | 2.35 | PASS | 280.5s |
 | Agentic coding session | deterministic | 1957 | true | 9 | 1.36 | PASS | 2ms |
 |  | llm-escalate | 1915 | true | 3 | 1.39 | PASS | 28.1s |
+
+</details>
 
 ## Methodology
 
