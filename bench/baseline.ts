@@ -446,11 +446,16 @@ function dedupChart(dedup: Record<string, DedupResult>): string[] {
   ];
 }
 
-function llmComparisonTable(
+function asciiBar(value: number, max: number, width: number): string {
+  const filled = Math.round((value / max) * width);
+  return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+function llmComparisonChart(
   basic: Record<string, BasicResult>,
   llmResults: LlmBenchmarkResult[],
 ): string[] {
-  // Use the best LLM result (highest average vsDet) for the summary table
+  // Use the best LLM result (highest average vsDet) for the summary
   let bestLlm: LlmBenchmarkResult | undefined;
   let bestAvg = -Infinity;
   for (const llm of llmResults) {
@@ -472,25 +477,35 @@ function llmComparisonTable(
   const sharedScenarios = Object.keys(basic).filter((s) => s in bestLlm!.scenarios);
   if (sharedScenarios.length === 0) return [];
 
-  const lines: string[] = [];
-  lines.push(`*Best provider: ${bestLlm.provider}/${bestLlm.model}*`);
-  lines.push('');
-  lines.push('| Scenario | Det | Best LLM | Delta | Winner |');
-  lines.push('| --- | ---: | ---: | ---: | --- |');
-
+  // Collect data and find max for scaling
+  const rows: { name: string; detR: number; llmR: number }[] = [];
   for (const s of sharedScenarios) {
     const detR = basic[s].ratio;
     const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
       (m) => m.vsDet != null,
     );
     const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
-    const delta = Math.round(((llmR - detR) / detR) * 100);
-    const sign = delta >= 0 ? '+' : '';
-    const winner = llmR > detR + 0.01 ? 'LLM' : detR > llmR + 0.01 ? 'Det' : 'Tie';
-    lines.push(
-      `| ${s} | ${fix(detR)}x | ${fix(llmR)}x | ${sign}${delta}% | ${winner} |`,
-    );
+    rows.push({ name: s, detR, llmR });
   }
+  const maxR = Math.max(...rows.flatMap((r) => [r.detR, r.llmR]));
+  const barWidth = 30;
+  const nameWidth = Math.max(...rows.map((r) => r.name.length));
+
+  const lines: string[] = [];
+  lines.push('```');
+  lines.push(`Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})`);
+  lines.push('');
+  for (const r of rows) {
+    const label = r.name.padEnd(nameWidth);
+    const detBar = asciiBar(r.detR, maxR, barWidth);
+    const llmBar = asciiBar(r.llmR, maxR, barWidth);
+    const winner = r.llmR > r.detR + 0.01 ? '  \u2605' : '';
+    lines.push(`${label}  Det ${detBar} ${fix(r.detR)}x`);
+    lines.push(`${' '.repeat(nameWidth)}  LLM ${llmBar} ${fix(r.llmR)}x${winner}`);
+    lines.push('');
+  }
+  lines.push('\u2605 = LLM wins');
+  lines.push('```');
 
   return lines;
 }
@@ -608,10 +623,10 @@ function generateLlmSection(
   );
   lines.push('');
 
-  // Summary comparison table
-  const table = llmComparisonTable(basic, llmResults);
-  if (table.length > 0) {
-    lines.push(...table);
+  // Summary comparison chart (ASCII horizontal bars in code block)
+  const chart = llmComparisonChart(basic, llmResults);
+  if (chart.length > 0) {
+    lines.push(...chart);
     lines.push('');
   }
 

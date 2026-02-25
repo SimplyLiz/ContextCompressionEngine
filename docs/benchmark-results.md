@@ -98,17 +98,32 @@ Target: **2000 tokens** · 1/4 fit
 
 > Results are **non-deterministic** — LLM outputs vary between runs. Saved as reference data, not used for regression testing.
 
-*Best provider: ollama/llama3.2*
+```
+Deterministic vs LLM (ollama/llama3.2)
 
-| Scenario | Det | Best LLM | Delta | Winner |
-| --- | ---: | ---: | ---: | --- |
-| Coding assistant | 1.68x | 1.55x | -8% | Det |
-| Long Q&A | 6.16x | 4.49x | -27% | Det |
-| Tool-heavy | 1.30x | 1.28x | -1% | Det |
-| Deep conversation | 2.12x | 3.28x | +54% | LLM |
-| Technical explanation | 1.00x | 1.00x | +0% | Tie |
-| Structured content | 1.93x | 1.46x | -25% | Det |
-| Agentic coding session | 1.43x | 1.40x | -2% | Det |
+Coding assistant        Det ████████░░░░░░░░░░░░░░░░░░░░░░ 1.68x
+                        LLM ████████░░░░░░░░░░░░░░░░░░░░░░ 1.55x
+
+Long Q&A                Det ██████████████████████████████ 6.16x
+                        LLM ██████████████████████░░░░░░░░ 4.49x
+
+Tool-heavy              Det ██████░░░░░░░░░░░░░░░░░░░░░░░░ 1.30x
+                        LLM ██████░░░░░░░░░░░░░░░░░░░░░░░░ 1.28x
+
+Deep conversation       Det ██████████░░░░░░░░░░░░░░░░░░░░ 2.12x
+                        LLM ████████████████░░░░░░░░░░░░░░ 3.28x  ★
+
+Technical explanation   Det █████░░░░░░░░░░░░░░░░░░░░░░░░░ 1.00x
+                        LLM █████░░░░░░░░░░░░░░░░░░░░░░░░░ 1.00x
+
+Structured content      Det █████████░░░░░░░░░░░░░░░░░░░░░ 1.93x
+                        LLM ███████░░░░░░░░░░░░░░░░░░░░░░░ 1.46x
+
+Agentic coding session  Det ███████░░░░░░░░░░░░░░░░░░░░░░░ 1.43x
+                        LLM ███████░░░░░░░░░░░░░░░░░░░░░░░ 1.40x
+
+★ = LLM wins
+```
 
 > **Key findings:**
 > LLM wins on prose-heavy scenarios: Deep conversation, Technical explanation
