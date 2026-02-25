@@ -72,16 +72,16 @@ xychart-beta
 
 ### Fuzzy Dedup
 
-| Scenario | Exact Deduped | Fuzzy Deduped | Ratio |
-| --- | ---: | ---: | ---: |
-| Coding assistant | 0 | 0 | 1.68 |
-| Long Q&A | 1 | 0 | 6.16 |
-| Tool-heavy | 0 | 0 | 1.30 |
-| Short conversation | 0 | 0 | 1.00 |
-| Deep conversation | 0 | 0 | 2.12 |
-| Technical explanation | 0 | 0 | 1.00 |
-| Structured content | 0 | 0 | 1.93 |
-| Agentic coding session | 4 | 2 | 2.23 |
+| Scenario | Exact Deduped | Fuzzy Deduped | Ratio | vs Base |
+| --- | ---: | ---: | ---: | ---: |
+| Coding assistant | 0 | 0 | 1.68 | - |
+| Long Q&A | 1 | 0 | 6.16 | - |
+| Tool-heavy | 0 | 0 | 1.30 | - |
+| Short conversation | 0 | 0 | 1.00 | - |
+| Deep conversation | 0 | 0 | 2.12 | - |
+| Technical explanation | 0 | 0 | 1.00 | - |
+| Structured content | 0 | 0 | 1.93 | - |
+| Agentic coding session | 4 | 2 | 2.23 | +56% |
 
 ## Token Budget
 
@@ -99,7 +99,7 @@ Target: **2000 tokens** · 1/4 fit
 > Results are **non-deterministic** — LLM outputs vary between runs. Saved as reference data, not used for regression testing.
 
 ```
-Deterministic vs LLM (ollama/llama3.2)
+Deterministic vs ollama/llama3.2
 
 Coding assistant        Det ████████░░░░░░░░░░░░░░░░░░░░░░ 1.68x
                         LLM ████████░░░░░░░░░░░░░░░░░░░░░░ 1.55x
@@ -124,6 +124,40 @@ Agentic coding session  Det ███████░░░░░░░░░░�
 
 ★ = LLM wins
 ```
+
+```
+Deterministic vs openai/gpt-4.1-mini
+
+Coding assistant        Det ████████░░░░░░░░░░░░░░░░░░░░░░ 1.68x
+                        LLM ████████░░░░░░░░░░░░░░░░░░░░░░ 1.64x
+
+Long Q&A                Det ██████████████████████████████ 6.16x
+                        LLM ██████████████████████████░░░░ 5.37x
+
+Tool-heavy              Det ██████░░░░░░░░░░░░░░░░░░░░░░░░ 1.30x
+                        LLM █████░░░░░░░░░░░░░░░░░░░░░░░░░ 1.12x
+
+Deep conversation       Det ██████████░░░░░░░░░░░░░░░░░░░░ 2.12x
+                        LLM ████████████░░░░░░░░░░░░░░░░░░ 2.37x  ★
+
+Technical explanation   Det █████░░░░░░░░░░░░░░░░░░░░░░░░░ 1.00x
+                        LLM █████░░░░░░░░░░░░░░░░░░░░░░░░░ 1.00x
+
+Structured content      Det █████████░░░░░░░░░░░░░░░░░░░░░ 1.93x
+                        LLM ██████░░░░░░░░░░░░░░░░░░░░░░░░ 1.29x
+
+Agentic coding session  Det ███████░░░░░░░░░░░░░░░░░░░░░░░ 1.43x
+                        LLM ███████░░░░░░░░░░░░░░░░░░░░░░░ 1.43x
+
+★ = LLM wins
+```
+
+### Provider Summary
+
+| Provider | Model | Avg Ratio | Avg vsDet | Round-trip | Budget Fits | Avg Time |
+| --- | --- | ---: | ---: | --- | --- | ---: |
+| ollama | llama3.2 | 2.09x | 0.96 | all PASS | 1/4 | 4.2s |
+| openai | gpt-4.1-mini | 2.09x | 0.92 | all PASS | 2/4 | 8.1s |
 
 > **Key findings:**
 > LLM wins on prose-heavy scenarios: Deep conversation, Technical explanation

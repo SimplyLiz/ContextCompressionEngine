@@ -451,61 +451,44 @@ function asciiBar(value: number, max: number, width: number): string {
   return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
 }
 
-function llmComparisonChart(
+function llmComparisonCharts(
   basic: Record<string, BasicResult>,
   llmResults: LlmBenchmarkResult[],
 ): string[] {
-  // Use the best LLM result (highest average vsDet) for the summary
-  let bestLlm: LlmBenchmarkResult | undefined;
-  let bestAvg = -Infinity;
-  for (const llm of llmResults) {
-    const vsDetValues: number[] = [];
-    for (const sr of Object.values(llm.scenarios)) {
-      for (const mr of Object.values(sr.methods)) {
-        if (mr.vsDet != null && mr.vsDet > 0) vsDetValues.push(mr.vsDet);
-      }
-    }
-    const avg =
-      vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
-    if (avg > bestAvg) {
-      bestAvg = avg;
-      bestLlm = llm;
-    }
-  }
-  if (!bestLlm) return [];
-
-  const sharedScenarios = Object.keys(basic).filter((s) => s in bestLlm!.scenarios);
-  if (sharedScenarios.length === 0) return [];
-
-  // Collect data and find max for scaling
-  const rows: { name: string; detR: number; llmR: number }[] = [];
-  for (const s of sharedScenarios) {
-    const detR = basic[s].ratio;
-    const methods = Object.values(bestLlm!.scenarios[s].methods).filter(
-      (m) => m.vsDet != null,
-    );
-    const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
-    rows.push({ name: s, detR, llmR });
-  }
-  const maxR = Math.max(...rows.flatMap((r) => [r.detR, r.llmR]));
-  const barWidth = 30;
-  const nameWidth = Math.max(...rows.map((r) => r.name.length));
-
   const lines: string[] = [];
-  lines.push('```');
-  lines.push(`Deterministic vs LLM (${bestLlm.provider}/${bestLlm.model})`);
-  lines.push('');
-  for (const r of rows) {
-    const label = r.name.padEnd(nameWidth);
-    const detBar = asciiBar(r.detR, maxR, barWidth);
-    const llmBar = asciiBar(r.llmR, maxR, barWidth);
-    const winner = r.llmR > r.detR + 0.01 ? '  \u2605' : '';
-    lines.push(`${label}  Det ${detBar} ${fix(r.detR)}x`);
-    lines.push(`${' '.repeat(nameWidth)}  LLM ${llmBar} ${fix(r.llmR)}x${winner}`);
+  const barWidth = 30;
+
+  for (const llm of llmResults) {
+    const sharedScenarios = Object.keys(basic).filter((s) => s in llm.scenarios);
+    if (sharedScenarios.length === 0) continue;
+
+    // Collect data and find max for scaling
+    const rows: { name: string; detR: number; llmR: number }[] = [];
+    for (const s of sharedScenarios) {
+      const detR = basic[s].ratio;
+      const methods = Object.values(llm.scenarios[s].methods).filter((m) => m.vsDet != null);
+      const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
+      rows.push({ name: s, detR, llmR });
+    }
+    const maxR = Math.max(...rows.flatMap((r) => [r.detR, r.llmR]));
+    const nameWidth = Math.max(...rows.map((r) => r.name.length));
+
+    lines.push('```');
+    lines.push(`Deterministic vs ${llm.provider}/${llm.model}`);
+    lines.push('');
+    for (const r of rows) {
+      const label = r.name.padEnd(nameWidth);
+      const detBar = asciiBar(r.detR, maxR, barWidth);
+      const llmBar = asciiBar(r.llmR, maxR, barWidth);
+      const winner = r.llmR > r.detR + 0.01 ? '  \u2605' : '';
+      lines.push(`${label}  Det ${detBar} ${fix(r.detR)}x`);
+      lines.push(`${' '.repeat(nameWidth)}  LLM ${llmBar} ${fix(r.llmR)}x${winner}`);
+      lines.push('');
+    }
+    lines.push('\u2605 = LLM wins');
+    lines.push('```');
     lines.push('');
   }
-  lines.push('\u2605 = LLM wins');
-  lines.push('```');
 
   return lines;
 }
@@ -574,10 +557,13 @@ function generateDedupSection(r: BenchmarkResults): string[] {
     lines.push('### Fuzzy Dedup');
     lines.push('');
   }
-  lines.push('| Scenario | Exact Deduped | Fuzzy Deduped | Ratio |');
-  lines.push('| --- | ---: | ---: | ---: |');
+  lines.push('| Scenario | Exact Deduped | Fuzzy Deduped | Ratio | vs Base |');
+  lines.push('| --- | ---: | ---: | ---: | ---: |');
   for (const [name, v] of Object.entries(r.fuzzyDedup)) {
-    lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} |`);
+    const baseRatio = r.basic[name]?.ratio ?? v.ratio;
+    const improvement =
+      v.ratio > baseRatio + 0.01 ? `+${Math.round(((v.ratio - baseRatio) / baseRatio) * 100)}%` : '-';
+    lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} | ${improvement} |`);
   }
   return lines;
 }
@@ -623,10 +609,60 @@ function generateLlmSection(
   );
   lines.push('');
 
-  // Summary comparison chart (ASCII horizontal bars in code block)
-  const chart = llmComparisonChart(basic, llmResults);
-  if (chart.length > 0) {
-    lines.push(...chart);
+  // Per-provider comparison charts (ASCII horizontal bars in code blocks)
+  const charts = llmComparisonCharts(basic, llmResults);
+  if (charts.length > 0) {
+    lines.push(...charts);
+  }
+
+  // Cross-provider summary table
+  if (llmResults.length > 0) {
+    lines.push('### Provider Summary');
+    lines.push('');
+    lines.push(
+      '| Provider | Model | Avg Ratio | Avg vsDet | Round-trip | Budget Fits | Avg Time |',
+    );
+    lines.push('| --- | --- | ---: | ---: | --- | --- | ---: |');
+    for (const llm of llmResults) {
+      const ratioValues: number[] = [];
+      const vsDetValues: number[] = [];
+      const timeValues: number[] = [];
+      let passCount = 0;
+      let totalCount = 0;
+      for (const sr of Object.values(llm.scenarios)) {
+        for (const mr of Object.values(sr.methods)) {
+          ratioValues.push(mr.ratio);
+          if (mr.vsDet != null) vsDetValues.push(mr.vsDet);
+          timeValues.push(mr.timeMs);
+          totalCount++;
+          if (mr.roundTrip === 'PASS') passCount++;
+        }
+      }
+      const avgRatio = ratioValues.length > 0
+        ? ratioValues.reduce((a, b) => a + b, 0) / ratioValues.length
+        : 0;
+      const avgVsDet = vsDetValues.length > 0
+        ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length
+        : 0;
+      const avgTime = timeValues.length > 0
+        ? timeValues.reduce((a, b) => a + b, 0) / timeValues.length
+        : 0;
+      const rt = passCount === totalCount ? 'all PASS' : `${passCount}/${totalCount}`;
+
+      // Token budget summary
+      let budgetFits = '-';
+      if (llm.tokenBudget) {
+        const allEntries = Object.values(llm.tokenBudget).flat();
+        if (allEntries.length > 0) {
+          const fitCount = allEntries.filter((e) => e.fits).length;
+          budgetFits = `${fitCount}/${allEntries.length}`;
+        }
+      }
+
+      lines.push(
+        `| ${llm.provider} | ${llm.model} | ${fix(avgRatio)}x | ${fix(avgVsDet)} | ${rt} | ${budgetFits} | ${formatTime(avgTime)} |`,
+      );
+    }
     lines.push('');
   }
 
