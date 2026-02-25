@@ -1,7 +1,7 @@
 {
   "provider": "ollama",
   "model": "llama3.2",
-  "generated": "2026-02-25T09:04:08.797Z",
+  "generated": "2026-02-25T12:21:05.747Z",
   "scenarios": {
     "Coding assistant": {
       "methods": {
@@ -11,23 +11,25 @@
           "compressed": 5,
           "preserved": 8,
           "roundTrip": "PASS",
-          "timeMs": 0.25633400000515394
+          "timeMs": 0.25966599996900186
         },
         "llm-basic": {
-          "ratio": 1.542581503659348,
-          "tokenRatio": 1.5375722543352601,
+          "ratio": 1.4847902657700929,
+          "tokenRatio": 1.4810690423162582,
           "compressed": 5,
           "preserved": 8,
           "roundTrip": "PASS",
-          "timeMs": 4017.3837080000085
+          "timeMs": 5869.715916000016,
+          "vsDet": 0.883125200128082
         },
         "llm-escalate": {
-          "ratio": 1.4490625,
-          "tokenRatio": 1.4472252448313385,
+          "ratio": 1.5518741633199464,
+          "tokenRatio": 1.5501165501165501,
           "compressed": 5,
           "preserved": 8,
           "roundTrip": "PASS",
-          "timeMs": 4231.839750000014
+          "timeMs": 3001.2509999999893,
+          "vsDet": 0.9230254350736279
         }
       }
     },
@@ -39,23 +41,25 @@
           "compressed": 4,
           "preserved": 6,
           "roundTrip": "PASS",
-          "timeMs": 0.9851250000065193
+          "timeMs": 0.73641700000735
         },
         "llm-basic": {
-          "ratio": 4.482911673324456,
-          "tokenRatio": 4.449230769230769,
+          "ratio": 4.308873720136519,
+          "tokenRatio": 4.2844444444444445,
           "compressed": 4,
           "preserved": 6,
           "roundTrip": "PASS",
-          "timeMs": 4514.40400000001
+          "timeMs": 4080.273957999947,
+          "vsDet": 0.6996587030716723
         },
         "llm-escalate": {
-          "ratio": 4.46113074204947,
-          "tokenRatio": 4.435582822085889,
+          "ratio": 4.486894713460684,
+          "tokenRatio": 4.456086286594761,
           "compressed": 4,
           "preserved": 6,
           "roundTrip": "PASS",
-          "timeMs": 4495.341832999984
+          "timeMs": 3666.4759170000325,
+          "vsDet": 0.7285650821856953
         }
       }
     },
@@ -67,23 +71,25 @@
           "compressed": 2,
           "preserved": 16,
           "roundTrip": "PASS",
-          "timeMs": 0.43775000001187436
+          "timeMs": 1.655417000001762
         },
         "llm-basic": {
-          "ratio": 1.1762632197414806,
-          "tokenRatio": 1.174089068825911,
+          "ratio": 1.1153203342618385,
+          "tokenRatio": 1.1132437619961613,
           "compressed": 2,
           "preserved": 16,
           "roundTrip": "PASS",
-          "timeMs": 2554.344207999995
+          "timeMs": 2252.8222499999683,
+          "vsDet": 0.8584958217270195
         },
         "llm-escalate": {
-          "ratio": 1.0945872061235649,
-          "tokenRatio": 1.0922787193973635,
+          "ratio": 1.2816901408450705,
+          "tokenRatio": 1.277533039647577,
           "compressed": 2,
           "preserved": 16,
           "roundTrip": "PASS",
-          "timeMs": 3072.135583000025
+          "timeMs": 2796.051916999975,
+          "vsDet": 0.9865556978233034
         }
       }
     },
@@ -95,23 +101,55 @@
           "compressed": 50,
           "preserved": 1,
           "roundTrip": "PASS",
-          "timeMs": 2.759959000017261
+          "timeMs": 2.8401660000090487
         },
         "llm-basic": {
-          "ratio": 3.1500511538024325,
-          "tokenRatio": 3.133385951065509,
+          "ratio": 3.123774095366926,
+          "tokenRatio": 3.1088488645262333,
           "compressed": 50,
           "preserved": 1,
           "roundTrip": "PASS",
-          "timeMs": 24927.85712499998
+          "timeMs": 22697.48683300003,
+          "vsDet": 1.470071017923571
         },
         "llm-escalate": {
-          "ratio": 3.3075913105753165,
-          "tokenRatio": 3.2891466445733224,
+          "ratio": 3.2790202342918,
+          "tokenRatio": 3.255432554325543,
           "compressed": 50,
           "preserved": 1,
           "roundTrip": "PASS",
-          "timeMs": 25502.586582999997
+          "timeMs": 23293.247875,
+          "vsDet": 1.5431309904153354
+        }
+      }
+    },
+    "Technical explanation": {
+      "methods": {
+        "deterministic": {
+          "ratio": 1,
+          "tokenRatio": 1,
+          "compressed": 0,
+          "preserved": 11,
+          "roundTrip": "PASS",
+          "timeMs": 0.6284590000286698
+        },
+        "llm-basic": {
+          "ratio": 1,
+          "tokenRatio": 1,
+          "compressed": 0,
+          "preserved": 11,
+          "roundTrip": "PASS",
+          "timeMs": 3207.201915999991,
+          "vsDet": 1
+        },
+        "llm-escalate": {
+          "ratio": 1.0009776232891592,
+          "tokenRatio": 1.0007587253414265,
+          "compressed": 2,
+          "preserved": 9,
+          "roundTrip": "PASS",
+          "timeMs": 784.6597920000786,
+          "vsDet": 1.0009776232891592
         }
       }
     },
@@ -123,23 +161,25 @@
           "compressed": 2,
           "preserved": 10,
           "roundTrip": "PASS",
-          "timeMs": 0.7937499999825377
+          "timeMs": 0.48375000001396984
         },
         "llm-basic": {
-          "ratio": 1.338071693448702,
-          "tokenRatio": 1.3365591397849463,
+          "ratio": 1.4554621848739495,
+          "tokenRatio": 1.4521028037383177,
           "compressed": 2,
           "preserved": 10,
           "roundTrip": "PASS",
-          "timeMs": 4280.396999999997
+          "timeMs": 3480.8887089999625,
+          "vsDet": 0.7526050420168067
         },
         "llm-escalate": {
-          "ratio": 1.338899196042053,
-          "tokenRatio": 1.3365591397849463,
+          "ratio": 1.3816209317166561,
+          "tokenRatio": 1.3795782463928967,
           "compressed": 2,
           "preserved": 10,
           "roundTrip": "PASS",
-          "timeMs": 4270.229416999995
+          "timeMs": 3686.4468750000233,
+          "vsDet": 0.7144224633056797
         }
       }
     },
@@ -151,25 +191,73 @@
           "compressed": 2,
           "preserved": 31,
           "roundTrip": "PASS",
-          "timeMs": 6.805083999992348
+          "timeMs": 0.749125000089407
         },
         "llm-basic": {
-          "ratio": 1.3898050974512743,
-          "tokenRatio": 1.3880208333333333,
+          "ratio": 1.3462097008422886,
+          "tokenRatio": 1.34460141271443,
           "compressed": 2,
           "preserved": 31,
           "roundTrip": "PASS",
-          "timeMs": 4489.758750000008
+          "timeMs": 3328.690416999976,
+          "vsDet": 0.9424920127795526
         },
         "llm-escalate": {
-          "ratio": 1.367660076718796,
-          "tokenRatio": 1.3659661711942594,
+          "ratio": 1.3975576662143827,
+          "tokenRatio": 1.3952879581151831,
           "compressed": 2,
           "preserved": 31,
           "roundTrip": "PASS",
-          "timeMs": 2974.9285839999793
+          "timeMs": 5422.445708999992,
+          "vsDet": 0.978441127694859
         }
       }
     }
+  },
+  "tokenBudget": {
+    "Deep conversation": [
+      {
+        "budget": 2000,
+        "method": "deterministic",
+        "tokenCount": 3738,
+        "fits": false,
+        "ratio": 2.124913733609386,
+        "recencyWindow": 0,
+        "roundTrip": "PASS",
+        "timeMs": 12.129625000059605
+      },
+      {
+        "budget": 2000,
+        "method": "llm-escalate",
+        "tokenCount": 2593,
+        "fits": false,
+        "ratio": 3.0834538778235228,
+        "recencyWindow": 0,
+        "roundTrip": "PASS",
+        "timeMs": 131976.87870800006
+      }
+    ],
+    "Agentic coding session": [
+      {
+        "budget": 2000,
+        "method": "deterministic",
+        "tokenCount": 1957,
+        "fits": true,
+        "ratio": 1.3638369869059879,
+        "recencyWindow": 9,
+        "roundTrip": "PASS",
+        "timeMs": 1.8957079999381676
+      },
+      {
+        "budget": 2000,
+        "method": "llm-escalate",
+        "tokenCount": 2003,
+        "fits": false,
+        "ratio": 1.331896551724138,
+        "recencyWindow": 9,
+        "roundTrip": "PASS",
+        "timeMs": 4096.28350000002
+      }
+    ]
   }
 }

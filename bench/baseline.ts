@@ -59,10 +59,23 @@ export interface LlmMethodResult {
   preserved: number;
   roundTrip: 'PASS' | 'FAIL';
   timeMs: number;
+  /** ratio / deterministic ratio — values < 1.0 mean LLM expanded instead of compressing */
+  vsDet?: number;
 }
 
 export interface LlmScenarioResult {
   methods: Record<string, LlmMethodResult>;
+}
+
+export interface LlmTokenBudgetResult {
+  budget: number;
+  method: string;
+  tokenCount: number;
+  fits: boolean;
+  ratio: number;
+  recencyWindow: number | undefined;
+  roundTrip: 'PASS' | 'FAIL';
+  timeMs: number;
 }
 
 export interface LlmBenchmarkResult {
@@ -70,6 +83,7 @@ export interface LlmBenchmarkResult {
   model: string;
   generated: string;
   scenarios: Record<string, LlmScenarioResult>;
+  tokenBudget?: Record<string, LlmTokenBudgetResult[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -421,10 +435,10 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push('npm run bench:save     # Run, save new baseline, regenerate this doc');
   lines.push('```');
   lines.push('');
-  lines.push('### LLM benchmarks (optional)');
+  lines.push('### LLM benchmarks (opt-in)');
   lines.push('');
   lines.push(
-    'Set environment variables (or add a `.env` file) to enable LLM-powered summarization comparison. Ollama is auto-detected when running locally.',
+    'LLM benchmarks require the `--llm` flag (`npm run bench:llm`). Set API keys in a `.env` file or export them. Ollama is auto-detected when running locally.',
   );
   lines.push('');
   lines.push('| Variable | Provider | Default Model | Notes |');
@@ -477,7 +491,7 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   // --- Scenarios ---
   lines.push('## Scenarios');
   lines.push('');
-  lines.push('The benchmark covers 7 conversation types:');
+  lines.push('The benchmark covers 8 conversation types:');
   lines.push('');
   lines.push('| Scenario | Description |');
   lines.push('| --- | --- |');
@@ -486,6 +500,7 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push('| Tool-heavy | Messages with `tool_calls` arrays (preserved by default) |');
   lines.push('| Short conversation | Brief exchanges, mostly under 120 chars |');
   lines.push('| Deep conversation | 25 turns of multi-paragraph prose |');
+  lines.push('| Technical explanation | Pure prose Q&A about event-driven architecture |');
   lines.push('| Structured content | JSON, YAML, SQL, API keys, test output |');
   lines.push(
     '| Agentic coding session | Repeated file reads, grep results, near-duplicate edits |',
@@ -550,9 +565,9 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
       lines.push(`*Generated: ${llm.generated.split('T')[0]}*`);
       lines.push('');
       lines.push(
-        '| Scenario | Method | Char Ratio | Token Ratio | Compressed | Preserved | Round-trip | Time |',
+        '| Scenario | Method | Char Ratio | Token Ratio | vs Det | Compressed | Preserved | Round-trip | Time |',
       );
-      lines.push('| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |');
+      lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |');
 
       for (const [scenario, sr] of Object.entries(llm.scenarios)) {
         let first = true;
@@ -560,10 +575,37 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
           const label = first ? scenario : '';
           const time =
             mr.timeMs < 1000 ? `${Math.round(mr.timeMs)}ms` : `${(mr.timeMs / 1000).toFixed(1)}s`;
+          const vsDet = mr.vsDet != null ? fix(mr.vsDet) : '-';
           lines.push(
-            `| ${label} | ${method} | ${fix(mr.ratio)} | ${fix(mr.tokenRatio)} | ${mr.compressed} | ${mr.preserved} | ${mr.roundTrip} | ${time} |`,
+            `| ${label} | ${method} | ${fix(mr.ratio)} | ${fix(mr.tokenRatio)} | ${vsDet} | ${mr.compressed} | ${mr.preserved} | ${mr.roundTrip} | ${time} |`,
           );
           first = false;
+        }
+      }
+
+      // Token budget table (if present)
+      if (llm.tokenBudget && Object.keys(llm.tokenBudget).length > 0) {
+        lines.push('');
+        lines.push('#### Token Budget (target: 2000 tokens)');
+        lines.push('');
+        lines.push(
+          '| Scenario | Method | Tokens | Fits | recencyWindow | Ratio | Round-trip | Time |',
+        );
+        lines.push('| --- | --- | ---: | --- | ---: | ---: | --- | ---: |');
+
+        for (const [scenario, entries] of Object.entries(llm.tokenBudget)) {
+          let first = true;
+          for (const entry of entries) {
+            const label = first ? scenario : '';
+            const time =
+              entry.timeMs < 1000
+                ? `${Math.round(entry.timeMs)}ms`
+                : `${(entry.timeMs / 1000).toFixed(1)}s`;
+            lines.push(
+              `| ${label} | ${entry.method} | ${entry.tokenCount} | ${entry.fits} | ${entry.recencyWindow ?? '-'} | ${fix(entry.ratio)} | ${entry.roundTrip} | ${time} |`,
+            );
+            first = false;
+          }
         }
       }
 
