@@ -1,6 +1,6 @@
 # context-compression-engine
 
-[![CI](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml)
+[![CI](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SimplyLiz/ContextCompressionEngine/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/context-compression-engine.svg)](https://www.npmjs.com/package/context-compression-engine)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
