@@ -1,46 +1,37 @@
 # Changelog
 
-## 1.0.0
+All notable changes to this project will be documented in this file.
 
-First stable release. Published as `context-compression-engine` (renamed from `@cce/core`).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Features
+## [1.0.0] - 2025-02-24
 
-- **Pluggable token counter** — `tokenCounter` option for accurate budget decisions with real tokenizers
-- **`forceConverge`** — hard-truncate non-recency messages when binary search bottoms out and budget is still exceeded
-- **`embedSummaryId`** — embed `summary_id` in compressed content for downstream reference
-- **Dedup target IDs** — dedup references now carry target IDs for provenance tracking
-- **Fuzzy dedup** — line-level Jaccard similarity catches near-duplicate content (opt-in)
-- **Cross-message deduplication** — exact-duplicate detection enabled by default
-- **LLM benchmark suite** — multi-provider (OpenAI, Anthropic, Ollama) head-to-head comparison
-- **Escalating summarizer** — `createEscalatingSummarizer` with three-level fallback (normal → aggressive → deterministic)
+First stable release. Published as `context-compression-engine`.
 
-### Fixes
+### Added
 
-- Fix TDZ bug in summarizer initialization
-- Fix field drops and double-counting in compression stats
-- Fix pattern boundary false positives in classifier
-- Add input validation for public API entry points
+- Lossless context compression with `compress()` and `uncompress()`
+- Code-aware classification: fences, SQL, JSON/YAML, API keys, URLs, file paths preserved verbatim
+- Paragraph-aware sentence scoring in `summarize()`
+- Code-bearing message splitting to compress surrounding prose
+- Exact and fuzzy cross-message deduplication (enabled by default)
+- LLM-powered summarization with `createSummarizer()` and `createEscalatingSummarizer()`
+- Three-level fallback: LLM → deterministic → size guard
+- `tokenBudget` with binary search over `recencyWindow`
+- `forceConverge` hard-truncation pass for guaranteed budget convergence
+- Pluggable `tokenCounter` option (default: `ceil(content.length / 3.5)`)
+- `embedSummaryId` option to embed summary IDs directly into message content
+- Provenance tracking via `_cce_original` metadata (origin IDs, summary hashes, version chains)
+- Verbatim store for lossless round-trip (`VerbatimMap` or lookup function)
+- Recursive `uncompress()` for multi-round compression chains
+- `preserve` option for role-based message protection
+- `recencyWindow` to protect recent messages from compression
+- Tool/function result compression through the classifier
+- Compression stats: `ratio`, `token_ratio`, `messages_compressed`, `messages_removed`
+- Input validation on public API surface
+- 333 tests with coverage across all compression paths
+- Benchmark suite with synthetic and real-session scenarios
+- LLM benchmark with multi-provider support (Claude, GPT, Gemini, Grok, Ollama)
 
-## 0.1.0
-
-Initial release.
-
-### Features
-
-- **Lossless context compression** — compress/uncompress round-trip restores byte-identical originals
-- **Code-aware classification** — fences, SQL, JSON, API keys, URLs, file paths stay verbatim
-- **Paragraph-aware sentence scoring** — deterministic summarizer picks highest-signal sentences
-- **Code-split messages** — prose compressed, code fences preserved inline
-- **Exact dedup** — hash-based duplicate detection replaces earlier copies with compact references (on by default)
-- **Fuzzy dedup** — line-level Jaccard similarity catches near-duplicate content (opt-in)
-- **LLM summarizer** — `createSummarizer` and `createEscalatingSummarizer` for pluggable LLM-powered compression
-- **Token budget** — `tokenBudget` option binary-searches recency window to fit a target token count
-- **Verbatim store** — originals keyed by ID for lossless retrieval via `uncompress()`
-
-### API
-
-- `compress(messages, options?)` — sync or async depending on whether `summarizer` is provided
-- `uncompress(messages, verbatim)` — restore originals from compressed messages + verbatim map
-- `createSummarizer(callLlm)` — wrap an LLM call with an optimized summarization prompt
-- `createEscalatingSummarizer(callLlm)` — three-level summarizer (normal → aggressive → deterministic)
+[1.0.0]: https://github.com/SimplyLiz/ContextCompressionEngine/releases/tag/v1.0.0
