@@ -21,7 +21,9 @@
     "test:e2e:smoke": "cd e2e && npm install ../context-compression-engine-*.tgz && npm test",
     "test:e2e:cleanup": "rm -f context-compression-engine-*.tgz && rm -rf e2e/node_modules && rm -f e2e/package-lock.json",
     "test:e2e:published": "cd e2e && npm install context-compression-engine && npm test",
-    "prepublishOnly": "npm test && tsc"
+    "prepublishOnly": "npm test && tsc",
+    "demo:build": "node demo/build.mjs",
+    "demo": "npm run demo:build && npx serve demo"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -61,6 +63,7 @@
     "@arethetypeswrong/cli": "^0.18.2",
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.0.18",
+    "esbuild": "^0.27.3",
     "eslint": "^10.0.2",
     "openai": "^6.25.0",
     "prettier": "^3.8.1",
