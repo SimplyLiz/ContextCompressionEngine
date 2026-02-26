@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated": "2026-02-25T19:10:23.701Z",
+  "generated": "2026-02-26T05:31:42.406Z",
   "results": {
     "basic": {
       "Coding assistant": {
@@ -184,6 +184,40 @@
         "exact": 4,
         "fuzzy": 2,
         "ratio": 2.229973538609574
+      }
+    },
+    "bundleSize": {
+      "classify.js": {
+        "bytes": 7724,
+        "gzipBytes": 3250
+      },
+      "compress.js": {
+        "bytes": 33941,
+        "gzipBytes": 8721
+      },
+      "dedup.js": {
+        "bytes": 10260,
+        "gzipBytes": 2864
+      },
+      "expand.js": {
+        "bytes": 2795,
+        "gzipBytes": 934
+      },
+      "index.js": {
+        "bytes": 225,
+        "gzipBytes": 159
+      },
+      "summarizer.js": {
+        "bytes": 2542,
+        "gzipBytes": 993
+      },
+      "types.js": {
+        "bytes": 11,
+        "gzipBytes": 31
+      },
+      "total": {
+        "bytes": 57498,
+        "gzipBytes": 16952
       }
     }
   }

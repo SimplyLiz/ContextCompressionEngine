@@ -35,11 +35,17 @@ export interface FuzzyDedupResult {
   ratio: number;
 }
 
+export interface BundleSizeResult {
+  bytes: number;
+  gzipBytes: number;
+}
+
 export interface BenchmarkResults {
   basic: Record<string, BasicResult>;
   tokenBudget: Record<string, TokenBudgetResult>;
   dedup: Record<string, DedupResult>;
   fuzzyDedup: Record<string, FuzzyDedupResult>;
+  bundleSize: Record<string, BundleSizeResult>;
 }
 
 export interface Baseline {
@@ -303,6 +309,17 @@ export function compareResults(
     checkNum(regressions, 'fuzzyDedup', name, 'ratio', exp.ratio, act.ratio, tolerance);
   }
 
+  // Bundle size
+  for (const [name, exp] of Object.entries(baseline.bundleSize ?? {})) {
+    const act = current.bundleSize?.[name];
+    if (!act) {
+      missing(regressions, 'bundleSize', name);
+      continue;
+    }
+    checkNum(regressions, 'bundleSize', name, 'bytes', exp.bytes, act.bytes, tolerance);
+    checkNum(regressions, 'bundleSize', name, 'gzipBytes', exp.gzipBytes, act.gzipBytes, tolerance);
+  }
+
   return regressions;
 }
 
@@ -383,7 +400,15 @@ function formatTime(ms: number): string {
 // Visual helpers
 // ---------------------------------------------------------------------------
 
-function badges(basic: Record<string, BasicResult>): string[] {
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function badges(
+  basic: Record<string, BasicResult>,
+  bundleSize?: Record<string, BundleSizeResult>,
+): string[] {
   const entries = Object.values(basic);
   const ratios = entries.map((v) => v.ratio);
   const avgR = (ratios.reduce((a, b) => a + b, 0) / ratios.length).toFixed(2);
@@ -393,14 +418,19 @@ function badges(basic: Record<string, BasicResult>): string[] {
   const badge = (label: string, value: string, color: string) =>
     `![${label}](https://img.shields.io/badge/${encodeURIComponent(label).replace(/-/g, '--')}-${encodeURIComponent(value).replace(/-/g, '--')}-${color})`;
 
-  return [
-    [
-      badge('avg ratio', `${avgR}x`, 'blue'),
-      badge('best', `${bestR}x`, 'blue'),
-      badge('scenarios', `${entries.length}`, 'blue'),
-      badge('round-trip', allPass, 'brightgreen'),
-    ].join(' '),
+  const badgeList = [
+    badge('avg ratio', `${avgR}x`, 'blue'),
+    badge('best', `${bestR}x`, 'blue'),
+    badge('scenarios', `${entries.length}`, 'blue'),
+    badge('round-trip', allPass, 'brightgreen'),
   ];
+
+  const totalGzip = bundleSize?.total?.gzipBytes;
+  if (totalGzip != null) {
+    badgeList.push(badge('gzip', formatBytes(totalGzip), 'blue'));
+  }
+
+  return [badgeList.join(' ')];
 }
 
 // ---------------------------------------------------------------------------
@@ -593,6 +623,24 @@ function generateTokenBudgetSection(r: BenchmarkResults): string[] {
   return lines;
 }
 
+function generateBundleSizeSection(bundleSize: Record<string, BundleSizeResult>): string[] {
+  const entries = Object.entries(bundleSize);
+  if (entries.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## Bundle Size');
+  lines.push('');
+  lines.push('> Zero-dependency ESM library — tracked per-file to catch regressions.');
+  lines.push('');
+  lines.push('| File | Size | Gzip |');
+  lines.push('| --- | ---: | ---: |');
+  for (const [name, v] of entries) {
+    const label = name === 'total' ? '**total**' : name;
+    lines.push(`| ${label} | ${formatBytes(v.bytes)} | ${formatBytes(v.gzipBytes)} |`);
+  }
+  return lines;
+}
+
 function generateLlmSection(
   baselinesDir: string,
   basic: Record<string, BasicResult>,
@@ -768,7 +816,7 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push('');
   lines.push(`**v${latest.version}** · Generated: ${latest.generated.split('T')[0]}`);
   lines.push('');
-  lines.push(...badges(latest.results.basic));
+  lines.push(...badges(latest.results.basic, latest.results.bundleSize));
   lines.push('');
 
   // --- Summary ---
@@ -806,6 +854,13 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   // --- Token budget ---
   lines.push(...generateTokenBudgetSection(latest.results));
   lines.push('');
+
+  // --- Bundle size ---
+  const bundleSizeSection = generateBundleSizeSection(latest.results.bundleSize ?? {});
+  if (bundleSizeSection.length > 0) {
+    lines.push(...bundleSizeSection);
+    lines.push('');
+  }
 
   // --- LLM (conditional) ---
   const llmSection = generateLlmSection(baselinesDir, latest.results.basic);

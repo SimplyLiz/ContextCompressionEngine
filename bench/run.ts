@@ -5,6 +5,8 @@ import type { CompressResult, Message } from '../src/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { execSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
 import { detectProviders } from './llm.js';
 import type {
   LlmBenchmarkResult,
@@ -818,6 +820,7 @@ async function run(): Promise<void> {
     tokenBudget: {},
     dedup: {},
     fuzzyDedup: {},
+    bundleSize: {},
   };
 
   for (const scenario of scenarios) {
@@ -1136,6 +1139,62 @@ async function run(): Promise<void> {
     console.error(`FAIL: ${fuzzyFails} fuzzy dedup scenario(s) failed round-trip`);
     process.exit(1);
   }
+
+  // ---------------------------------------------------------------------------
+  // Bundle size
+  // ---------------------------------------------------------------------------
+
+  console.log();
+  console.log('Bundle Size');
+
+  execSync('npm run build', { stdio: 'pipe', cwd: resolve(import.meta.dirname, '..') });
+
+  const distDir = resolve(import.meta.dirname, '..', 'dist');
+  const distFiles = readdirSync(distDir, { recursive: true })
+    .map(String)
+    .filter((f) => f.endsWith('.js'))
+    .sort();
+
+  let totalBytes = 0;
+  let totalGzip = 0;
+
+  const bsHeader = [
+    'File'.padEnd(30),
+    'Size'.padStart(10),
+    'Gzip'.padStart(10),
+  ].join('  ');
+  const bsSep = '-'.repeat(bsHeader.length);
+
+  console.log(bsSep);
+  console.log(bsHeader);
+  console.log(bsSep);
+
+  for (const file of distFiles) {
+    const fullPath = join(distDir, file);
+    const bytes = statSync(fullPath).size;
+    const gzipBytes = gzipSync(readFileSync(fullPath)).length;
+    totalBytes += bytes;
+    totalGzip += gzipBytes;
+
+    benchResults.bundleSize[file] = { bytes, gzipBytes };
+
+    const fmtBytes = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+    const fmtGzip = gzipBytes < 1024 ? `${gzipBytes} B` : `${(gzipBytes / 1024).toFixed(1)} KB`;
+    console.log(
+      [file.padEnd(30), fmtBytes.padStart(10), fmtGzip.padStart(10)].join('  '),
+    );
+  }
+
+  benchResults.bundleSize['total'] = { bytes: totalBytes, gzipBytes: totalGzip };
+
+  const fmtTotal = totalBytes < 1024 ? `${totalBytes} B` : `${(totalBytes / 1024).toFixed(1)} KB`;
+  const fmtTotalGz =
+    totalGzip < 1024 ? `${totalGzip} B` : `${(totalGzip / 1024).toFixed(1)} KB`;
+  console.log(bsSep);
+  console.log(
+    ['total'.padEnd(30), fmtTotal.padStart(10), fmtTotalGz.padStart(10)].join('  '),
+  );
+  console.log(bsSep);
 
   // ---------------------------------------------------------------------------
   // --save / --check
