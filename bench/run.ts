@@ -3,9 +3,40 @@ import { uncompress } from '../src/expand.js';
 import { createSummarizer, createEscalatingSummarizer } from '../src/summarizer.js';
 import type { CompressResult, Message } from '../src/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { execSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
 import { detectProviders } from './llm.js';
+import type {
+  LlmBenchmarkResult,
+  LlmMethodResult,
+  LlmTokenBudgetResult,
+  BenchmarkResults,
+} from './baseline.js';
+import {
+  saveLlmResult,
+  saveBaseline,
+  loadCurrentBaseline,
+  compareResults,
+  formatRegressions,
+  generateBenchmarkDocs,
+} from './baseline.js';
+
+// ---------------------------------------------------------------------------
+// Auto-load .env (no dependency, won't override existing vars)
+// ---------------------------------------------------------------------------
+
+const envPath = resolve(import.meta.dirname, '..', '.env');
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const match = line.match(/^\s*(?:export\s+)?([^#=]+?)\s*=\s*(.*?)\s*$/);
+    if (!match || process.env[match[1]]) continue;
+    // Strip wrapping quotes (single or double)
+    const val = match[2].replace(/^(['"])(.*)\1$/, '$2');
+    process.env[match[1]] = val;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,6 +70,7 @@ function buildScenarios(): Scenario[] {
     toolHeavy(),
     shortConversation(),
     deepConversation(),
+    technicalExplanation(),
     structuredContent(),
     agenticCodingSession(),
   ];
@@ -260,6 +292,160 @@ function deepConversation(): Scenario {
   }
 
   return { name: 'Deep conversation', messages };
+}
+
+function technicalExplanation(): Scenario {
+  // Prose-heavy architectural discussion — no code fences, no structured data.
+  // Tests whether LLM summarization outperforms deterministic on pure technical prose.
+  return {
+    name: 'Technical explanation',
+    messages: [
+      msg('system', 'You are a principal engineer explaining system design to a new team lead.'),
+      msg(
+        'user',
+        'Can you walk me through how our event-driven architecture works and why we chose it over a traditional request-response model?',
+      ),
+      msg(
+        'assistant',
+        'The event-driven architecture we adopted grew out of a series of scaling problems we ' +
+          'encountered roughly two years ago when the monolith started buckling under peak traffic. ' +
+          'The core idea is that services communicate through immutable events published to a central ' +
+          'log rather than making synchronous calls to each other. When the order service completes a ' +
+          'checkout, it publishes an OrderPlaced event. The inventory service, the notification ' +
+          'service, and the analytics pipeline each consume that event independently and at their own ' +
+          'pace. None of them need to know about the others, and none of them can block the order ' +
+          'service from finishing its work.\n\n' +
+          'The biggest advantage is temporal decoupling. Under the old model, a single slow downstream ' +
+          'dependency could cascade latency across the entire checkout flow. A payment verification ' +
+          'that normally took fifty milliseconds would occasionally spike to several seconds, and ' +
+          'because every call was synchronous, the user sat waiting while six services completed in ' +
+          'sequence. With events, the order service does its own work, publishes, and returns. ' +
+          'Downstream processing happens asynchronously, so the user experience stays fast even when ' +
+          'one consumer is struggling.\n\n' +
+          'The trade-off is eventual consistency. In a synchronous model, you get immediate confirmation ' +
+          'that every step completed. In an event-driven model, you have to design for the possibility ' +
+          'that the inventory adjustment or the email notification has not happened yet when the user ' +
+          'sees their confirmation page. We handle this through careful UX design that sets appropriate ' +
+          'expectations and through idempotent consumers that can safely replay events if something ' +
+          'goes wrong during processing.',
+      ),
+      msg(
+        'user',
+        'That makes sense. What about the event schema evolution problem? How do we handle ' +
+          'changes to event formats without breaking all the consumers?',
+      ),
+      msg(
+        'assistant',
+        'Schema evolution is one of the hardest problems in event-driven systems and we spent ' +
+          'considerable time getting our approach right. We settled on a strategy that combines ' +
+          'explicit versioning with backward-compatible evolution rules. Every event type carries a ' +
+          'schema version number in its header. Consumers declare which versions they understand, and ' +
+          'the platform routes accordingly.\n\n' +
+          'For non-breaking changes like adding a new optional field, we increment the minor version. ' +
+          'Consumers that do not understand the new field simply ignore it. This follows the robustness ' +
+          'principle of being conservative in what you send and liberal in what you accept. The vast ' +
+          'majority of our schema changes fall into this category, and they require zero coordination ' +
+          'between teams.\n\n' +
+          'For breaking changes like removing a field or changing a field type, we increment the major ' +
+          'version and run both the old and new versions in parallel during a migration window. The ' +
+          'producing service publishes to both versions, and consuming teams migrate on their own ' +
+          'schedule within the agreed window. Once all consumers have migrated, we sunset the old ' +
+          'version. This approach adds operational complexity but gives teams the autonomy to migrate ' +
+          'at their own pace without coordinated deployment ceremonies.\n\n' +
+          'We also maintain a central schema registry that validates events at publish time. If a ' +
+          'service tries to publish an event that does not conform to its declared schema, the publish ' +
+          'fails fast with a clear error. This catches drift between the code and the schema before ' +
+          'it reaches consumers and prevents subtle data corruption that would be much harder to ' +
+          'diagnose after the fact.',
+      ),
+      msg(
+        'user',
+        'How do we handle ordering guarantees? I noticed some of our consumers seem to ' +
+          'process events out of order.',
+      ),
+      msg(
+        'assistant',
+        'Ordering is subtle in distributed event systems and the right answer depends on what ' +
+          'level of ordering your consumer actually needs. Our event platform guarantees ordering ' +
+          'within a partition, but not across partitions. Events for the same aggregate, like all ' +
+          'events for a specific order, go to the same partition based on the aggregate identifier, ' +
+          'so they arrive in the order they were published. Events for different aggregates may arrive ' +
+          'in any order because they live on different partitions processed by different consumer ' +
+          'instances.\n\n' +
+          'Most consumers only care about ordering within an aggregate and they get it for free from ' +
+          'the partitioning scheme. The inventory service needs to see OrderPlaced before OrderCancelled ' +
+          'for the same order, and it does because both events share the same order identifier as their ' +
+          'partition key. But it does not care whether order A events arrive before or after order B ' +
+          'events because those are independent aggregates.\n\n' +
+          'For the rare cases where a consumer needs cross-aggregate ordering, we use a sequence ' +
+          'number stamped by the producer at publish time. The consumer tracks the last processed ' +
+          'sequence number and detects gaps. When it encounters a gap, it buffers the event and waits ' +
+          'briefly for the missing one to arrive. If the missing event does not appear within the ' +
+          'timeout window, the consumer raises an alert and proceeds with compensating logic. This ' +
+          'approach adds latency in the gap case but preserves correctness.\n\n' +
+          'The consumers you noticed processing out of order are likely reading from a topic that ' +
+          'mixes events from multiple aggregates. Check whether the partition key is set correctly ' +
+          'on the producer side. A common mistake is using a random or missing partition key, which ' +
+          'causes round-robin assignment and destroys any ordering guarantee.',
+      ),
+      msg(
+        'user',
+        'What about failure handling? If a consumer crashes mid-processing, do we lose events?',
+      ),
+      msg(
+        'assistant',
+        'No, the platform guarantees at-least-once delivery. When a consumer reads an event, it ' +
+          'does not acknowledge the read until processing completes successfully. If the consumer ' +
+          'crashes before acknowledging, the event remains available for redelivery. The next time ' +
+          'the consumer starts up, or when another instance in the consumer group takes over the ' +
+          'partition, it picks up from the last acknowledged position.\n\n' +
+          'The flip side of at-least-once delivery is that consumers must be idempotent. They will ' +
+          'occasionally see the same event twice, particularly after a crash or during a rebalance. ' +
+          'We enforce idempotency through a combination of techniques depending on the consumer. ' +
+          'Some use a deduplication table that records processed event identifiers and skips any event ' +
+          'it has seen before. Others design their state mutations to be naturally idempotent, for ' +
+          'example using upserts instead of inserts or applying absolute values instead of deltas.\n\n' +
+          'Dead letter queues catch events that fail processing repeatedly. After a configurable number ' +
+          'of retries with exponential backoff, the platform moves the event to a dead letter topic ' +
+          'and advances the consumer offset so it does not block subsequent events. The operations team ' +
+          'monitors the dead letter queue and investigates failures. Once the root cause is fixed, they ' +
+          'can replay events from the dead letter queue back into the main topic.\n\n' +
+          'We also run a reconciliation process that periodically compares the state derived from ' +
+          'events against the source of truth in the originating service. This catches any silent data ' +
+          'loss or corruption that might slip through the cracks. The reconciler runs daily during off-' +
+          'peak hours and flags discrepancies for manual review.',
+      ),
+      msg(
+        'user',
+        'One more thing — how do we test all of this? Integration testing with events seems ' +
+          'really hard.',
+      ),
+      msg(
+        'assistant',
+        'Testing event-driven systems requires a layered approach because no single testing ' +
+          'strategy covers all the failure modes. At the unit level, each consumer is tested with ' +
+          'synthetic events that exercise the happy path, edge cases, and error paths. These tests ' +
+          'run in milliseconds and give fast feedback on business logic correctness.\n\n' +
+          'At the integration level, we run each service against a local instance of the event ' +
+          'platform. The test publishes events, waits for the consumer to process them, and verifies ' +
+          'the resulting state. These tests are slower but catch serialization issues, schema ' +
+          'mismatches, and configuration problems that unit tests miss. We keep the integration test ' +
+          'suite focused on the boundaries: publishing, consuming, and acknowledging. Internal ' +
+          'business logic is covered at the unit level.\n\n' +
+          'At the system level, we maintain a staging environment that mirrors production topology. ' +
+          'Every deployment goes through staging first, where we run end-to-end scenarios that ' +
+          'exercise the full event flow from producer through all consumers. These tests use realistic ' +
+          'data volumes and introduce controlled failures like consumer crashes and network partitions ' +
+          'to verify that the retry and dead-letter mechanisms work correctly.\n\n' +
+          'Contract testing bridges the gap between producers and consumers without requiring a ' +
+          'shared integration environment. Each consumer publishes a contract describing the events ' +
+          'it expects, and the producer runs those contracts as part of its build. If a producer ' +
+          'change would break a consumer contract, the build fails before the change reaches any ' +
+          'shared environment. This is particularly valuable in our setup where different teams own ' +
+          "different services and may not be aware of each other's dependencies.",
+      ),
+    ],
+  };
 }
 
 function structuredContent(): Scenario {
@@ -618,8 +804,24 @@ interface Result {
 }
 
 async function run(): Promise<void> {
+  const args = process.argv.slice(2);
+  const flagSave = args.includes('--save');
+  const flagCheck = args.includes('--check');
+  const flagLlm = args.includes('--llm');
+  const toleranceIdx = args.indexOf('--tolerance');
+  const tolerance = toleranceIdx >= 0 ? Number(args[toleranceIdx + 1]) / 100 : 0;
+
   const scenarios = buildScenarios();
   const results: Result[] = [];
+
+  // Structured results for baseline save/check
+  const benchResults: BenchmarkResults = {
+    basic: {},
+    tokenBudget: {},
+    dedup: {},
+    fuzzyDedup: {},
+    bundleSize: {},
+  };
 
   for (const scenario of scenarios) {
     const t0 = performance.now();
@@ -648,6 +850,13 @@ async function run(): Promise<void> {
       roundTrip,
       timeMs: (t1 - t0).toFixed(2),
     });
+
+    benchResults.basic[scenario.name] = {
+      ratio: cr.compression.ratio,
+      tokenRatio: cr.compression.token_ratio,
+      compressed: cr.compression.messages_compressed,
+      preserved: cr.compression.messages_preserved,
+    };
   }
 
   // Print table
@@ -777,6 +986,16 @@ async function run(): Promise<void> {
           ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
         ].join('  '),
       );
+
+      const tbKey = `${scenario.name}|dedup=${dedup}`;
+      benchResults.tokenBudget[tbKey] = {
+        tokenCount: cr.tokenCount ?? 0,
+        fits: cr.fits ?? false,
+        recencyWindow: cr.recencyWindow,
+        compressed: cr.compression.messages_compressed,
+        preserved: cr.compression.messages_preserved,
+        deduped: cr.compression.messages_deduped ?? 0,
+      };
     }
   }
 
@@ -840,6 +1059,14 @@ async function run(): Promise<void> {
         rt2.padStart(cols.rt),
       ].join('  '),
     );
+
+    benchResults.dedup[scenario.name] = {
+      rw0Base: baseRw0.compression.ratio,
+      rw0Dup: dedupRw0.compression.ratio,
+      rw4Base: baseRw4.compression.ratio,
+      rw4Dup: dedupRw4.compression.ratio,
+      deduped,
+    };
   }
 
   console.log(dedupSep);
@@ -898,6 +1125,12 @@ async function run(): Promise<void> {
         ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
       ].join('  '),
     );
+
+    benchResults.fuzzyDedup[scenario.name] = {
+      exact: cr.compression.messages_deduped ?? 0,
+      fuzzy: cr.compression.messages_fuzzy_deduped ?? 0,
+      ratio: cr.compression.ratio,
+    };
   }
 
   console.log(fuzzySep);
@@ -908,19 +1141,115 @@ async function run(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
+  // Bundle size
+  // ---------------------------------------------------------------------------
+
+  console.log();
+  console.log('Bundle Size');
+
+  execSync('npm run build', { stdio: 'pipe', cwd: resolve(import.meta.dirname, '..') });
+
+  const distDir = resolve(import.meta.dirname, '..', 'dist');
+  const distFiles = readdirSync(distDir, { recursive: true })
+    .map(String)
+    .filter((f) => f.endsWith('.js'))
+    .sort();
+
+  let totalBytes = 0;
+  let totalGzip = 0;
+
+  const bsHeader = [
+    'File'.padEnd(30),
+    'Size'.padStart(10),
+    'Gzip'.padStart(10),
+  ].join('  ');
+  const bsSep = '-'.repeat(bsHeader.length);
+
+  console.log(bsSep);
+  console.log(bsHeader);
+  console.log(bsSep);
+
+  for (const file of distFiles) {
+    const fullPath = join(distDir, file);
+    const bytes = statSync(fullPath).size;
+    const gzipBytes = gzipSync(readFileSync(fullPath)).length;
+    totalBytes += bytes;
+    totalGzip += gzipBytes;
+
+    benchResults.bundleSize[file] = { bytes, gzipBytes };
+
+    const fmtBytes = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+    const fmtGzip = gzipBytes < 1024 ? `${gzipBytes} B` : `${(gzipBytes / 1024).toFixed(1)} KB`;
+    console.log(
+      [file.padEnd(30), fmtBytes.padStart(10), fmtGzip.padStart(10)].join('  '),
+    );
+  }
+
+  benchResults.bundleSize['total'] = { bytes: totalBytes, gzipBytes: totalGzip };
+
+  const fmtTotal = totalBytes < 1024 ? `${totalBytes} B` : `${(totalBytes / 1024).toFixed(1)} KB`;
+  const fmtTotalGz =
+    totalGzip < 1024 ? `${totalGzip} B` : `${(totalGzip / 1024).toFixed(1)} KB`;
+  console.log(bsSep);
+  console.log(
+    ['total'.padEnd(30), fmtTotal.padStart(10), fmtTotalGz.padStart(10)].join('  '),
+  );
+  console.log(bsSep);
+
+  // ---------------------------------------------------------------------------
+  // --save / --check
+  // ---------------------------------------------------------------------------
+
+  const baselinesDir = resolve(import.meta.dirname, 'baselines');
+  const version = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf-8'),
+  ).version;
+
+  if (flagSave) {
+    saveBaseline(baselinesDir, version, benchResults);
+    generateBenchmarkDocs(
+      baselinesDir,
+      resolve(import.meta.dirname, '..', 'docs', 'benchmark-results.md'),
+    );
+    console.log();
+    console.log(`Baseline saved (v${version}) and docs/benchmark-results.md regenerated.`);
+  }
+
+  if (flagCheck) {
+    const current = loadCurrentBaseline(baselinesDir);
+    if (!current) {
+      console.error(
+        'No baseline found at bench/baselines/current.json — run `npm run bench:save` first.',
+      );
+      process.exit(1);
+    }
+    const regressions = compareResults(current.results, benchResults, tolerance);
+    if (regressions.length > 0) {
+      console.error();
+      console.error(formatRegressions(regressions));
+      process.exit(1);
+    }
+    console.log();
+    console.log(`Baseline check passed (v${current.version}, tolerance ${tolerance * 100}%).`);
+  }
+
+  // ---------------------------------------------------------------------------
   // Real Claude Code sessions (if available locally)
   // ---------------------------------------------------------------------------
 
   runRealSessions();
 
-  await runLlmBenchmark();
+  // LLM benchmarks require explicit --llm flag (they cost money and take minutes)
+  if (flagLlm) {
+    await runLlmBenchmark();
+  }
 
   console.log();
   console.log('All benchmarks passed.');
 }
 
 // ---------------------------------------------------------------------------
-// LLM summarization benchmark (opt-in via env vars)
+// LLM summarization benchmark (requires --llm flag)
 // ---------------------------------------------------------------------------
 
 function roundTrip(messages: Message[], cr: CompressResult): 'PASS' | 'FAIL' {
@@ -936,12 +1265,13 @@ async function runLlmBenchmark(): Promise<void> {
   if (providers.length === 0) {
     console.log();
     console.log(
-      'LLM Summarization Benchmark — skipped (no OPENAI_API_KEY, OLLAMA_MODEL, or ANTHROPIC_API_KEY set)',
+      'LLM Summarization Benchmark — no providers detected (set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env, or start Ollama)',
     );
     return;
   }
 
   const scenarios = buildScenarios().filter((s) => s.name !== 'Short conversation');
+  const baselinesDir = resolve(import.meta.dirname, 'baselines');
 
   for (const provider of providers) {
     console.log();
@@ -955,6 +1285,7 @@ async function runLlmBenchmark(): Promise<void> {
       method: 14,
       chr: 6,
       tkr: 6,
+      vsDet: 6,
       comp: 5,
       pres: 5,
       rt: 5,
@@ -966,6 +1297,7 @@ async function runLlmBenchmark(): Promise<void> {
       'Method'.padStart(cols.method),
       'ChR'.padStart(cols.chr),
       'TkR'.padStart(cols.tkr),
+      'vsDet'.padStart(cols.vsDet),
       'Comp'.padStart(cols.comp),
       'Pres'.padStart(cols.pres),
       'R/T'.padStart(cols.rt),
@@ -978,41 +1310,177 @@ async function runLlmBenchmark(): Promise<void> {
     console.log(sep);
 
     let llmFails = 0;
+    const llmResult: LlmBenchmarkResult = {
+      provider: provider.name,
+      model: provider.model,
+      generated: new Date().toISOString(),
+      scenarios: {},
+    };
 
     for (const scenario of scenarios) {
-      // Deterministic baseline
-      const t0d = performance.now();
-      const detResult = compress(scenario.messages, { recencyWindow: 0 });
-      const t1d = performance.now();
-      const detRt = roundTrip(scenario.messages, detResult);
+      try {
+        const scenarioResult: Record<string, LlmMethodResult> = {};
 
-      printLlmRow(scenario.name, 'deterministic', detResult, detRt, t1d - t0d, cols);
+        // Deterministic baseline
+        const t0d = performance.now();
+        const detResult = compress(scenario.messages, { recencyWindow: 0 });
+        const t1d = performance.now();
+        const detRt = roundTrip(scenario.messages, detResult);
+        const detRatio = detResult.compression.ratio;
 
-      // LLM basic summarizer
-      const t0b = performance.now();
-      const llmBasicResult = await compress(scenario.messages, {
-        recencyWindow: 0,
-        summarizer: basicSummarizer,
-      });
-      const t1b = performance.now();
-      const basicRt = roundTrip(scenario.messages, llmBasicResult);
-      if (basicRt === 'FAIL') llmFails++;
+        printLlmRow(scenario.name, 'deterministic', detResult, detRt, t1d - t0d, undefined, cols);
+        scenarioResult['deterministic'] = {
+          ratio: detRatio,
+          tokenRatio: detResult.compression.token_ratio,
+          compressed: detResult.compression.messages_compressed,
+          preserved: detResult.compression.messages_preserved,
+          roundTrip: detRt,
+          timeMs: t1d - t0d,
+        };
 
-      printLlmRow('', 'llm-basic', llmBasicResult, basicRt, t1b - t0b, cols);
+        // LLM basic summarizer
+        const t0b = performance.now();
+        const llmBasicResult = await compress(scenario.messages, {
+          recencyWindow: 0,
+          summarizer: basicSummarizer,
+        });
+        const t1b = performance.now();
+        const basicRt = roundTrip(scenario.messages, llmBasicResult);
+        if (basicRt === 'FAIL') llmFails++;
+        const basicVsDet = llmBasicResult.compression.ratio / detRatio;
 
-      // LLM escalating summarizer
-      const t0e = performance.now();
-      const llmEscResult = await compress(scenario.messages, {
-        recencyWindow: 0,
-        summarizer: escalatingSummarizer,
-      });
-      const t1e = performance.now();
-      const escRt = roundTrip(scenario.messages, llmEscResult);
-      if (escRt === 'FAIL') llmFails++;
+        printLlmRow('', 'llm-basic', llmBasicResult, basicRt, t1b - t0b, basicVsDet, cols);
+        scenarioResult['llm-basic'] = {
+          ratio: llmBasicResult.compression.ratio,
+          tokenRatio: llmBasicResult.compression.token_ratio,
+          compressed: llmBasicResult.compression.messages_compressed,
+          preserved: llmBasicResult.compression.messages_preserved,
+          roundTrip: basicRt,
+          timeMs: t1b - t0b,
+          vsDet: basicVsDet,
+        };
 
-      printLlmRow('', 'llm-escalate', llmEscResult, escRt, t1e - t0e, cols);
-      console.log(sep);
+        // LLM escalating summarizer
+        const t0e = performance.now();
+        const llmEscResult = await compress(scenario.messages, {
+          recencyWindow: 0,
+          summarizer: escalatingSummarizer,
+        });
+        const t1e = performance.now();
+        const escRt = roundTrip(scenario.messages, llmEscResult);
+        if (escRt === 'FAIL') llmFails++;
+        const escVsDet = llmEscResult.compression.ratio / detRatio;
+
+        printLlmRow('', 'llm-escalate', llmEscResult, escRt, t1e - t0e, escVsDet, cols);
+        scenarioResult['llm-escalate'] = {
+          ratio: llmEscResult.compression.ratio,
+          tokenRatio: llmEscResult.compression.token_ratio,
+          compressed: llmEscResult.compression.messages_compressed,
+          preserved: llmEscResult.compression.messages_preserved,
+          roundTrip: escRt,
+          timeMs: t1e - t0e,
+          vsDet: escVsDet,
+        };
+
+        console.log(sep);
+        llmResult.scenarios[scenario.name] = { methods: scenarioResult };
+      } catch (err) {
+        console.error(`  ${scenario.name}: ERROR — ${(err as Error).message}`);
+        console.log(sep);
+      }
     }
+
+    // --- Token budget + LLM ---
+    const tokenBudget = 2000;
+    const budgetScenarios: Scenario[] = scenarios.filter(
+      (s) => s.name === 'Deep conversation' || s.name === 'Agentic coding session',
+    );
+
+    if (budgetScenarios.length > 0) {
+      console.log();
+      console.log(
+        `LLM Token Budget — ${provider.name} (${provider.model}) — target: ${tokenBudget} tokens`,
+      );
+
+      const tbCols = { name: 24, method: 14, tokens: 7, fits: 5, rw: 4, chr: 6, rt: 5, time: 10 };
+      const tbHeader = [
+        'Scenario'.padEnd(tbCols.name),
+        'Method'.padStart(tbCols.method),
+        'Tokens'.padStart(tbCols.tokens),
+        'Fits'.padStart(tbCols.fits),
+        'Rw'.padStart(tbCols.rw),
+        'ChR'.padStart(tbCols.chr),
+        'R/T'.padStart(tbCols.rt),
+        'Time'.padStart(tbCols.time),
+      ].join('  ');
+      const tbSep = '-'.repeat(tbHeader.length);
+
+      console.log(tbSep);
+      console.log(tbHeader);
+      console.log(tbSep);
+
+      llmResult.tokenBudget = {};
+
+      for (const scenario of budgetScenarios) {
+        const entries: LlmTokenBudgetResult[] = [];
+
+        try {
+          // Deterministic with token budget
+          const t0d = performance.now();
+          const detCr = compress(scenario.messages, { tokenBudget });
+          const t1d = performance.now();
+          const detRt = roundTrip(scenario.messages, detCr);
+
+          const detEntry: LlmTokenBudgetResult = {
+            budget: tokenBudget,
+            method: 'deterministic',
+            tokenCount: detCr.tokenCount ?? 0,
+            fits: detCr.fits ?? false,
+            ratio: detCr.compression.ratio,
+            recencyWindow: detCr.recencyWindow,
+            roundTrip: detRt,
+            timeMs: t1d - t0d,
+          };
+          entries.push(detEntry);
+          printBudgetRow(scenario.name, detEntry, tbCols);
+
+          // LLM escalating with token budget
+          const t0e = performance.now();
+          const llmCr = await compress(scenario.messages, {
+            tokenBudget,
+            summarizer: escalatingSummarizer,
+          });
+          const t1e = performance.now();
+          const llmRt = roundTrip(scenario.messages, llmCr);
+
+          const llmEntry: LlmTokenBudgetResult = {
+            budget: tokenBudget,
+            method: 'llm-escalate',
+            tokenCount: llmCr.tokenCount ?? 0,
+            fits: llmCr.fits ?? false,
+            ratio: llmCr.compression.ratio,
+            recencyWindow: llmCr.recencyWindow,
+            roundTrip: llmRt,
+            timeMs: t1e - t0e,
+          };
+          entries.push(llmEntry);
+          printBudgetRow('', llmEntry, tbCols);
+
+          console.log(tbSep);
+        } catch (err) {
+          console.error(`  ${scenario.name}: ERROR — ${(err as Error).message}`);
+          console.log(tbSep);
+        }
+
+        if (entries.length > 0) {
+          llmResult.tokenBudget[scenario.name] = entries;
+        }
+      }
+    }
+
+    // Always save LLM results (informational, not gated behind --save)
+    saveLlmResult(baselinesDir, llmResult);
+    console.log(`  Results saved to bench/baselines/llm/`);
 
     if (llmFails > 0) {
       console.error(`  WARNING: ${llmFails} LLM scenario(s) failed round-trip`);
@@ -1026,11 +1494,13 @@ function printLlmRow(
   cr: CompressResult,
   rt: string,
   timeMs: number,
+  vsDet: number | undefined,
   cols: {
     name: number;
     method: number;
     chr: number;
     tkr: number;
+    vsDet: number;
     comp: number;
     pres: number;
     rt: number;
@@ -1043,12 +1513,44 @@ function printLlmRow(
       method.padStart(cols.method),
       cr.compression.ratio.toFixed(2).padStart(cols.chr),
       cr.compression.token_ratio.toFixed(2).padStart(cols.tkr),
+      (vsDet != null ? vsDet.toFixed(2) : '-').padStart(cols.vsDet),
       String(cr.compression.messages_compressed).padStart(cols.comp),
       String(cr.compression.messages_preserved).padStart(cols.pres),
       rt.padStart(cols.rt),
       (timeMs < 1000 ? timeMs.toFixed(0) + 'ms' : (timeMs / 1000).toFixed(1) + 's').padStart(
         cols.time,
       ),
+    ].join('  '),
+  );
+}
+
+function printBudgetRow(
+  name: string,
+  entry: LlmTokenBudgetResult,
+  cols: {
+    name: number;
+    method: number;
+    tokens: number;
+    fits: number;
+    rw: number;
+    chr: number;
+    rt: number;
+    time: number;
+  },
+): void {
+  console.log(
+    [
+      name.padEnd(cols.name),
+      entry.method.padStart(cols.method),
+      String(entry.tokenCount).padStart(cols.tokens),
+      String(entry.fits).padStart(cols.fits),
+      String(entry.recencyWindow ?? '-').padStart(cols.rw),
+      entry.ratio.toFixed(2).padStart(cols.chr),
+      entry.roundTrip.padStart(cols.rt),
+      (entry.timeMs < 1000
+        ? entry.timeMs.toFixed(0) + 'ms'
+        : (entry.timeMs / 1000).toFixed(1) + 's'
+      ).padStart(cols.time),
     ].join('  '),
   );
 }
