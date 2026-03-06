@@ -14,6 +14,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "bench": "npx tsx bench/run.ts",
+    "bench:llm": "npx tsx bench/run.ts --llm",
     "bench:save": "npx tsx bench/run.ts --save",
     "bench:check": "npx tsx bench/run.ts --check",
     "test:e2e": "npm run build && npm pack && npm run test:e2e:lint && npm run test:e2e:smoke; EXIT=$?; npm run test:e2e:cleanup; exit $EXIT",

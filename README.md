@@ -32,7 +32,7 @@ const { messages: originals } = uncompress(compressed, verbatim);
 
 No API keys. No network calls. Runs synchronously by default. Under 2ms for typical conversations.
 
-The classifier is content-aware, not domain-specific. It preserves structured data (code, JSON, SQL, tables, citations, formulas) and compresses surrounding prose — making it useful anywhere dense reference material is mixed with natural language: LLM conversations, legal briefs, medical records, technical documentation, support logs.
+The classifier is content-aware, not domain-specific. It preserves structured data (code, JSON, SQL, tables, citations, formulas) and compresses surrounding prose — optimized for LLM conversations and technical documentation.
 
 ## Key findings
 
