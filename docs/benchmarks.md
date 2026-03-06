@@ -15,38 +15,38 @@ npm run bench:llm      # Run with LLM summarization benchmarks
 
 LLM benchmarks require the `--llm` flag (`npm run bench:llm`). Set API keys in a `.env` file or export them. Ollama is auto-detected when running locally.
 
-| Variable | Provider | Default Model | Notes |
-| --- | --- | --- | --- |
-| `OPENAI_API_KEY` | OpenAI | `gpt-4.1-mini` | |
-| `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` | |
-| *(none required)* | Ollama | `llama3.2` | Auto-detected on localhost:11434 |
+| Variable            | Provider  | Default Model               | Notes                            |
+| ------------------- | --------- | --------------------------- | -------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI    | `gpt-4.1-mini`              |                                  |
+| `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5-20251001` |                                  |
+| _(none required)_   | Ollama    | `llama3.2`                  | Auto-detected on localhost:11434 |
 
 ## Scenarios
 
 The benchmark covers 8 conversation types:
 
-| Scenario | Description |
-| --- | --- |
-| Coding assistant | Mixed code fences and prose discussion |
-| Long Q&A | Extended question-and-answer with repeated paragraphs |
-| Tool-heavy | Messages with `tool_calls` arrays (preserved by default) |
-| Short conversation | Brief exchanges, mostly under 120 chars |
-| Deep conversation | 25 turns of multi-paragraph prose |
-| Technical explanation | Pure prose Q&A about event-driven architecture |
-| Structured content | JSON, YAML, SQL, API keys, test output |
-| Agentic coding session | Repeated file reads, grep results, near-duplicate edits |
+| Scenario               | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| Coding assistant       | Mixed code fences and prose discussion                   |
+| Long Q&A               | Extended question-and-answer with repeated paragraphs    |
+| Tool-heavy             | Messages with `tool_calls` arrays (preserved by default) |
+| Short conversation     | Brief exchanges, mostly under 120 chars                  |
+| Deep conversation      | 25 turns of multi-paragraph prose                        |
+| Technical explanation  | Pure prose Q&A about event-driven architecture           |
+| Structured content     | JSON, YAML, SQL, API keys, test output                   |
+| Agentic coding session | Repeated file reads, grep results, near-duplicate edits  |
 
 ## Interpreting Results
 
 ### Compression ratio
 
-| Ratio | Reduction |
-| ---: | --- |
-| 1.0x | no compression (all messages preserved) |
-| 1.5x | 33% reduction |
-| 2.0x | 50% reduction |
-| 3.0x | 67% reduction |
-| 6.0x | 83% reduction |
+| Ratio | Reduction                               |
+| ----: | --------------------------------------- |
+|  1.0x | no compression (all messages preserved) |
+|  1.5x | 33% reduction                           |
+|  2.0x | 50% reduction                           |
+|  3.0x | 67% reduction                           |
+|  6.0x | 83% reduction                           |
 
 Higher is better. Token ratio is more meaningful for LLM context budgeting; character ratio is useful for storage.
 
@@ -78,8 +78,8 @@ Baselines are stored in [`bench/baselines/`](../bench/baselines/) as JSON. CI ru
 
 ### Baseline files
 
-| File | Purpose |
-| --- | --- |
-| `bench/baselines/current.json` | Active baseline compared in CI |
-| `bench/baselines/history/v*.json` | Versioned snapshots, one per release |
-| `bench/baselines/llm/*.json` | LLM benchmark reference data (non-deterministic) |
+| File                              | Purpose                                          |
+| --------------------------------- | ------------------------------------------------ |
+| `bench/baselines/current.json`    | Active baseline compared in CI                   |
+| `bench/baselines/history/v*.json` | Versioned snapshots, one per release             |
+| `bench/baselines/llm/*.json`      | LLM benchmark reference data (non-deterministic) |

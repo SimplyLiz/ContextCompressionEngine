@@ -317,7 +317,8 @@ export function compareResults(
       continue;
     }
     checkNum(regressions, 'bundleSize', name, 'bytes', exp.bytes, act.bytes, tolerance);
-    checkNum(regressions, 'bundleSize', name, 'gzipBytes', exp.gzipBytes, act.gzipBytes, tolerance);
+    // gzipBytes is informational only — zlib output varies across platforms/versions
+    // so we don't regression-check it (raw bytes is the meaningful size metric)
   }
 
   return regressions;
@@ -539,15 +540,13 @@ function generateCompressionSection(b: Baseline): string[] {
   lines.push('## Compression by Scenario');
   lines.push('');
   lines.push(
-    `> **${basicEntries.length} scenarios** · **${fix(avgR)}x** avg ratio · `
-      + `**${fix(minR)}x** – **${fix(maxR)}x** range · all round-trips PASS`,
+    `> **${basicEntries.length} scenarios** · **${fix(avgR)}x** avg ratio · ` +
+      `**${fix(minR)}x** – **${fix(maxR)}x** range · all round-trips PASS`,
   );
   lines.push('');
   lines.push(...compressionChart(r.basic));
   lines.push('');
-  lines.push(
-    '| Scenario | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |',
-  );
+  lines.push('| Scenario | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |');
   lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const [name, v] of basicEntries) {
     const reduction = Math.round((1 - 1 / v.ratio) * 100);
@@ -592,7 +591,9 @@ function generateDedupSection(r: BenchmarkResults): string[] {
   for (const [name, v] of Object.entries(r.fuzzyDedup)) {
     const baseRatio = r.basic[name]?.ratio ?? v.ratio;
     const improvement =
-      v.ratio > baseRatio + 0.01 ? `+${Math.round(((v.ratio - baseRatio) / baseRatio) * 100)}%` : '-';
+      v.ratio > baseRatio + 0.01
+        ? `+${Math.round(((v.ratio - baseRatio) / baseRatio) * 100)}%`
+        : '-';
     lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} | ${improvement} |`);
   }
   return lines;
@@ -606,7 +607,9 @@ function generateTokenBudgetSection(r: BenchmarkResults): string[] {
 
   lines.push('## Token Budget');
   lines.push('');
-  lines.push(`Target: **2000 tokens** · ${allFit ? 'all fit' : `${fitCount}/${entries.length} fit`}`);
+  lines.push(
+    `Target: **2000 tokens** · ${allFit ? 'all fit' : `${fitCount}/${entries.length} fit`}`,
+  );
   lines.push('');
   lines.push(
     '| Scenario | Dedup | Tokens | Fits | recencyWindow | Compressed | Preserved | Deduped |',
@@ -641,10 +644,7 @@ function generateBundleSizeSection(bundleSize: Record<string, BundleSizeResult>)
   return lines;
 }
 
-function generateLlmSection(
-  baselinesDir: string,
-  basic: Record<string, BasicResult>,
-): string[] {
+function generateLlmSection(baselinesDir: string, basic: Record<string, BasicResult>): string[] {
   const llmResults = loadAllLlmResults(baselinesDir);
   if (llmResults.length === 0) return [];
 
@@ -652,8 +652,8 @@ function generateLlmSection(
   lines.push('## LLM vs Deterministic');
   lines.push('');
   lines.push(
-    '> Results are **non-deterministic** — LLM outputs vary between runs. '
-      + 'Saved as reference data, not used for regression testing.',
+    '> Results are **non-deterministic** — LLM outputs vary between runs. ' +
+      'Saved as reference data, not used for regression testing.',
   );
   lines.push('');
 
@@ -686,15 +686,12 @@ function generateLlmSection(
           if (mr.roundTrip === 'PASS') passCount++;
         }
       }
-      const avgRatio = ratioValues.length > 0
-        ? ratioValues.reduce((a, b) => a + b, 0) / ratioValues.length
-        : 0;
-      const avgVsDet = vsDetValues.length > 0
-        ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length
-        : 0;
-      const avgTime = timeValues.length > 0
-        ? timeValues.reduce((a, b) => a + b, 0) / timeValues.length
-        : 0;
+      const avgRatio =
+        ratioValues.length > 0 ? ratioValues.reduce((a, b) => a + b, 0) / ratioValues.length : 0;
+      const avgVsDet =
+        vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
+      const avgTime =
+        timeValues.length > 0 ? timeValues.reduce((a, b) => a + b, 0) / timeValues.length : 0;
       const rt = passCount === totalCount ? 'all PASS' : `${passCount}/${totalCount}`;
 
       // Token budget summary
@@ -894,7 +891,9 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
       const oldAvg = oldRatios.reduce((a, b) => a + b, 0) / oldRatios.length;
 
       lines.push(`<details>`);
-      lines.push(`<summary>v${b.version} (${b.generated.split('T')[0]}) — ${fix(oldAvg)}x avg</summary>`);
+      lines.push(
+        `<summary>v${b.version} (${b.generated.split('T')[0]}) — ${fix(oldAvg)}x avg</summary>`,
+      );
       lines.push('');
       lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
       lines.push('| --- | ---: | ---: | ---: | ---: |');

@@ -1158,11 +1158,7 @@ async function run(): Promise<void> {
   let totalBytes = 0;
   let totalGzip = 0;
 
-  const bsHeader = [
-    'File'.padEnd(30),
-    'Size'.padStart(10),
-    'Gzip'.padStart(10),
-  ].join('  ');
+  const bsHeader = ['File'.padEnd(30), 'Size'.padStart(10), 'Gzip'.padStart(10)].join('  ');
   const bsSep = '-'.repeat(bsHeader.length);
 
   console.log(bsSep);
@@ -1180,20 +1176,15 @@ async function run(): Promise<void> {
 
     const fmtBytes = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
     const fmtGzip = gzipBytes < 1024 ? `${gzipBytes} B` : `${(gzipBytes / 1024).toFixed(1)} KB`;
-    console.log(
-      [file.padEnd(30), fmtBytes.padStart(10), fmtGzip.padStart(10)].join('  '),
-    );
+    console.log([file.padEnd(30), fmtBytes.padStart(10), fmtGzip.padStart(10)].join('  '));
   }
 
   benchResults.bundleSize['total'] = { bytes: totalBytes, gzipBytes: totalGzip };
 
   const fmtTotal = totalBytes < 1024 ? `${totalBytes} B` : `${(totalBytes / 1024).toFixed(1)} KB`;
-  const fmtTotalGz =
-    totalGzip < 1024 ? `${totalGzip} B` : `${(totalGzip / 1024).toFixed(1)} KB`;
+  const fmtTotalGz = totalGzip < 1024 ? `${totalGzip} B` : `${(totalGzip / 1024).toFixed(1)} KB`;
   console.log(bsSep);
-  console.log(
-    ['total'.padEnd(30), fmtTotal.padStart(10), fmtTotalGz.padStart(10)].join('  '),
-  );
+  console.log(['total'.padEnd(30), fmtTotal.padStart(10), fmtTotalGz.padStart(10)].join('  '));
   console.log(bsSep);
 
   // ---------------------------------------------------------------------------
