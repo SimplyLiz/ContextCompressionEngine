@@ -2468,3 +2468,121 @@ describe('compress with custom tokenCounter', () => {
     expect(withDefault.fits).toBe(withExplicit.fits);
   });
 });
+
+// ---------------------------------------------------------------------------
+// preservePatterns
+// ---------------------------------------------------------------------------
+
+describe('preservePatterns', () => {
+  const LONG_PROSE =
+    'This is a long user message that talks about many things and goes on for a while to exceed the threshold and get compressed normally. '.repeat(
+      5,
+    );
+
+  it('pattern-matched message is preserved even when it would normally compress', () => {
+    const content = `Pursuant to § 42 of the agreement, the parties agree. ${LONG_PROSE}`;
+    const messages: Message[] = [msg({ id: '1', index: 0, content })];
+    const result = compress(messages, {
+      recencyWindow: 0,
+      preservePatterns: [{ re: /§\s*\d+/, label: 'section_ref' }],
+    });
+    expect(result.messages[0].content).toBe(content);
+    expect(result.compression.messages_preserved).toBe(1);
+    expect(result.compression.messages_compressed).toBe(0);
+    expect(result.compression.messages_pattern_preserved).toBe(1);
+  });
+
+  it('non-matching messages still compress normally', () => {
+    const messages: Message[] = [msg({ id: '1', index: 0, content: LONG_PROSE })];
+    const result = compress(messages, {
+      recencyWindow: 0,
+      preservePatterns: [{ re: /§\s*\d+/, label: 'section_ref' }],
+    });
+    expect(result.messages[0].content).toMatch(/^\[summary:/);
+    expect(result.compression.messages_compressed).toBe(1);
+    expect(result.compression.messages_pattern_preserved).toBeUndefined();
+  });
+
+  it('multiple patterns — any match preserves', () => {
+    const content = `Patient prescribed Metformin 500mg bid. ${LONG_PROSE}`;
+    const messages: Message[] = [msg({ id: '1', index: 0, content })];
+    const result = compress(messages, {
+      recencyWindow: 0,
+      preservePatterns: [
+        { re: /§\s*\d+/, label: 'section_ref' },
+        { re: /\d+\s*mg\b/i, label: 'dosage' },
+      ],
+    });
+    expect(result.messages[0].content).toBe(content);
+    expect(result.compression.messages_pattern_preserved).toBe(1);
+  });
+
+  it('empty preservePatterns array has no effect', () => {
+    const messages: Message[] = [msg({ id: '1', index: 0, content: LONG_PROSE })];
+    const withEmpty = compress(messages, { recencyWindow: 0, preservePatterns: [] });
+    const without = compress(messages, { recencyWindow: 0 });
+    expect(withEmpty.compression.messages_compressed).toBe(without.compression.messages_compressed);
+    expect(withEmpty.compression.messages_pattern_preserved).toBeUndefined();
+  });
+
+  it('code-split check runs before pattern check — code-split messages are not affected', () => {
+    const proseWithPattern = `Section § 12 discussion. ${LONG_PROSE}`;
+    const codeContent = `${proseWithPattern}\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
+    const messages: Message[] = [
+      msg({ id: '1', index: 0, role: 'assistant', content: codeContent }),
+    ];
+    const result = compress(messages, {
+      recencyWindow: 0,
+      preservePatterns: [{ re: /§\s*\d+/, label: 'section_ref' }],
+    });
+    // Code-split path takes precedence: prose is compressed, code fence preserved
+    expect(result.messages[0].content).toContain('```');
+    expect(result.compression.messages_compressed).toBe(1);
+    expect(result.compression.messages_pattern_preserved).toBeUndefined();
+  });
+
+  it('dedup runs before patterns — deduped message stays deduped', () => {
+    const content = `Reference to § 42 in this document. ${LONG_PROSE}`;
+    const messages: Message[] = [
+      msg({ id: '1', index: 0, content }),
+      msg({ id: '2', index: 1, content }),
+    ];
+    const result = compress(messages, {
+      recencyWindow: 0,
+      dedup: true,
+      preservePatterns: [{ re: /§\s*\d+/, label: 'section_ref' }],
+    });
+    // First message is deduped (earlier duplicate), second is pattern-preserved
+    expect(result.messages[0].content).toMatch(/^\[cce:dup/);
+    expect(result.messages[1].content).toBe(content);
+    expect(result.compression.messages_deduped).toBe(1);
+    expect(result.compression.messages_pattern_preserved).toBe(1);
+  });
+
+  it('pattern-preserved messages survive tokenBudget binary search', () => {
+    const matchContent = `Legal clause § 7 reference. ${LONG_PROSE}`;
+    const plainContent = LONG_PROSE;
+    const messages: Message[] = [
+      msg({ id: '0', index: 0, content: matchContent }),
+      msg({ id: '1', index: 1, content: plainContent }),
+      msg({ id: '2', index: 2, content: matchContent }),
+      msg({ id: '3', index: 3, content: plainContent }),
+      msg({ id: '4', index: 4, content: matchContent }),
+      msg({ id: '5', index: 5, content: 'recent' }),
+    ];
+    // Budget tight enough to trigger binary search (not fast-path)
+    const perMsg = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
+    const totalTokens = messages.reduce((s, m) => s + perMsg(m), 0);
+    const result = compress(messages, {
+      tokenBudget: Math.floor(totalTokens * 0.8),
+      tokenCounter: perMsg,
+      dedup: false,
+      preservePatterns: [{ re: /§\s*\d+/, label: 'section_ref' }],
+    });
+    // Pattern-matched messages should be preserved even under budget pressure
+    expect(result.messages[0].content).toBe(matchContent);
+    expect(result.messages[2].content).toBe(matchContent);
+    // Plain prose messages should be compressed to fit budget
+    expect(result.compression.messages_compressed).toBeGreaterThan(0);
+  });
+});

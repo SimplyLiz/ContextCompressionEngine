@@ -445,6 +445,7 @@ type Classified = {
   preserved: boolean;
   codeSplit?: boolean;
   dedup?: DedupAnnotation;
+  patternPreserved?: boolean;
 };
 
 /** Build a compressed message with _cce_original provenance metadata. */
@@ -538,6 +539,7 @@ function classifyAll(
   preserveRoles: Set<string>,
   recencyWindow: number,
   dedupAnnotations?: Map<number, DedupAnnotation>,
+  preservePatterns?: Array<{ re: RegExp; label: string }>,
 ): Classified[] {
   const recencyStart = Math.max(0, messages.length - recencyWindow);
 
@@ -590,6 +592,11 @@ function classifyAll(
         // Soft T0 only — allow compression, entities will capture references
       }
     }
+    if (preservePatterns && preservePatterns.length > 0 && content) {
+      if (preservePatterns.some((p) => p.re.test(content))) {
+        return { msg, preserved: true, patternPreserved: true };
+      }
+    }
     if (content && isValidJson(content)) {
       return { msg, preserved: true };
     }
@@ -607,6 +614,7 @@ function computeStats(
   counter: (msg: Message) => number,
   messagesDeduped?: number,
   messagesFuzzyDeduped?: number,
+  messagesPatternPreserved?: number,
 ): CompressResult['compression'] {
   const originalTotalChars = originalMessages.reduce((sum, m) => sum + contentLength(m), 0);
   const compressedTotalChars = resultMessages.reduce((sum, m) => sum + contentLength(m), 0);
@@ -626,6 +634,9 @@ function computeStats(
     ...(messagesDeduped && messagesDeduped > 0 ? { messages_deduped: messagesDeduped } : {}),
     ...(messagesFuzzyDeduped && messagesFuzzyDeduped > 0
       ? { messages_fuzzy_deduped: messagesFuzzyDeduped }
+      : {}),
+    ...(messagesPatternPreserved && messagesPatternPreserved > 0
+      ? { messages_pattern_preserved: messagesPatternPreserved }
       : {}),
   };
 }
@@ -696,7 +707,13 @@ function* compressGen(
     }
   }
 
-  const classified = classifyAll(messages, preserveRoles, recencyWindow, dedupAnnotations);
+  const classified = classifyAll(
+    messages,
+    preserveRoles,
+    recencyWindow,
+    dedupAnnotations,
+    options.preservePatterns,
+  );
 
   const result: Message[] = [];
   const verbatim: Record<string, Message> = {};
@@ -704,6 +721,7 @@ function* compressGen(
   let messagesPreserved = 0;
   let messagesDeduped = 0;
   let messagesFuzzyDeduped = 0;
+  let messagesPatternPreserved = 0;
   let i = 0;
 
   while (i < classified.length) {
@@ -712,6 +730,7 @@ function* compressGen(
     if (preserved) {
       result.push(msg);
       messagesPreserved++;
+      if (classified[i].patternPreserved) messagesPatternPreserved++;
       i++;
       continue;
     }
@@ -829,6 +848,7 @@ function* compressGen(
       counter,
       messagesDeduped,
       messagesFuzzyDeduped,
+      messagesPatternPreserved,
     ),
     verbatim,
   };

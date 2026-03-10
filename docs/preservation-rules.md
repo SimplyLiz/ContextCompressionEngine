@@ -19,8 +19,9 @@ Messages are evaluated in this order. The **first matching rule** determines the
 | 7        | Code fences + prose >= 80 chars                             | Code-split path |
 | 8        | Code fences + prose < 80 chars                              | Preserved       |
 | 9        | Hard T0 classification                                      | Preserved       |
-| 10       | Valid JSON                                                  | Preserved       |
-| 11       | Everything else                                             | Compressed      |
+| 10       | Custom `preservePatterns` match                             | Preserved       |
+| 11       | Valid JSON                                                  | Preserved       |
+| 12       | Everything else                                             | Compressed      |
 
 Soft T0 classifications (file paths, URLs, version numbers, etc.) do **not** prevent compression — entities capture the important references, and the prose is still compressible.
 
@@ -142,6 +143,55 @@ Protect more or fewer recent messages:
 compress(messages, { recencyWindow: 10 }); // protect last 10
 compress(messages, { recencyWindow: 0 }); // no recency protection
 ```
+
+### `preservePatterns` option
+
+Force preservation of messages matching domain-specific regex patterns. Each pattern is a hard T0 — the message is preserved verbatim, no summarization. Patterns are checked after the built-in heuristic classifier but before JSON detection.
+
+```ts
+compress(messages, {
+  preservePatterns: [
+    { re: /§\s*\d+/, label: 'section_ref' },
+    { re: /\d+\s*mg\b/i, label: 'dosage' },
+  ],
+});
+```
+
+**Domain examples:**
+
+**Legal** — preserve clause references, case citations, regulatory references:
+
+```ts
+preservePatterns: [
+  { re: /§\s*\d+/, label: 'section_ref' },
+  { re: /\b\d+\s+U\.S\.C\.\s*§/, label: 'usc_cite' },
+  { re: /\bArticle\s+[IVX]+\b/, label: 'article_ref' },
+  { re: /\bGDPR\s+Art\.\s*\d+/, label: 'gdpr_ref' },
+];
+```
+
+**Medical** — preserve dosages, diagnostic codes, lab values:
+
+```ts
+preservePatterns: [
+  { re: /\d+\s*mg\b/i, label: 'dosage' },
+  { re: /\bICD-10:\s*[A-Z]\d+/i, label: 'icd_code' },
+  { re: /\bCPT\s+\d{5}/, label: 'cpt_code' },
+  { re: /\bBP\s+\d+\/\d+/, label: 'vital_sign' },
+];
+```
+
+**Academic** — preserve DOIs, citation markers, theorem references:
+
+```ts
+preservePatterns: [
+  { re: /\bdoi:\s*10\.\d{4,}/, label: 'doi' },
+  { re: /\[(\d+(?:,\s*\d+)*)\]/, label: 'citation_marker' },
+  { re: /\bTheorem\s+\d+/i, label: 'theorem_ref' },
+];
+```
+
+The stat `compression.messages_pattern_preserved` reports how many messages were preserved by custom patterns.
 
 ---
 
