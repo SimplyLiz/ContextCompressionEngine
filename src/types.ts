@@ -32,6 +32,10 @@ export type CompressOptions = {
   embedSummaryId?: boolean;
   /** Hard-truncate non-recency messages when binary search bottoms out and budget still exceeded. Default: false. */
   forceConverge?: boolean;
+  /** Custom patterns that force preservation (hard T0). Matched against message content.
+   *  Each pattern needs a regex and a label used in classification reasons.
+   *  Example: `[{ re: /§\s*\d+/, label: 'section_ref' }]` */
+  preservePatterns?: Array<{ re: RegExp; label: string }>;
   /** Custom token counter per message. Default: ceil(content.length / 3.5) — see defaultTokenCounter for rationale. */
   tokenCounter?: (msg: Message) => number;
 };
@@ -63,6 +67,7 @@ export type CompressResult = {
     messages_preserved: number;
     messages_deduped?: number;
     messages_fuzzy_deduped?: number;
+    messages_pattern_preserved?: number;
   };
   /**
    * Original verbatim messages keyed by ID — every compressed message's
