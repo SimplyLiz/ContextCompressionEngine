@@ -68,11 +68,11 @@ Soft T0 content is still compressible because the entity extraction step capture
 
 ### T2 — Short prose
 
-Prose under 20 words. Currently treated the same as T3 in the compression pipeline.
+Prose under 20 words. Treated identically to T3 in the current deterministic pipeline — the distinction is preserved for future LLM classifier integration, which can apply lighter compression to short prose.
 
 ### T3 — Long prose
 
-Prose of 20+ words. The primary target for summarization.
+Prose of 20+ words. The primary target for summarization. Treated identically to T2 in the current pipeline; the LLM classifier will use the T2/T3 distinction for tier-specific strategies.
 
 ## API key detection
 
@@ -103,7 +103,7 @@ SQL detection uses a tiered anchor system to avoid false positives on English pr
 Messages with code fences and significant prose (>= 80 chars) are split:
 
 1. Code fences are extracted verbatim
-2. Surrounding prose is summarized (budget: 200 chars if < 600 chars, 400 otherwise)
+2. Surrounding prose is summarized (budget scales adaptively: 200–600 chars based on prose length)
 3. Result: summary + preserved code fences
 
 If the total prose is < 80 chars, the entire message is preserved (not enough prose to justify splitting).

@@ -100,7 +100,7 @@ The `summarize` function uses sentence scoring:
 5. Re-sort selected sentences by original position to preserve reading order
 6. Join with `...` separator
 
-Budget: 200 chars if input < 600 chars, 400 chars otherwise.
+Budget scales adaptively: max(200, min(round(length × 0.3), 600)). Short content gets 200 chars, long content up to 600.
 
 ### Entity extraction
 
@@ -111,14 +111,14 @@ After summarizing, `extractEntities` pulls out key identifiers from the original
 - Vowelless abbreviations
 - Numbers with units/context
 
-Up to 10 entities are appended as `| entities: foo, bar, baz`.
+Entities scale with content length (3–15) and are appended as `| entities: foo, bar, baz`.
 
 ### Code-split processing
 
 Messages containing code fences with significant prose (>= 80 chars) get split:
 
 1. `splitCodeAndProse` extracts code fences and surrounding prose separately
-2. Prose is summarized (budget: 200 if < 600 chars, else 400)
+2. Prose is summarized (budget scales adaptively with prose length)
 3. Code fences are preserved verbatim
 4. Result: `[summary: ...]\n\n```code here````
 
