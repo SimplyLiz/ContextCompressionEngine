@@ -330,6 +330,10 @@ const COMMON_STARTERS = new Set([
   'Into',
 ]);
 
+function computeBudget(contentLength: number): number {
+  return Math.max(200, Math.min(Math.round(contentLength * 0.3), 600));
+}
+
 function extractEntities(text: string): string[] {
   const entities = new Set<string>();
 
@@ -376,8 +380,8 @@ function extractEntities(text: string): string[] {
     for (const n of numbersCtx) entities.add(n.trim());
   }
 
-  // Cap at 10
-  return Array.from(entities).slice(0, 10);
+  const maxEntities = Math.max(3, Math.min(Math.round(text.length / 200), 15));
+  return Array.from(entities).slice(0, maxEntities);
 }
 
 function splitCodeAndProse(text: string): Array<{ type: 'prose' | 'code'; content: string }> {
@@ -572,6 +576,10 @@ function classifyAll(
       }
       return { msg, preserved: true };
     }
+    // T2 (short prose) and T3 (long prose) are intentionally treated identically
+    // in the current pipeline — both go through the same summarization path.
+    // The distinction is preserved for future LLM classifier integration, which
+    // can apply different strategies per tier (e.g. lighter compression for T2).
     if (content) {
       const cls = classifyMessage(content);
       if (cls.decision === 'T0') {
@@ -735,7 +743,7 @@ function* compressGen(
         .map((s) => s.content)
         .join(' ');
       const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
-      const proseBudget = proseText.length < 600 ? 200 : 400;
+      const proseBudget = computeBudget(proseText.length);
       const summaryText: string = yield { text: proseText, budget: proseBudget };
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
       const compressed = `${formatSummary(summaryText, proseText, undefined, true, embeddedId)}\n\n${codeFences.join('\n\n')}`;
@@ -762,7 +770,7 @@ function* compressGen(
     const allContent = group
       .map((g) => (typeof g.msg.content === 'string' ? g.msg.content : ''))
       .join(' ');
-    const contentBudget = allContent.length < 600 ? 200 : 400;
+    const contentBudget = computeBudget(allContent.length);
     const summaryText = isStructuredOutput(allContent)
       ? summarizeStructured(allContent, contentBudget)
       : yield { text: allContent, budget: contentBudget };

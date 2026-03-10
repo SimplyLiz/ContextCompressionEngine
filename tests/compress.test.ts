@@ -760,7 +760,7 @@ describe('compress', () => {
       expect(content).toContain('authentication module');
     });
 
-    it('budget ceiling at 400 chars', () => {
+    it('adaptive budget ceiling scales with content length', () => {
       const sentences = Array.from(
         { length: 20 },
         (_, i) => `Sentence number ${i + 1} provides additional context about the deployment.`,
@@ -771,7 +771,8 @@ describe('compress', () => {
       const result = compress(messages, { recencyWindow: 0 });
       const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
       expect(match).toBeTruthy();
-      expect(match![1].length).toBeLessThanOrEqual(400);
+      // ~3900 chars content → computeBudget = 600
+      expect(match![1].length).toBeLessThanOrEqual(600);
     });
 
     it('weights PASS/FAIL/ERROR status words higher', () => {
@@ -878,7 +879,7 @@ describe('compress', () => {
       expect(content).toContain('grpc');
     });
 
-    it('caps entities at 10', () => {
+    it('caps entities proportionally to content length', () => {
       const text =
         'Alice Bob Charlie Dave Eve Frank Grace Heidi Ivan Judy Karl Liam Mallory spoke about getUserData fetchItems parseConfig with user_id auth_token db_name cache_key log_level queue_size worker_count and 5 retries and 10 seconds. '.repeat(
           3,
@@ -889,7 +890,57 @@ describe('compress', () => {
       const entitiesMatch = content.match(/entities: ([^\]]+)/);
       expect(entitiesMatch).toBeTruthy();
       const entityList = entitiesMatch![1].split(', ');
-      expect(entityList.length).toBeLessThanOrEqual(10);
+      // ~684 chars → cap = max(3, min(round(684/200), 15)) = 3
+      expect(entityList.length).toBeLessThanOrEqual(3);
+    });
+
+    it('allows more entities for longer content', () => {
+      const text =
+        'Alice Bob Charlie Dave Eve Frank Grace Heidi Ivan Judy Karl Liam Mallory spoke about getUserData fetchItems parseConfig with user_id auth_token db_name cache_key log_level queue_size worker_count and 5 retries and 10 seconds. '.repeat(
+          12,
+        );
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
+      const result = compress(messages, { recencyWindow: 0 });
+      const content = result.messages[0].content!;
+      const entitiesMatch = content.match(/entities: ([^\]]+)/);
+      expect(entitiesMatch).toBeTruthy();
+      const entityList = entitiesMatch![1].split(', ');
+      // ~2736 chars → cap = max(3, min(round(2736/200), 15)) = 14
+      expect(entityList.length).toBeGreaterThan(3);
+      expect(entityList.length).toBeLessThanOrEqual(15);
+    });
+  });
+
+  describe('adaptive budget scaling', () => {
+    it('short content gets a small budget (≤ 200 chars)', () => {
+      // ~500 chars of prose → computeBudget(500) = 200
+      const text =
+        'The deployment process starts by pulling the latest Docker image from the registry and running pre-flight checks. '.repeat(
+          4,
+        );
+      expect(text.length).toBeLessThan(667);
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: text })];
+      const result = compress(messages, { recencyWindow: 0 });
+      const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
+      expect(match).toBeTruthy();
+      expect(match![1].length).toBeLessThanOrEqual(200);
+    });
+
+    it('long content gets a larger budget (≤ 600 and > 200 chars)', () => {
+      // ~2400 chars of diverse prose → computeBudget(2400) = 600
+      const sentences = Array.from(
+        { length: 30 },
+        (_, i) =>
+          `Step ${i + 1} in the deployment pipeline involves running integration tests against the staging environment.`,
+      ).join(' ');
+      expect(sentences.length).toBeGreaterThan(2000);
+      const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: sentences })];
+      const result = compress(messages, { recencyWindow: 0 });
+      const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
+      expect(match).toBeTruthy();
+      expect(match![1].length).toBeLessThanOrEqual(600);
+      // Budget is 600 so the summarizer has room for > 200 chars
+      expect(match![1].length).toBeGreaterThan(200);
     });
   });
 

@@ -1,5 +1,18 @@
 export type ClassifyResult = {
   decision: 'T0' | 'T2' | 'T3';
+  /**
+   * Classification confidence (0–1). Higher values indicate stronger signal.
+   *
+   * For T0: starts at 0.70, increases by 0.05 per additional structural reason
+   * (capped at 0.95). Multiple overlapping signals → higher confidence.
+   * For T2/T3: fixed at 0.65 (pure prose heuristic, no structural anchors).
+   *
+   * The deterministic pipeline does not route on confidence — it uses the
+   * hard/soft T0 distinction instead. Consumers can use confidence for custom
+   * routing (e.g. only compress below a threshold), monitoring dashboards,
+   * or LLM classifier fallback decisions (cf. Amazon Science "Label with
+   * Confidence" for confidence-weighted routing patterns).
+   */
   confidence: number;
   reasons: string[];
 };
@@ -189,6 +202,14 @@ function detectContentTypes(text: string): {
 
 // -- Tier heuristic for clean prose --
 
+/**
+ * Assign T2 (short prose, < 20 words) or T3 (long prose, >= 20 words).
+ *
+ * Both tiers are compressed identically in the current deterministic pipeline.
+ * The distinction exists so a future LLM classifier can apply different
+ * strategies per tier — e.g. lighter summarization for T2 or aggressive
+ * compression for verbose T3 content.
+ */
 function inferProseTier(text: string): 'T2' | 'T3' {
   const words = text.split(/\s+/).length;
   if (words < 20) return 'T2';
