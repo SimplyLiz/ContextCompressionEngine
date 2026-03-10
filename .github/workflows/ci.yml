@@ -50,9 +50,16 @@ jobs:
           else
             npm run test:coverage
           fi
+      - name: Upload coverage
+        if: matrix.node-version == 22
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
       - run: npx tsc --noEmit
 
   bench:
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -76,7 +83,7 @@ jobs:
         run: npm run test:e2e
 
   publish:
-    needs: [audit, lint, test, e2e]
+    needs: [audit, lint, test, bench, e2e]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -97,6 +104,14 @@ jobs:
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Validate changelog entry
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if ! grep -q "## \[${TAG_VERSION}\]" CHANGELOG.md; then
+            echo "::error::No CHANGELOG.md entry found for version ${TAG_VERSION}"
             exit 1
           fi
 
