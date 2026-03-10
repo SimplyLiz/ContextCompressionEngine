@@ -7,7 +7,26 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
   audit:
     runs-on: ubuntu-latest
     steps:
@@ -56,6 +75,9 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+      - name: Coverage report on PR
+        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
       - run: npx tsc --noEmit
 
   bench:
