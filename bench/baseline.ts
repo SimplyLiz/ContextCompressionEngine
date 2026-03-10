@@ -344,6 +344,128 @@ export function formatRegressions(regressions: Regression[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Version diff
+// ---------------------------------------------------------------------------
+
+export interface ScenarioDelta {
+  scenario: string;
+  oldRatio: number;
+  newRatio: number;
+  change: number; // percentage change (positive = improvement)
+  oldTokenRatio: number;
+  newTokenRatio: number;
+  tokenChange: number;
+}
+
+export interface VersionDiff {
+  fromVersion: string;
+  toVersion: string;
+  fromDate: string;
+  toDate: string;
+  scenarios: ScenarioDelta[];
+  avgRatioOld: number;
+  avgRatioNew: number;
+  avgChange: number;
+  bundleSizeOld?: { bytes: number; gzipBytes: number };
+  bundleSizeNew?: { bytes: number; gzipBytes: number };
+}
+
+/**
+ * Compares two baselines and returns a structured diff.
+ * Positive `change` values mean the newer version compresses better.
+ */
+export function diffBaselines(older: Baseline, newer: Baseline): VersionDiff {
+  const scenarios: ScenarioDelta[] = [];
+
+  // Use the union of both scenario sets
+  const allScenarios = new Set([
+    ...Object.keys(older.results.basic),
+    ...Object.keys(newer.results.basic),
+  ]);
+
+  for (const name of allScenarios) {
+    const oldVal = older.results.basic[name];
+    const newVal = newer.results.basic[name];
+    if (!oldVal || !newVal) continue;
+
+    const change = oldVal.ratio === 0 ? 0 : ((newVal.ratio - oldVal.ratio) / oldVal.ratio) * 100;
+    const tokenChange =
+      oldVal.tokenRatio === 0
+        ? 0
+        : ((newVal.tokenRatio - oldVal.tokenRatio) / oldVal.tokenRatio) * 100;
+
+    scenarios.push({
+      scenario: name,
+      oldRatio: oldVal.ratio,
+      newRatio: newVal.ratio,
+      change,
+      oldTokenRatio: oldVal.tokenRatio,
+      newTokenRatio: newVal.tokenRatio,
+      tokenChange,
+    });
+  }
+
+  const avgOld =
+    scenarios.length > 0 ? scenarios.reduce((s, d) => s + d.oldRatio, 0) / scenarios.length : 0;
+  const avgNew =
+    scenarios.length > 0 ? scenarios.reduce((s, d) => s + d.newRatio, 0) / scenarios.length : 0;
+  const avgChange = avgOld === 0 ? 0 : ((avgNew - avgOld) / avgOld) * 100;
+
+  return {
+    fromVersion: older.version,
+    toVersion: newer.version,
+    fromDate: older.generated.split('T')[0],
+    toDate: newer.generated.split('T')[0],
+    scenarios,
+    avgRatioOld: avgOld,
+    avgRatioNew: avgNew,
+    avgChange,
+    bundleSizeOld: older.results.bundleSize?.total,
+    bundleSizeNew: newer.results.bundleSize?.total,
+  };
+}
+
+/**
+ * Formats a version diff as a markdown table for console or doc output.
+ */
+export function formatVersionDiff(diff: VersionDiff): string {
+  const lines: string[] = [];
+
+  lines.push(`## v${diff.fromVersion} → v${diff.toVersion}`);
+  lines.push('');
+
+  const sign = (n: number) => (n > 0 ? '+' : '');
+  const arrow = (n: number) => (n > 1 ? ' ↑' : n < -1 ? ' ↓' : ' ─');
+
+  lines.push(
+    `> **${fix(diff.avgRatioOld)}x** → **${fix(diff.avgRatioNew)}x** avg compression` +
+      ` (${sign(diff.avgChange)}${fix(diff.avgChange)}%)`,
+  );
+  lines.push('');
+
+  lines.push(
+    '| Scenario | v' + diff.fromVersion + ' | v' + diff.toVersion + ' | Change | Token Δ |   |',
+  );
+  lines.push('| --- | ---: | ---: | ---: | ---: | --- |');
+  for (const d of diff.scenarios) {
+    lines.push(
+      `| ${d.scenario} | ${fix(d.oldRatio)}x | ${fix(d.newRatio)}x | ${sign(d.change)}${fix(d.change)}% | ${sign(d.tokenChange)}${fix(d.tokenChange)}% |${arrow(d.change)}|`,
+    );
+  }
+
+  if (diff.bundleSizeOld && diff.bundleSizeNew) {
+    const bytesDelta =
+      ((diff.bundleSizeNew.bytes - diff.bundleSizeOld.bytes) / diff.bundleSizeOld.bytes) * 100;
+    lines.push('');
+    lines.push(
+      `Bundle: ${formatBytes(diff.bundleSizeOld.bytes)} → ${formatBytes(diff.bundleSizeNew.bytes)} (${sign(bytesDelta)}${fix(bytesDelta)}%)`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Doc generation
 // ---------------------------------------------------------------------------
 
@@ -882,7 +1004,44 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
     }
     lines.push('');
 
-    // Per-version detail (older versions)
+    // Version-to-version comparison (latest vs previous)
+    const prev = baselines[baselines.length - 2];
+    const diff = diffBaselines(prev, latest);
+    const sign = (n: number) => (n > 0 ? '+' : '');
+    const arrow = (n: number) => (n > 1 ? ' \u2191' : n < -1 ? ' \u2193' : ' \u2500');
+
+    lines.push(`### v${diff.fromVersion} \u2192 v${diff.toVersion}`);
+    lines.push('');
+    lines.push(
+      `> **${fix(diff.avgRatioOld)}x** \u2192 **${fix(diff.avgRatioNew)}x** avg compression` +
+        ` (${sign(diff.avgChange)}${fix(diff.avgChange)}%)`,
+    );
+    lines.push('');
+    lines.push(
+      '| Scenario | v' +
+        diff.fromVersion +
+        ' | v' +
+        diff.toVersion +
+        ' | Change | Token \u0394 |   |',
+    );
+    lines.push('| --- | ---: | ---: | ---: | ---: | --- |');
+    for (const d of diff.scenarios) {
+      lines.push(
+        `| ${d.scenario} | ${fix(d.oldRatio)}x | ${fix(d.newRatio)}x | ${sign(d.change)}${fix(d.change)}% | ${sign(d.tokenChange)}${fix(d.tokenChange)}% |${arrow(d.change)}|`,
+      );
+    }
+
+    if (diff.bundleSizeOld && diff.bundleSizeNew) {
+      const bytesDelta =
+        ((diff.bundleSizeNew.bytes - diff.bundleSizeOld.bytes) / diff.bundleSizeOld.bytes) * 100;
+      lines.push('');
+      lines.push(
+        `Bundle: ${formatBytes(diff.bundleSizeOld.bytes)} \u2192 ${formatBytes(diff.bundleSizeNew.bytes)} (${sign(bytesDelta)}${fix(bytesDelta)}%)`,
+      );
+    }
+    lines.push('');
+
+    // Per-version detail (older versions, collapsible)
     const olderVersions = baselines.slice(0, -1).reverse();
     for (const b of olderVersions) {
       const r = b.results;
@@ -892,7 +1051,7 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
 
       lines.push(`<details>`);
       lines.push(
-        `<summary>v${b.version} (${b.generated.split('T')[0]}) — ${fix(oldAvg)}x avg</summary>`,
+        `<summary>v${b.version} (${b.generated.split('T')[0]}) \u2014 ${fix(oldAvg)}x avg</summary>`,
       );
       lines.push('');
       lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
