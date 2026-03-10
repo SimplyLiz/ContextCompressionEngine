@@ -684,14 +684,13 @@ describe('compress', () => {
       expect(content).toContain('Express');
     });
 
-    it('caps at 400 chars when no punctuation', () => {
-      const noPunct = 'word '.repeat(200); // 1000 chars, no sentence-ending punctuation
+    it('caps at adaptive budget when no punctuation', () => {
+      const noPunct = 'word '.repeat(200); // 1000 chars → computeBudget = 300
       const messages: Message[] = [msg({ id: '1', index: 0, role: 'user', content: noPunct })];
       const result = compress(messages, { recencyWindow: 0 });
-      // The summary text (between [summary: and the suffix) should not exceed 400 chars
       const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
       expect(match).toBeTruthy();
-      expect(match![1].length).toBeLessThanOrEqual(400);
+      expect(match![1].length).toBeLessThanOrEqual(300);
     });
 
     it('includes first substantive + last sentence', () => {
@@ -719,19 +718,20 @@ describe('compress', () => {
       expect(content).toContain('Sure thing');
     });
 
-    it('hard caps overall summary at 400 chars', () => {
+    it('hard caps overall summary at adaptive budget', () => {
       // Use non-hex chars to avoid triggering hash_or_sha T0 detection
       const longSentence =
         'Wor '.repeat(50) + 'is the architecture we chose for this particular deployment. ';
       const text =
         longSentence + 'The last sentence describes the final outcome of this deployment strategy.';
+      // ~1675 chars → computeBudget = 503
       const messages: Message[] = [
         msg({ id: '1', index: 0, role: 'user', content: text.repeat(5) }),
       ];
       const result = compress(messages, { recencyWindow: 0 });
       const match = result.messages[0].content!.match(/\[summary: (.*?)(?:\s*\(|\s*\||\])/);
       expect(match).toBeTruthy();
-      expect(match![1].length).toBeLessThanOrEqual(400);
+      expect(match![1].length).toBeLessThanOrEqual(503);
     });
 
     it('extracts content from multiple paragraphs', () => {
