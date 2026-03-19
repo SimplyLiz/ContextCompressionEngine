@@ -21,6 +21,7 @@ import {
   compareResults,
   formatRegressions,
   generateBenchmarkDocs,
+  analyzeRetention,
 } from './baseline.js';
 
 // ---------------------------------------------------------------------------
@@ -857,6 +858,16 @@ async function run(): Promise<void> {
       compressed: cr.compression.messages_compressed,
       preserved: cr.compression.messages_preserved,
     };
+
+    // Retention analysis
+    const originalText = scenario.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    const compressedText = cr.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    if (!benchResults.retention) benchResults.retention = {};
+    benchResults.retention[scenario.name] = analyzeRetention(originalText, compressedText);
   }
 
   // Print table
@@ -923,6 +934,40 @@ async function run(): Promise<void> {
   }
 
   console.log('All scenarios passed round-trip verification.');
+
+  // ---------------------------------------------------------------------------
+  // Retention metrics
+  // ---------------------------------------------------------------------------
+
+  if (benchResults.retention && Object.keys(benchResults.retention).length > 0) {
+    console.log();
+    console.log('Retention Metrics');
+
+    const retHeader = [
+      'Scenario'.padEnd(24),
+      'Keywords'.padStart(9),
+      'Entities'.padStart(9),
+      'Structural'.padStart(11),
+    ].join('  ');
+    const retSep = '-'.repeat(retHeader.length);
+
+    console.log(retSep);
+    console.log(retHeader);
+    console.log(retSep);
+
+    for (const [name, ret] of Object.entries(benchResults.retention)) {
+      console.log(
+        [
+          name.padEnd(24),
+          `${(ret.keywordRetention * 100).toFixed(0)}%`.padStart(9),
+          `${(ret.entityRetention * 100).toFixed(0)}%`.padStart(9),
+          `${(ret.structuralRetention * 100).toFixed(0)}%`.padStart(11),
+        ].join('  '),
+      );
+    }
+
+    console.log(retSep);
+  }
 
   // ---------------------------------------------------------------------------
   // tokenBudget scenarios

@@ -5,12 +5,21 @@ export type { StoreLookup } from './expand.js';
 
 // Helpers (LLM integration)
 export { createSummarizer, createEscalatingSummarizer } from './summarizer.js';
+export { createClassifier, createEscalatingClassifier } from './classifier.js';
+
+// Format adapters
+export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
 
 // Types
 export type {
+  Classifier,
+  ClassifierResult,
+  CompressDecision,
   CompressOptions,
   CompressResult,
+  CreateClassifierOptions,
   CreateSummarizerOptions,
+  FormatAdapter,
   Message,
   Summarizer,
   UncompressOptions,

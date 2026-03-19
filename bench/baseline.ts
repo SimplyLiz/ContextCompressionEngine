@@ -40,12 +40,19 @@ export interface BundleSizeResult {
   gzipBytes: number;
 }
 
+export interface RetentionResult {
+  keywordRetention: number;
+  entityRetention: number;
+  structuralRetention: number;
+}
+
 export interface BenchmarkResults {
   basic: Record<string, BasicResult>;
   tokenBudget: Record<string, TokenBudgetResult>;
   dedup: Record<string, DedupResult>;
   fuzzyDedup: Record<string, FuzzyDedupResult>;
   bundleSize: Record<string, BundleSizeResult>;
+  retention?: Record<string, RetentionResult>;
 }
 
 export interface Baseline {
@@ -152,6 +159,103 @@ export function loadAllLlmResults(baselinesDir: string): LlmBenchmarkResult[] {
     }
   }
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Retention analysis
+// ---------------------------------------------------------------------------
+
+/** Extract technical identifiers (camelCase, PascalCase, snake_case). */
+export function extractKeywords(text: string): string[] {
+  const keywords = new Set<string>();
+  const camel = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g);
+  if (camel) for (const w of camel) keywords.add(w);
+  const pascal = text.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g);
+  if (pascal) for (const w of pascal) keywords.add(w);
+  const snake = text.match(/\b[a-z]+(?:_[a-z]+)+\b/g);
+  if (snake) for (const w of snake) keywords.add(w);
+  return Array.from(keywords);
+}
+
+/** Extract named entities: proper nouns, paths, URLs. */
+export function extractEntities(text: string): string[] {
+  const entities = new Set<string>();
+  // Proper nouns (capitalized, not common starters)
+  const common = new Set([
+    'The',
+    'This',
+    'That',
+    'When',
+    'Where',
+    'What',
+    'How',
+    'Here',
+    'There',
+    'But',
+    'And',
+    'If',
+    'It',
+    'In',
+    'On',
+    'At',
+    'To',
+    'For',
+    'With',
+    'From',
+    'As',
+    'By',
+    'An',
+  ]);
+  const proper = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g);
+  if (proper) {
+    for (const noun of proper) {
+      const first = noun.split(/\s+/)[0];
+      if (!common.has(first)) entities.add(noun);
+    }
+  }
+  // File paths
+  const paths = text.match(/(?:\/[\w.-]+){2,}/g);
+  if (paths) for (const p of paths) entities.add(p);
+  // URLs
+  const urls = text.match(/https?:\/\/[^\s]+/g);
+  if (urls) for (const u of urls) entities.add(u);
+  return Array.from(entities);
+}
+
+/** Extract structural markers: code fences, bullet points, numbered lists. */
+export function extractStructural(text: string): string[] {
+  const markers: string[] = [];
+  const fences = text.match(/^[ ]{0,3}```[\w]*$/gm);
+  if (fences) markers.push(...fences.map((f) => f.trim()));
+  const bullets = text.match(/^[ \t]*[-•*]\s+.+$/gm);
+  if (bullets) markers.push(...bullets.map((b) => b.trim()));
+  const numbered = text.match(/^[ \t]*\d+[.)]\s+.+$/gm);
+  if (numbered) markers.push(...numbered.map((n) => n.trim()));
+  return markers;
+}
+
+/** Measure retention: what fraction of original elements appear in the compressed text. */
+export function analyzeRetention(originalText: string, compressedText: string): RetentionResult {
+  const origKeywords = extractKeywords(originalText);
+  const origEntities = extractEntities(originalText);
+  const origStructural = extractStructural(originalText);
+
+  const keywordRetention =
+    origKeywords.length === 0
+      ? 1
+      : origKeywords.filter((k) => compressedText.includes(k)).length / origKeywords.length;
+
+  const entityRetention =
+    origEntities.length === 0
+      ? 1
+      : origEntities.filter((e) => compressedText.includes(e)).length / origEntities.length;
+
+  const structuralRetention =
+    origStructural.length === 0
+      ? 1
+      : origStructural.filter((s) => compressedText.includes(s)).length / origStructural.length;
+
+  return { keywordRetention, entityRetention, structuralRetention };
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +423,45 @@ export function compareResults(
     checkNum(regressions, 'bundleSize', name, 'bytes', exp.bytes, act.bytes, tolerance);
     // gzipBytes is informational only — zlib output varies across platforms/versions
     // so we don't regression-check it (raw bytes is the meaningful size metric)
+  }
+
+  // Retention — 5% tolerance (retention should not drop significantly)
+  const retentionTolerance = 0.05;
+  if (baseline.retention && current.retention) {
+    for (const [name, exp] of Object.entries(baseline.retention)) {
+      const act = current.retention[name];
+      if (!act) continue;
+      if (exp.keywordRetention - act.keywordRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'keywordRetention',
+          expected: exp.keywordRetention,
+          actual: act.keywordRetention,
+          delta: `${((act.keywordRetention - exp.keywordRetention) * 100).toFixed(1)}%`,
+        });
+      }
+      if (exp.entityRetention - act.entityRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'entityRetention',
+          expected: exp.entityRetention,
+          actual: act.entityRetention,
+          delta: `${((act.entityRetention - exp.entityRetention) * 100).toFixed(1)}%`,
+        });
+      }
+      if (exp.structuralRetention - act.structuralRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'structuralRetention',
+          expected: exp.structuralRetention,
+          actual: act.structuralRetention,
+          delta: `${((act.structuralRetention - exp.structuralRetention) * 100).toFixed(1)}%`,
+        });
+      }
+    }
   }
 
   return regressions;

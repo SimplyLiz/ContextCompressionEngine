@@ -1,6 +1,15 @@
-import { classifyMessage } from './classify.js';
+import { classifyMessage, HARD_T0_REASONS } from './classify.js';
 import { analyzeDuplicates, analyzeFuzzyDuplicates, type DedupAnnotation } from './dedup.js';
-import type { CompressOptions, CompressResult, Message, Summarizer } from './types.js';
+import type {
+  Classifier,
+  ClassifierResult,
+  CompressDecision,
+  CompressOptions,
+  CompressResult,
+  FormatAdapter,
+  Message,
+  Summarizer,
+} from './types.js';
 
 /**
  * Deterministic summary ID from sorted source message IDs.
@@ -440,12 +449,19 @@ export function defaultTokenCounter(msg: Message): number {
 // Shared helpers extracted for sync / async reuse
 // ---------------------------------------------------------------------------
 
+type _InternalOptions = CompressOptions & {
+  _llmResults?: Map<number, ClassifierResult>;
+};
+
 type Classified = {
   msg: Message;
   preserved: boolean;
   codeSplit?: boolean;
   dedup?: DedupAnnotation;
   patternPreserved?: boolean;
+  llmPreserved?: boolean;
+  traceReason?: string;
+  adapterMatch?: FormatAdapter;
 };
 
 /** Build a compressed message with _cce_original provenance metadata. */
@@ -496,7 +512,7 @@ function formatSummary(
   return `${prefix}${summaryText}${mergeSuffix}${entitySuffix}]`;
 }
 
-/** Collect consecutive non-preserved, non-codeSplit, non-dedup messages with the same role. */
+/** Collect consecutive non-preserved, non-codeSplit, non-dedup, non-adapter messages with the same role. */
 function collectGroup(
   classified: Classified[],
   startIdx: number,
@@ -509,6 +525,7 @@ function collectGroup(
     !classified[i].preserved &&
     !classified[i].codeSplit &&
     !classified[i].dedup &&
+    !classified[i].adapterMatch &&
     classified[i].msg.role === role
   ) {
     group.push(classified[i]);
@@ -517,29 +534,16 @@ function collectGroup(
   return { group, nextIdx: i };
 }
 
-// Hard T0 reasons: genuinely structural content that can't be summarized.
-// Soft T0 reasons (file_path, url, version_number, etc.): incidental
-// references in prose — entities capture them, prose is still compressible.
-const HARD_T0_REASONS = new Set([
-  'code_fence',
-  'indented_code',
-  'json_structure',
-  'yaml_structure',
-  'high_special_char_ratio',
-  'high_line_length_variance',
-  'api_key',
-  'latex_math',
-  'unicode_math',
-  'sql_content',
-  'verse_pattern',
-]);
-
 function classifyAll(
   messages: Message[],
   preserveRoles: Set<string>,
   recencyWindow: number,
   dedupAnnotations?: Map<number, DedupAnnotation>,
   preservePatterns?: Array<{ re: RegExp; label: string }>,
+  llmResults?: Map<number, ClassifierResult>,
+  classifierMode?: 'hybrid' | 'full',
+  trace?: boolean,
+  adapters?: FormatAdapter[],
 ): Classified[] {
   const recencyStart = Math.max(0, messages.length - recencyWindow);
 
@@ -547,26 +551,34 @@ function classifyAll(
     const content = typeof msg.content === 'string' ? msg.content : '';
 
     if (msg.role && preserveRoles.has(msg.role)) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'preserved_role' }) };
     }
     if (recencyWindow > 0 && idx >= recencyStart) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'recency_window' }) };
     }
     if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'tool_calls' }) };
     }
     if (content.length < 120) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'short_content' }) };
     }
     if (
       content.startsWith('[summary:') ||
       content.startsWith('[summary#') ||
       content.startsWith('[truncated')
     ) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'already_compressed' }) };
     }
     if (dedupAnnotations?.has(idx)) {
-      return { msg, preserved: false, dedup: dedupAnnotations.get(idx)! };
+      const ann = dedupAnnotations.get(idx)!;
+      return {
+        msg,
+        preserved: false,
+        dedup: ann,
+        ...(trace && {
+          traceReason: ann.similarity != null ? 'fuzzy_duplicate' : 'exact_duplicate',
+        }),
+      };
     }
     if (content.includes('```')) {
       const segments = splitCodeAndProse(content);
@@ -574,34 +586,74 @@ function classifyAll(
         .filter((s) => s.type === 'prose')
         .reduce((sum, s) => sum + s.content.length, 0);
       if (totalProse >= 80) {
-        return { msg, preserved: false, codeSplit: true };
+        return {
+          msg,
+          preserved: false,
+          codeSplit: true,
+          ...(trace && { traceReason: 'code_split' }),
+        };
       }
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'code_fence_no_prose' }) };
     }
-    // T2 (short prose) and T3 (long prose) are intentionally treated identically
-    // in the current pipeline — both go through the same summarization path.
-    // The distinction is preserved for future LLM classifier integration, which
-    // can apply different strategies per tier (e.g. lighter compression for T2).
-    if (content) {
+    // Heuristic classification (skipped in full mode)
+    if (classifierMode !== 'full' && content) {
       const cls = classifyMessage(content);
       if (cls.decision === 'T0') {
         const hasHardReason = cls.reasons.some((r) => HARD_T0_REASONS.has(r));
         if (hasHardReason) {
-          return { msg, preserved: true };
+          const hardReasons = cls.reasons.filter((r) => HARD_T0_REASONS.has(r));
+          return {
+            msg,
+            preserved: true,
+            ...(trace && { traceReason: `hard_t0:${hardReasons.join(',')}` }),
+          };
         }
         // Soft T0 only — allow compression, entities will capture references
       }
     }
     if (preservePatterns && preservePatterns.length > 0 && content) {
-      if (preservePatterns.some((p) => p.re.test(content))) {
-        return { msg, preserved: true, patternPreserved: true };
+      const matchedPattern = preservePatterns.find((p) => p.re.test(content));
+      if (matchedPattern) {
+        return {
+          msg,
+          preserved: true,
+          patternPreserved: true,
+          ...(trace && { traceReason: `pattern:${matchedPattern.label}` }),
+        };
       }
     }
+    // LLM classifier results (pre-computed)
+    if (llmResults && llmResults.has(idx)) {
+      const llmResult = llmResults.get(idx)!;
+      if (llmResult.decision === 'preserve') {
+        return {
+          msg,
+          preserved: true,
+          llmPreserved: true,
+          ...(trace && { traceReason: `llm_preserved:${llmResult.reason}` }),
+        };
+      }
+      // decision === 'compress' — fall through
+    }
     if (content && isValidJson(content)) {
-      return { msg, preserved: true };
+      return { msg, preserved: true, ...(trace && { traceReason: 'json_structure' }) };
     }
 
-    return { msg, preserved: false };
+    // Custom format adapters
+    if (adapters && adapters.length > 0 && content) {
+      for (const adapter of adapters) {
+        if (adapter.detect(content)) {
+          return {
+            msg,
+            preserved: false,
+            adapterMatch: adapter,
+            ...(trace && { traceReason: `adapter:${adapter.name}` }),
+          };
+        }
+      }
+    }
+
+    return { msg, preserved: false, ...(trace && { traceReason: 'compressible_prose' }) };
   });
 }
 
@@ -615,6 +667,8 @@ function computeStats(
   messagesDeduped?: number,
   messagesFuzzyDeduped?: number,
   messagesPatternPreserved?: number,
+  messagesLlmClassified?: number,
+  messagesLlmPreserved?: number,
 ): CompressResult['compression'] {
   const originalTotalChars = originalMessages.reduce((sum, m) => sum + contentLength(m), 0);
   const compressedTotalChars = resultMessages.reduce((sum, m) => sum + contentLength(m), 0);
@@ -638,7 +692,68 @@ function computeStats(
     ...(messagesPatternPreserved && messagesPatternPreserved > 0
       ? { messages_pattern_preserved: messagesPatternPreserved }
       : {}),
+    ...(messagesLlmClassified && messagesLlmClassified > 0
+      ? { messages_llm_classified: messagesLlmClassified }
+      : {}),
+    ...(messagesLlmPreserved && messagesLlmPreserved > 0
+      ? { messages_llm_preserved: messagesLlmPreserved }
+      : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// LLM pre-classification (runs once before the pipeline)
+// ---------------------------------------------------------------------------
+
+async function preClassify(
+  messages: Message[],
+  classifier: Classifier,
+  classifierMode: 'hybrid' | 'full',
+  preserveRoles: Set<string>,
+): Promise<Map<number, ClassifierResult>> {
+  const results = new Map<number, ClassifierResult>();
+  const tasks: Array<{ idx: number; promise: Promise<ClassifierResult> }> = [];
+
+  for (let idx = 0; idx < messages.length; idx++) {
+    const msg = messages[idx];
+    const content = typeof msg.content === 'string' ? msg.content : '';
+
+    // Skip always-preserved messages
+    if (msg.role && preserveRoles.has(msg.role)) continue;
+    if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) continue;
+    if (content.length < 120) continue;
+    if (
+      content.startsWith('[summary:') ||
+      content.startsWith('[summary#') ||
+      content.startsWith('[truncated')
+    )
+      continue;
+
+    // In hybrid mode: skip hard T0 (heuristic handles those)
+    if (classifierMode === 'hybrid' && content) {
+      const cls = classifyMessage(content);
+      if (cls.decision === 'T0') {
+        const hasHard = cls.reasons.some((r) => HARD_T0_REASONS.has(r));
+        if (hasHard) continue;
+      }
+    }
+
+    const result = classifier(content);
+    if (result instanceof Promise) {
+      tasks.push({ idx, promise: result });
+    } else {
+      results.set(idx, result);
+    }
+  }
+
+  if (tasks.length > 0) {
+    const settled = await Promise.all(tasks.map((t) => t.promise));
+    for (let i = 0; i < tasks.length; i++) {
+      results.set(tasks[i].idx, settled[i]);
+    }
+  }
+
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -707,21 +822,33 @@ function* compressGen(
     }
   }
 
+  const internalOpts = options as _InternalOptions;
+  const llmResults = internalOpts._llmResults;
+  const classifierMode = options.classifierMode ?? 'hybrid';
+
+  const trace = options.trace ?? false;
+
   const classified = classifyAll(
     messages,
     preserveRoles,
     recencyWindow,
     dedupAnnotations,
     options.preservePatterns,
+    llmResults,
+    classifierMode,
+    trace,
+    options.adapters,
   );
 
   const result: Message[] = [];
   const verbatim: Record<string, Message> = {};
+  const decisions: CompressDecision[] = [];
   let messagesCompressed = 0;
   let messagesPreserved = 0;
   let messagesDeduped = 0;
   let messagesFuzzyDeduped = 0;
   let messagesPatternPreserved = 0;
+  let messagesLlmPreserved = 0;
   let i = 0;
 
   while (i < classified.length) {
@@ -731,6 +858,18 @@ function* compressGen(
       result.push(msg);
       messagesPreserved++;
       if (classified[i].patternPreserved) messagesPatternPreserved++;
+      if (classified[i].llmPreserved) messagesLlmPreserved++;
+      if (trace) {
+        const inChars = contentLength(msg);
+        decisions.push({
+          messageId: msg.id,
+          messageIndex: i,
+          action: 'preserved',
+          reason: classified[i].traceReason ?? 'preserved',
+          inputChars: inChars,
+          outputChars: inChars,
+        });
+      }
       i++;
       continue;
     }
@@ -744,6 +883,18 @@ function* compressGen(
           ? `[cce:near-dup of ${keepTargetId} — ${annotation.contentLength} chars, ~${Math.round(annotation.similarity * 100)}% match]`
           : `[cce:dup of ${keepTargetId} — ${annotation.contentLength} chars]`;
       result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
+      if (trace) {
+        decisions.push({
+          messageId: msg.id,
+          messageIndex: i,
+          action: annotation.similarity != null ? 'fuzzy_deduped' : 'deduped',
+          reason:
+            classified[i].traceReason ??
+            (annotation.similarity != null ? 'fuzzy_duplicate' : 'exact_duplicate'),
+          inputChars: annotation.contentLength,
+          outputChars: tag.length,
+        });
+      }
       if (annotation.similarity != null) {
         messagesFuzzyDeduped++;
       } else {
@@ -770,6 +921,16 @@ function* compressGen(
       if (compressed.length >= content.length) {
         result.push(msg);
         messagesPreserved++;
+        if (trace) {
+          decisions.push({
+            messageId: msg.id,
+            messageIndex: i,
+            action: 'preserved',
+            reason: 'code_split_reverted',
+            inputChars: content.length,
+            outputChars: content.length,
+          });
+        }
         i++;
         continue;
       }
@@ -778,11 +939,67 @@ function* compressGen(
         buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]),
       );
       messagesCompressed++;
+      if (trace) {
+        decisions.push({
+          messageId: msg.id,
+          messageIndex: i,
+          action: 'code_split',
+          reason: 'code_split',
+          inputChars: content.length,
+          outputChars: compressed.length,
+        });
+      }
+      i++;
+      continue;
+    }
+
+    // Custom adapter: extract preserved/compressible, summarize compressible, reconstruct
+    if (classified[i].adapterMatch) {
+      const adapter = classified[i].adapterMatch!;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      const preserved = adapter.extractPreserved(content);
+      const compressible = adapter.extractCompressible(content);
+      const proseText = compressible.join(' ');
+      const proseBudget = computeBudget(proseText.length);
+      const summaryText: string =
+        proseText.length > 0 ? yield { text: proseText, budget: proseBudget } : '';
+      const compressed = adapter.reconstruct(preserved, summaryText);
+
+      if (compressed.length >= content.length) {
+        result.push(msg);
+        messagesPreserved++;
+        if (trace) {
+          decisions.push({
+            messageId: msg.id,
+            messageIndex: i,
+            action: 'preserved',
+            reason: `adapter_reverted:${adapter.name}`,
+            inputChars: content.length,
+            outputChars: content.length,
+          });
+        }
+      } else {
+        result.push(
+          buildCompressedMessage(msg, [msg.id], compressed, sourceVersion, verbatim, [msg]),
+        );
+        messagesCompressed++;
+        if (trace) {
+          decisions.push({
+            messageId: msg.id,
+            messageIndex: i,
+            action: 'compressed',
+            reason: `adapter:${adapter.name}`,
+            inputChars: content.length,
+            outputChars: compressed.length,
+          });
+        }
+      }
       i++;
       continue;
     }
 
     // Collect consecutive non-preserved messages with the SAME role
+    const groupStartIdx = i;
     const { group, nextIdx } = collectGroup(classified, i);
     i = nextIdx;
 
@@ -804,9 +1021,19 @@ function* compressGen(
       }
 
       if (summary.length >= combinedLength) {
-        for (const g of group) {
-          result.push(g.msg);
+        for (let gi = 0; gi < group.length; gi++) {
+          result.push(group[gi].msg);
           messagesPreserved++;
+          if (trace) {
+            decisions.push({
+              messageId: group[gi].msg.id,
+              messageIndex: groupStartIdx + gi,
+              action: 'preserved',
+              reason: 'merge_reverted',
+              inputChars: contentLength(group[gi].msg),
+              outputChars: contentLength(group[gi].msg),
+            });
+          }
         }
       } else {
         const sourceMsgs = group.map((g) => g.msg);
@@ -815,6 +1042,18 @@ function* compressGen(
           buildCompressedMessage(base, mergeIds, summary, sourceVersion, verbatim, sourceMsgs),
         );
         messagesCompressed += group.length;
+        if (trace) {
+          for (let gi = 0; gi < group.length; gi++) {
+            decisions.push({
+              messageId: group[gi].msg.id,
+              messageIndex: groupStartIdx + gi,
+              action: 'compressed',
+              reason: group.length > 1 ? 'merged_compressed' : 'compressible_prose',
+              inputChars: contentLength(group[gi].msg),
+              outputChars: Math.round(summary.length / group.length),
+            });
+          }
+        }
       }
     } else {
       const single = group[0].msg;
@@ -828,28 +1067,56 @@ function* compressGen(
       if (summary.length >= content.length) {
         result.push(single);
         messagesPreserved++;
+        if (trace) {
+          decisions.push({
+            messageId: single.id,
+            messageIndex: groupStartIdx,
+            action: 'preserved',
+            reason: 'single_reverted',
+            inputChars: content.length,
+            outputChars: content.length,
+          });
+        }
       } else {
         result.push(
           buildCompressedMessage(single, [single.id], summary, sourceVersion, verbatim, [single]),
         );
         messagesCompressed++;
+        if (trace) {
+          decisions.push({
+            messageId: single.id,
+            messageIndex: groupStartIdx,
+            action: 'compressed',
+            reason: classified[groupStartIdx].traceReason ?? 'compressible_prose',
+            inputChars: content.length,
+            outputChars: summary.length,
+          });
+        }
       }
     }
   }
 
+  const stats = computeStats(
+    messages,
+    result,
+    messagesCompressed,
+    messagesPreserved,
+    sourceVersion,
+    counter,
+    messagesDeduped,
+    messagesFuzzyDeduped,
+    messagesPatternPreserved,
+    llmResults?.size,
+    messagesLlmPreserved,
+  );
+
+  if (trace) {
+    stats.decisions = decisions;
+  }
+
   return {
     messages: result,
-    compression: computeStats(
-      messages,
-      result,
-      messagesCompressed,
-      messagesPreserved,
-      sourceVersion,
-      counter,
-      messagesDeduped,
-      messagesFuzzyDeduped,
-      messagesPatternPreserved,
-    ),
+    compression: stats,
     verbatim,
   };
 }
@@ -883,6 +1150,18 @@ async function compressAsync(
   messages: Message[],
   options: CompressOptions = {},
 ): Promise<CompressResult> {
+  const internalOpts = options as _InternalOptions;
+  if (options.classifier && !internalOpts._llmResults) {
+    const preserveRoles = new Set(options.preserve ?? ['system']);
+    const llmResults = await preClassify(
+      messages,
+      options.classifier,
+      options.classifierMode ?? 'hybrid',
+      preserveRoles,
+    );
+    const opts: _InternalOptions = { ...options, _llmResults: llmResults };
+    return runCompressAsync(compressGen(messages, opts), options.summarizer);
+  }
   return runCompressAsync(compressGen(messages, options), options.summarizer);
 }
 
@@ -940,6 +1219,7 @@ function forceConvergePass(
   preserveRoles: Set<string>,
   sourceVersion: number,
   counter: (msg: Message) => number,
+  trace?: boolean,
 ): CompressResult {
   if (cr.fits) return cr;
 
@@ -1002,6 +1282,25 @@ function forceConvergePass(
 
     const newTokens = counter(messages[cand.idx]);
     tokenCount -= oldTokens - newTokens;
+
+    if (trace && cr.compression.decisions) {
+      // Find and update the existing decision for this message, or add a new one
+      const existing = cr.compression.decisions.find((d) => d.messageId === m.id);
+      if (existing) {
+        existing.action = 'truncated';
+        existing.reason = 'force_converge';
+        existing.outputChars = tag.length;
+      } else {
+        cr.compression.decisions.push({
+          messageId: m.id,
+          messageIndex: cand.idx,
+          action: 'truncated',
+          reason: 'force_converge',
+          inputChars: content.length,
+          outputChars: tag.length,
+        });
+      }
+    }
   }
 
   const fits = tokenCount <= tokenBudget;
@@ -1058,7 +1357,14 @@ function compressSyncWithBudget(
 
   if (!result.fits && options.forceConverge) {
     const preserveRoles = new Set(options.preserve ?? ['system']);
-    result = forceConvergePass(result, tokenBudget, preserveRoles, sourceVersion, counter);
+    result = forceConvergePass(
+      result,
+      tokenBudget,
+      preserveRoles,
+      sourceVersion,
+      counter,
+      options.trace,
+    );
   }
 
   return result;
@@ -1076,6 +1382,19 @@ async function compressAsyncWithBudget(
   const fast = budgetFastPath(messages, tokenBudget, sourceVersion, counter);
   if (fast) return fast;
 
+  // Pre-classify ONCE before binary search — prevents re-classification per iteration
+  let innerOpts: _InternalOptions = options;
+  if (options.classifier && !(options as _InternalOptions)._llmResults) {
+    const preserveRoles = new Set(options.preserve ?? ['system']);
+    const llmResults = await preClassify(
+      messages,
+      options.classifier,
+      options.classifierMode ?? 'hybrid',
+      preserveRoles,
+    );
+    innerOpts = { ...options, classifier: undefined, _llmResults: llmResults };
+  }
+
   let lo = minRw;
   let hi = messages.length - 1;
   let lastResult: CompressResult | undefined;
@@ -1084,7 +1403,7 @@ async function compressAsyncWithBudget(
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
     const cr = await compressAsync(messages, {
-      ...options,
+      ...innerOpts,
       recencyWindow: mid,
       tokenBudget: undefined,
     });
@@ -1103,7 +1422,7 @@ async function compressAsyncWithBudget(
     result = lastResult;
   } else {
     const cr = await compressAsync(messages, {
-      ...options,
+      ...innerOpts,
       recencyWindow: lo,
       tokenBudget: undefined,
     });
@@ -1112,7 +1431,14 @@ async function compressAsyncWithBudget(
 
   if (!result.fits && options.forceConverge) {
     const preserveRoles = new Set(options.preserve ?? ['system']);
-    result = forceConvergePass(result, tokenBudget, preserveRoles, sourceVersion, counter);
+    result = forceConvergePass(
+      result,
+      tokenBudget,
+      preserveRoles,
+      sourceVersion,
+      counter,
+      options.trace,
+    );
   }
 
   return result;
@@ -1123,7 +1449,7 @@ async function compressAsyncWithBudget(
 // ---------------------------------------------------------------------------
 
 /**
- * Compress a message array. Sync by default; async when a `summarizer` is provided.
+ * Compress a message array. Sync by default; async when a `summarizer` or `classifier` is provided.
  *
  * The caller MUST persist `messages` and `verbatim` atomically.
  * Partial writes (e.g. storing compressed messages without their
@@ -1134,6 +1460,10 @@ export function compress(messages: Message[], options?: CompressOptions): Compre
 export function compress(
   messages: Message[],
   options: CompressOptions & { summarizer: Summarizer },
+): Promise<CompressResult>;
+export function compress(
+  messages: Message[],
+  options: CompressOptions & { classifier: Classifier },
 ): Promise<CompressResult>;
 export function compress(
   messages: Message[],
@@ -1153,9 +1483,10 @@ export function compress(
   }
 
   const hasSummarizer = !!options.summarizer;
+  const hasClassifier = !!options.classifier;
   const hasBudget = options.tokenBudget != null;
 
-  if (hasSummarizer) {
+  if (hasSummarizer || hasClassifier) {
     // Async paths
     if (hasBudget) {
       return compressAsyncWithBudget(messages, options.tokenBudget!, options);
