@@ -145,6 +145,44 @@ const API_KEY_PATTERNS: RegExp[] = [
 const GENERIC_TOKEN_RE =
   /\b[a-zA-Z](?=[a-zA-Z0-9]{0,13}[g-zG-Z])[a-zA-Z0-9]{1,14}[-_](?=[a-zA-Z0-9_-]*[0-9])(?=[a-zA-Z0-9_-]*[a-zA-Z])[a-zA-Z0-9_-]{20,}\b/;
 
+// Reasoning chain detection — two-tier anchor system (mirrors SQL detection).
+// Strong anchors: explicit reasoning labels or formal inference → 1 match is enough.
+// Weak anchors: logical connectives / causal phrases → need 3+ distinct to trigger.
+const REASONING_STRONG_RE =
+  /^[ \t]*(?:Reasoning|Analysis|Conclusion|Proof|Derivation|Chain of Thought|Step[- ]by[- ]step)\s*:/im;
+const REASONING_INFERENCE_RE =
+  /\b(?:it follows that|we can (?:conclude|deduce|infer)|this (?:implies|proves) that|QED)\b|∴/i;
+const REASONING_WEAK_ANCHORS_RE =
+  /\b(?:therefore|hence|thus|consequently|accordingly|this means that|as a result|because of this|which (?:implies|means|shows)|given that|assuming that|since we know)\b/gi;
+const NUMBERED_STEP_RE = /(?:^|\n)\s*(?:Step\s+\d+[:.)]|\d+[.)]\s)/gi;
+const SEQUENCE_MARKERS_RE =
+  /\b(?:Let me (?:think|reason|analyze)|Let's (?:consider|break this down)|(?:First(?:ly)?|Second(?:ly)?|Third(?:ly)?)\b.*?\b(?:then|next|second(?:ly)?|third(?:ly)?)|In conclusion|To summarize|In summary)\b/i;
+
+function detectReasoningChain(text: string): boolean {
+  // 1+ strong anchor → unambiguous reasoning chain
+  if (REASONING_STRONG_RE.test(text)) return true;
+  if (REASONING_INFERENCE_RE.test(text)) return true;
+
+  // Count distinct weak anchors
+  const weakMatches = text.match(REASONING_WEAK_ANCHORS_RE);
+  const distinctWeak = weakMatches
+    ? new Set(weakMatches.map((m) => m.toLowerCase().replace(/\s+/g, ' '))).size
+    : 0;
+
+  // Sequence markers count as 1 weak anchor
+  const seqCount = SEQUENCE_MARKERS_RE.test(text) ? 1 : 0;
+
+  // 3+ numbered steps AND 1+ weak anchor → reasoning chain
+  const stepMatches = text.match(NUMBERED_STEP_RE);
+  const stepCount = stepMatches ? stepMatches.length : 0;
+  if (stepCount >= 3 && distinctWeak + seqCount >= 1) return true;
+
+  // 3+ distinct weak anchors (including sequence contribution) → reasoning chain
+  if (distinctWeak + seqCount >= 3) return true;
+
+  return false;
+}
+
 const FORCE_T0_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /https?:\/\/[^\s]+/, label: 'url' },
   { re: /[\w.+-]+@[\w-]+\.[a-z]{2,}/i, label: 'email' },
@@ -192,6 +230,9 @@ function detectContentTypes(text: string): {
   }
   if (apiKeyFound) reasons.push('api_key');
 
+  // Reasoning chain detection
+  if (detectReasoningChain(text)) reasons.push('reasoning_chain');
+
   // Other content-type patterns
   for (const { re, label } of FORCE_T0_PATTERNS) {
     if (re.test(text)) reasons.push(label);
@@ -233,6 +274,7 @@ export const HARD_T0_REASONS = new Set([
   'unicode_math',
   'sql_content',
   'verse_pattern',
+  'reasoning_chain',
 ]);
 
 export function classifyMessage(content: string): ClassifyResult {

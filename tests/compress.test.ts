@@ -3035,4 +3035,40 @@ describe('compression decision audit trail (trace)', () => {
     expect(truncated.length).toBeGreaterThan(0);
     expect(truncated[0].reason).toBe('force_converge');
   });
+
+  describe('reasoning chain preservation', () => {
+    it('preserves reasoning chain as hard T0 through compression', () => {
+      const reasoning =
+        'Given that the connection pool is exhausted, new requests queue up. ' +
+        'Thus the response latency increases exponentially. ' +
+        'Consequently the health check fails and the node is removed from rotation.';
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Why is the service slow?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: reasoning }),
+      ];
+      const result = compress(messages);
+      const preserved = result.messages.find((m) => m.content === reasoning);
+      expect(preserved).toBeDefined();
+    });
+
+    it('still compresses prose with a single "therefore"', () => {
+      const prose =
+        'The deployment was delayed and therefore the release notes were updated to reflect the new timeline. ' +
+        'The team worked through the weekend to prepare the documentation. ' +
+        'Everyone was pleased with the final outcome of the project. ' +
+        'The stakeholders approved the changes and we moved forward with the plan.';
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'What happened?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: prose }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks for explaining.' }),
+        msg({ id: '4', index: 3, role: 'assistant', content: 'You are welcome.' }),
+        msg({ id: '5', index: 4, role: 'user', content: 'One more question.' }),
+        msg({ id: '6', index: 5, role: 'assistant', content: 'Go ahead.' }),
+      ];
+      const result = compress(messages, { recencyWindow: 2 });
+      const original = result.messages.find((m) => m.content === prose);
+      // Single "therefore" should not prevent compression — message should be summarized
+      expect(original).toBeUndefined();
+    });
+  });
 });

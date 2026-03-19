@@ -543,6 +543,145 @@ describe('classifyMessage', () => {
     });
   });
 
+  describe('reasoning chain detection', () => {
+    it('detects explicit "Reasoning:" label', () => {
+      const r = classifyMessage(
+        'Reasoning: The cache invalidation happens before the write completes, causing stale reads.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects "Analysis:" label', () => {
+      const r = classifyMessage(
+        'Analysis: The latency spike correlates with GC pauses in the 99th percentile.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects "Chain of Thought:" label', () => {
+      const r = classifyMessage(
+        'Chain of Thought: We know the input is sorted. Binary search applies. The mid-point comparison narrows the range by half each iteration.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects formal inference phrase "it follows that"', () => {
+      const r = classifyMessage(
+        'Since the function is monotonically increasing, it follows that the minimum is at the left boundary.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects formal inference phrase "we can conclude"', () => {
+      const r = classifyMessage(
+        'The tests pass on both platforms, so we can conclude the fix is portable.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects ∴ symbol', () => {
+      const r = classifyMessage('A ⊆ B and B ⊆ C ∴ A ⊆ C');
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct weak anchors (therefore, hence, as a result)', () => {
+      const r = classifyMessage(
+        'The timeout was too short. Therefore the request failed. ' +
+          'Hence the retry logic kicked in. As a result the queue backed up.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct weak anchors (thus, consequently, given that)', () => {
+      const r = classifyMessage(
+        'Given that the pool is exhausted, new connections fail. ' +
+          'Thus the health check returns 503. Consequently the load balancer removes the node.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects numbered steps with a weak anchor', () => {
+      const r = classifyMessage(
+        'Step 1: Parse the input tokens.\n' +
+          'Step 2: Build the AST from the token stream.\n' +
+          'Step 3: Run semantic analysis on the AST.\n' +
+          'Therefore the compiler rejects malformed programs early.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects sequence markers combined with weak anchors', () => {
+      const r = classifyMessage(
+        'Let me analyze this. The error occurs because the buffer overflows. ' +
+          'Therefore the write is truncated. Hence downstream parsers fail.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+  });
+
+  describe('reasoning chain — false-positive resistance', () => {
+    it('shopping list with numbered items does not trigger reasoning_chain', () => {
+      const r = classifyMessage('1. Milk\n2. Eggs\n3. Bread\n4. Butter\n5. Cheese');
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('instructional steps without connectives do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'Step 1: Open the settings page.\n' +
+          'Step 2: Click on the profile tab.\n' +
+          'Step 3: Update your email address.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('single "therefore" in prose does not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'The deployment was delayed and therefore the release notes were updated to reflect the new timeline.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('"analysis" as a regular noun does not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'The team completed their analysis of the quarterly metrics and shared the dashboard.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('meeting notes with numbered items do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        '1. Review last sprint\n2. Discuss blockers\n3. Plan next sprint\n4. Assign action items',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('recipe steps do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'Step 1: Preheat the oven to 350 degrees.\n' +
+          'Step 2: Mix flour and sugar in a bowl.\n' +
+          'Step 3: Add eggs and stir until smooth.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('casual "so" and "then" do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'So I went to the store and then I picked up some groceries. Then I drove home and made dinner.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+  });
+
   describe('T2 — short factual assertions', () => {
     it('classifies short factual text as T2', () => {
       const r = classifyMessage('The service uses PostgreSQL.');

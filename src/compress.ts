@@ -46,6 +46,9 @@ const FILLER_RE =
 const EMPHASIS_RE =
   /\b(?:importantly|note that|however|critical|crucial|essential|significant|notably|key point|in particular|specifically|must|require[ds]?|never|always)\b/i;
 
+const REASONING_SCORE_RE =
+  /\b(?:therefore|hence|thus|consequently|accordingly|it follows that|we can (?:conclude|deduce|infer)|this (?:implies|proves|means) that|as a result|given that|in conclusion)\b/i;
+
 function scoreSentence(sentence: string): number {
   let score = 0;
   // camelCase identifiers
@@ -56,6 +59,8 @@ function scoreSentence(sentence: string): number {
   score += (sentence.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? []).length * 3;
   // Emphasis phrases
   if (EMPHASIS_RE.test(sentence)) score += 4;
+  // Reasoning connectives — defense-in-depth so reasoning sentences survive summarization
+  if (REASONING_SCORE_RE.test(sentence)) score += 3;
   // Numbers with units
   score +=
     (
