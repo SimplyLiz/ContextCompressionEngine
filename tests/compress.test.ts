@@ -3143,4 +3143,102 @@ describe('compression decision audit trail (trace)', () => {
       expect(summarizer).not.toHaveBeenCalled();
     });
   });
+
+  describe('observationThreshold', () => {
+    const largeProse =
+      'This is a detailed explanation of the system architecture and design decisions. '.repeat(60);
+
+    it('compresses large recency-window messages that exceed threshold', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'What happened?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: largeProse }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks.' }),
+      ];
+      // recencyWindow covers all messages, but observationThreshold forces compression of the large one
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+      // The large message should be compressed
+      const compressed = result.messages.find((m) => m.id === '2');
+      expect(compressed?.content).not.toBe(largeProse);
+    });
+
+    it('preserves small messages in recency window even when threshold is set', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Short question.' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: 'Short answer.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      expect(result.compression.messages_compressed).toBe(0);
+    });
+
+    it('always preserves system role regardless of observation threshold', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'system', content: largeProse }),
+        msg({ id: '2', index: 1, role: 'user', content: 'Hello.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      const systemMsg = result.messages.find((m) => m.role === 'system');
+      expect(systemMsg?.content).toBe(largeProse);
+    });
+
+    it('always preserves tool_calls messages regardless of observation threshold', () => {
+      const messages: Message[] = [
+        msg({
+          id: '1',
+          index: 0,
+          role: 'assistant',
+          content: largeProse,
+          tool_calls: [{ id: 'call_1', function: { name: 'test' } }],
+        }),
+        msg({ id: '2', index: 1, role: 'user', content: 'Done.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      const toolMsg = result.messages.find((m) => m.id === '1');
+      expect(toolMsg?.content).toBe(largeProse);
+    });
+
+    it('compresses large JSON in recency window when threshold exceeded', () => {
+      const bigJson = JSON.stringify({
+        data: Array.from({ length: 200 }, (_, i) => ({ id: i, value: `item_${i}` })),
+      });
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Get data.' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: bigJson }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      // JSON would normally be preserved, but exceeds observation threshold
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('works with custom tokenCounter', () => {
+      const counter = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Q' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: largeProse }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Ok.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 500,
+        tokenCounter: counter,
+      });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+  });
 });

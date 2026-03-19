@@ -6,7 +6,15 @@ export type { StoreLookup } from './expand.js';
 // Helpers (LLM integration)
 export { createSummarizer, createEscalatingSummarizer } from './summarizer.js';
 export { createClassifier, createEscalatingClassifier } from './classifier.js';
-export { createFeedbackCollector, refineSummarizer } from './feedback.js';
+export {
+  createFeedbackCollector,
+  refineSummarizer,
+  tightenSummarizer,
+  refineSummarizerCandidates,
+  createDistillationPairs,
+  RECOMMENDED_HISTORY_THRESHOLD,
+  RECOMMENDED_OBSERVATION_THRESHOLD,
+} from './feedback.js';
 
 // Format adapters
 export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
@@ -21,10 +29,12 @@ export type {
   CompressResult,
   CreateClassifierOptions,
   CreateSummarizerOptions,
+  DistillationPair,
   FeedbackCollector,
   FeedbackResult,
   FormatAdapter,
   Message,
+  OverPreservationResult,
   Summarizer,
   TaskOutcome,
   UncompressOptions,

@@ -95,6 +95,10 @@ export type CompressOptions = {
    *  Each adapter can detect, extract, and reconstruct format-specific content.
    *  Built-in adapters (code fences, structured output) always run first. */
   adapters?: FormatAdapter[];
+  /** Per-message token threshold for observation compression (ACON §3.2 Eq 4).
+   *  Messages exceeding this are compressed even if in the recency window.
+   *  System-role and tool_calls messages are always exempt. */
+  observationThreshold?: number;
 };
 
 export type VerbatimMap = Record<string, Message>;
@@ -163,10 +167,24 @@ export type FeedbackResult = {
   guidelines: string[];
 };
 
+export type OverPreservationResult = {
+  unnecessaryPatterns: string[];
+  removableTerms: string[];
+  tighteningGuidelines: string[];
+};
+
 export type FeedbackCollector = {
   add(original: Message[], compressed: Message[], outcome: TaskOutcome): void;
+  /** UT step: analyze what was lost in failed compressions. */
   analyze(): Promise<FeedbackResult>;
+  /** CO step: analyze what was over-preserved in successful compressions. */
+  analyzeOverPreservation(): Promise<OverPreservationResult>;
   readonly pairs: readonly CompressionPair[];
+};
+
+export type DistillationPair = {
+  input: string;
+  output: string;
 };
 
 export type Message = {
