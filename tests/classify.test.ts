@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyMessage } from '../src/classify.js';
+import { classifyMessage, detectReasoningChain } from '../src/classify.js';
 
 describe('classifyMessage', () => {
   describe('T0 — verbatim required', () => {
@@ -627,6 +627,24 @@ describe('classifyMessage', () => {
       expect(r.decision).toBe('T0');
       expect(r.reasons).toContain('reasoning_chain');
     });
+
+    it('detects "step-by-step:" label (mixed case)', () => {
+      const r = classifyMessage(
+        'step-by-step: First we parse the input. Then we validate. Finally we persist.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct sequence markers alone (Firstly, Secondly, In conclusion)', () => {
+      const r = classifyMessage(
+        'Firstly, the connection is established with TLS. ' +
+          'Secondly, the handshake negotiates cipher suites. ' +
+          'In conclusion, the channel is secured before any payload is sent.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
   });
 
   describe('reasoning chain — false-positive resistance', () => {
@@ -679,6 +697,71 @@ describe('classifyMessage', () => {
         'So I went to the store and then I picked up some groceries. Then I drove home and made dinner.',
       );
       expect(r.reasons).not.toContain('reasoning_chain');
+    });
+  });
+
+  describe('detectReasoningChain (direct unit tests)', () => {
+    it('returns true for strong anchor label', () => {
+      expect(detectReasoningChain('Proof: By induction on n.')).toBe(true);
+    });
+
+    it('returns true for formal inference', () => {
+      expect(detectReasoningChain('Since x > 0, we can deduce that f(x) is positive.')).toBe(true);
+    });
+
+    it('returns true for ∴ symbol', () => {
+      expect(detectReasoningChain('P → Q, P ∴ Q')).toBe(true);
+    });
+
+    it('returns true for 3+ distinct weak anchors', () => {
+      expect(detectReasoningChain('Therefore A. Hence B. Consequently C.')).toBe(true);
+    });
+
+    it('returns true for 3+ distinct sequence markers', () => {
+      expect(
+        detectReasoningChain('Firstly we check. Secondly we validate. In summary it works.'),
+      ).toBe(true);
+    });
+
+    it('returns true for mixed weak anchors and sequence markers totaling 3+', () => {
+      expect(
+        detectReasoningChain(
+          'Firstly the input is parsed. Therefore the AST is built. Hence the output is correct.',
+        ),
+      ).toBe(true);
+    });
+
+    it('returns false for 0 anchors', () => {
+      expect(detectReasoningChain('The sky is blue and the grass is green.')).toBe(false);
+    });
+
+    it('returns false for 1 weak anchor only', () => {
+      expect(detectReasoningChain('Therefore the meeting is postponed.')).toBe(false);
+    });
+
+    it('returns false for 2 weak anchors (below threshold)', () => {
+      expect(detectReasoningChain('Therefore A. Hence B.')).toBe(false);
+    });
+
+    it('returns false for numbered steps without any connective', () => {
+      expect(detectReasoningChain('Step 1: Unbox.\nStep 2: Plug in.\nStep 3: Power on.')).toBe(
+        false,
+      );
+    });
+
+    it('returns true for numbered steps with 1 weak anchor', () => {
+      expect(
+        detectReasoningChain(
+          'Step 1: Read input.\nStep 2: Parse tokens.\nStep 3: Build AST.\nTherefore the program compiles.',
+        ),
+      ).toBe(true);
+    });
+
+    it('is stateless across repeated calls (g-flag safety)', () => {
+      const text = 'Therefore A. Hence B. Consequently C.';
+      expect(detectReasoningChain(text)).toBe(true);
+      expect(detectReasoningChain(text)).toBe(true);
+      expect(detectReasoningChain(text)).toBe(true);
     });
   });
 

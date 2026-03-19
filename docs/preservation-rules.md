@@ -49,6 +49,7 @@ Content with structural patterns that would be destroyed by summarization.
 | `unicode_math`              | Mathematical symbols                                                                                           |
 | `sql_content`               | SQL keyword density (strong anchors like `GROUP BY`, `PRIMARY KEY` or 3+ distinct keywords with a weak anchor) |
 | `verse_pattern`             | Poetry/verse pattern (consecutive capitalized lines without terminal punctuation)                              |
+| `reasoning_chain`           | Reasoning chains: explicit labels (`Reasoning:`, `Proof:`), formal inference, or 3+ logical connectives        |
 
 **Soft T0 reasons** (do not prevent compression):
 

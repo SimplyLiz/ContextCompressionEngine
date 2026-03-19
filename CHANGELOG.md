@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-19
+
+### Added
+
+- Reasoning chain detection in classifier — preserves chain-of-thought, step-by-step analysis, formal proofs, and multi-step logical arguments as hard T0 (verbatim). Uses two-tier anchor system: strong anchors (explicit labels like `Reasoning:`, formal inference phrases) trigger on a single match; weak anchors (logical connectives like `therefore`, `hence`, `thus`) require 3+ distinct to fire. Defense-in-depth scoring boost in the summarizer ensures reasoning sentences survive even if classification is bypassed.
+
 ## [1.0.0] - 2025-02-24
 
 First stable release. Published as `context-compression-engine`.
@@ -34,4 +40,5 @@ First stable release. Published as `context-compression-engine`.
 - Benchmark suite with synthetic and real-session scenarios
 - LLM benchmark with multi-provider support (Claude, GPT, Gemini, Grok, Ollama)
 
+[1.1.0]: https://github.com/SimplyLiz/ContextCompressionEngine/releases/tag/v1.1.0
 [1.0.0]: https://github.com/SimplyLiz/ContextCompressionEngine/releases/tag/v1.0.0

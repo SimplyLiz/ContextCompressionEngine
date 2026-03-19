@@ -152,13 +152,15 @@ const REASONING_STRONG_RE =
   /^[ \t]*(?:Reasoning|Analysis|Conclusion|Proof|Derivation|Chain of Thought|Step[- ]by[- ]step)\s*:/im;
 const REASONING_INFERENCE_RE =
   /\b(?:it follows that|we can (?:conclude|deduce|infer)|this (?:implies|proves) that|QED)\b|∴/i;
+// Note: `g` flag is safe here — these regexes are only used via String.match(),
+// which ignores lastIndex. Do NOT use .test()/.exec() on them without resetting.
 const REASONING_WEAK_ANCHORS_RE =
   /\b(?:therefore|hence|thus|consequently|accordingly|this means that|as a result|because of this|which (?:implies|means|shows)|given that|assuming that|since we know)\b/gi;
 const NUMBERED_STEP_RE = /(?:^|\n)\s*(?:Step\s+\d+[:.)]|\d+[.)]\s)/gi;
 const SEQUENCE_MARKERS_RE =
-  /\b(?:Let me (?:think|reason|analyze)|Let's (?:consider|break this down)|(?:First(?:ly)?|Second(?:ly)?|Third(?:ly)?)\b.*?\b(?:then|next|second(?:ly)?|third(?:ly)?)|In conclusion|To summarize|In summary)\b/i;
+  /\b(?:Let me (?:think|reason|analyze)|Let's (?:consider|break this down)|First(?:ly)?|Second(?:ly)?|Third(?:ly)?|In conclusion|To summarize|In summary)\b/gi;
 
-function detectReasoningChain(text: string): boolean {
+export function detectReasoningChain(text: string): boolean {
   // 1+ strong anchor → unambiguous reasoning chain
   if (REASONING_STRONG_RE.test(text)) return true;
   if (REASONING_INFERENCE_RE.test(text)) return true;
@@ -169,8 +171,11 @@ function detectReasoningChain(text: string): boolean {
     ? new Set(weakMatches.map((m) => m.toLowerCase().replace(/\s+/g, ' '))).size
     : 0;
 
-  // Sequence markers count as 1 weak anchor
-  const seqCount = SEQUENCE_MARKERS_RE.test(text) ? 1 : 0;
+  // Count distinct sequence markers (each counts as 1 weak anchor)
+  const seqMatches = text.match(SEQUENCE_MARKERS_RE);
+  const seqCount = seqMatches
+    ? new Set(seqMatches.map((m) => m.toLowerCase().replace(/\s+/g, ' '))).size
+    : 0;
 
   // 3+ numbered steps AND 1+ weak anchor → reasoning chain
   const stepMatches = text.match(NUMBERED_STEP_RE);
