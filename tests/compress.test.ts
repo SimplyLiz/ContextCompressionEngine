@@ -3071,4 +3071,76 @@ describe('compression decision audit trail (trace)', () => {
       expect(original).toBeUndefined();
     });
   });
+
+  describe('compressionThreshold', () => {
+    const longProse = 'This is a detailed explanation of the architecture. '.repeat(30);
+    const messages: Message[] = [
+      msg({ id: '1', index: 0, role: 'user', content: longProse }),
+      msg({ id: '2', index: 1, role: 'assistant', content: longProse }),
+      msg({ id: '3', index: 2, role: 'user', content: 'Follow up question here.' }),
+      msg({ id: '4', index: 3, role: 'assistant', content: 'Short answer.' }),
+    ];
+
+    function totalTokens(msgs: Message[]): number {
+      return msgs.reduce((sum, m) => sum + estimateTokens(m), 0);
+    }
+
+    it('returns messages unmodified when below threshold', () => {
+      const total = totalTokens(messages);
+      const result = compress(messages, { compressionThreshold: total + 100 });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.ratio).toBe(1);
+      expect(result.compression.messages_compressed).toBe(0);
+      expect(result.compression.messages_preserved).toBe(messages.length);
+      expect(result.verbatim).toEqual({});
+    });
+
+    it('runs compression at exact threshold', () => {
+      const total = totalTokens(messages);
+      const result = compress(messages, { compressionThreshold: total, recencyWindow: 2 });
+      // At threshold (not below), compression should run
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('runs compression above threshold', () => {
+      const result = compress(messages, { compressionThreshold: 1, recencyWindow: 2 });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('works with custom tokenCounter', () => {
+      const counter = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
+      const total = messages.reduce((sum, m) => sum + counter(m), 0);
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        tokenCounter: counter,
+      });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.ratio).toBe(1);
+    });
+
+    it('works alongside tokenBudget', () => {
+      const total = totalTokens(messages);
+      // Below threshold: skip compression even though tokenBudget is set
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        tokenBudget: 50,
+      });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.messages_compressed).toBe(0);
+    });
+
+    it('returns Promise when summarizer is set and below threshold', async () => {
+      const total = totalTokens(messages);
+      const summarizer = vi.fn().mockResolvedValue('summary');
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        summarizer,
+      });
+      expect(result).toBeInstanceOf(Promise);
+      const resolved = await result;
+      expect(resolved.messages).toBe(messages);
+      expect(resolved.compression.ratio).toBe(1);
+      expect(summarizer).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -61,6 +61,8 @@ export type CompressOptions = {
   summarizer?: Summarizer;
   /** Target token budget. When set, compress binary-searches recencyWindow to fit. */
   tokenBudget?: number;
+  /** Skip compression entirely when total input tokens are below this threshold. Returns messages unmodified. */
+  compressionThreshold?: number;
   /** Minimum recencyWindow when using tokenBudget. Default: 0. */
   minRecencyWindow?: number;
   /** Replace earlier duplicate messages with a compact reference. Default: true. */
@@ -145,6 +147,26 @@ export type CompressResult = {
   tokenCount?: number;
   /** The recencyWindow the binary search settled on. Present when tokenBudget is used. */
   recencyWindow?: number;
+};
+
+export type TaskOutcome = { success: boolean; error?: string };
+
+export type CompressionPair = {
+  original: Message[];
+  compressed: Message[];
+  outcome: TaskOutcome;
+};
+
+export type FeedbackResult = {
+  lostPatterns: string[];
+  suggestedTerms: string[];
+  guidelines: string[];
+};
+
+export type FeedbackCollector = {
+  add(original: Message[], compressed: Message[], outcome: TaskOutcome): void;
+  analyze(): Promise<FeedbackResult>;
+  readonly pairs: readonly CompressionPair[];
 };
 
 export type Message = {

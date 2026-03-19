@@ -1487,6 +1487,25 @@ export function compress(
     }
   }
 
+  if (options.compressionThreshold != null) {
+    const counter = options.tokenCounter ?? defaultTokenCounter;
+    const total = sumTokens(messages, counter);
+    if (total < options.compressionThreshold) {
+      const fast: CompressResult = {
+        messages,
+        compression: {
+          original_version: options.sourceVersion ?? 0,
+          ratio: 1,
+          token_ratio: 1,
+          messages_compressed: 0,
+          messages_preserved: messages.length,
+        },
+        verbatim: {},
+      };
+      return options.summarizer || options.classifier ? Promise.resolve(fast) : fast;
+    }
+  }
+
   const hasSummarizer = !!options.summarizer;
   const hasClassifier = !!options.classifier;
   const hasBudget = options.tokenBudget != null;
