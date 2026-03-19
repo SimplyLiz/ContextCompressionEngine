@@ -215,6 +215,122 @@ const summarizer = async (text: string) => {
 };
 ```
 
+## Classifier interface
+
+```ts
+type Classifier = (content: string) => ClassifierResult | Promise<ClassifierResult>;
+type ClassifierResult = { decision: 'preserve' | 'compress'; confidence: number; reason: string };
+```
+
+The classifier decides whether each message should be preserved verbatim or compressed. It complements the summarizer — the summarizer controls _how_ to compress, the classifier controls _what_ to compress.
+
+## `createClassifier`
+
+Wraps your LLM call with a classification prompt:
+
+```ts
+import { createClassifier, compress } from 'context-compression-engine';
+
+const classifier = createClassifier(async (prompt) => myLlm.complete(prompt), {
+  systemPrompt: 'You are classifying content from legal documents.',
+  alwaysPreserve: ['clause references', 'defined terms', 'party names'],
+  alwaysCompress: ['boilerplate acknowledgments'],
+});
+
+const result = await compress(messages, { classifier });
+```
+
+### Domain examples
+
+**Legal:**
+
+```ts
+const classifier = createClassifier(callLlm, {
+  systemPrompt:
+    'You are classifying content from legal documents (contracts, briefs, court filings).',
+  alwaysPreserve: [
+    'clause references and numbers (e.g., Section 4.2, Article III)',
+    'defined terms (capitalized terms with specific legal meaning)',
+    'party names and roles',
+    'dates, deadlines, and time periods',
+    'monetary amounts and payment terms',
+    'obligations (shall, must, agrees to)',
+  ],
+  alwaysCompress: [
+    'recitals and background context already summarized',
+    'boilerplate acknowledgments',
+    'procedural correspondence (scheduling, confirmations)',
+  ],
+});
+```
+
+**Medical:**
+
+```ts
+const classifier = createClassifier(callLlm, {
+  systemPrompt: 'You are classifying content from medical records and clinical notes.',
+  alwaysPreserve: [
+    'diagnoses and ICD codes',
+    'medication names, dosages, and frequencies',
+    'lab values and vital signs with numbers',
+    'allergies and contraindications',
+    'procedure descriptions and outcomes',
+  ],
+  alwaysCompress: [
+    'general health education text',
+    'administrative notes about scheduling',
+    'repeated disclaimer language',
+  ],
+});
+```
+
+**Academic:**
+
+```ts
+const classifier = createClassifier(callLlm, {
+  systemPrompt: 'You are classifying content from academic papers and research documents.',
+  alwaysPreserve: [
+    'citations and references (author names, years, DOIs)',
+    'statistical results (p-values, confidence intervals, effect sizes)',
+    'methodology descriptions',
+    'theorem statements and proofs',
+  ],
+  alwaysCompress: [
+    'literature review summaries of well-known background',
+    'verbose transitions between sections',
+    'acknowledgments and funding boilerplate',
+  ],
+});
+```
+
+## `createEscalatingClassifier`
+
+Tries the LLM first, falls back to heuristic classification on failure:
+
+```ts
+import { createEscalatingClassifier, compress } from 'context-compression-engine';
+
+const classifier = createEscalatingClassifier(async (prompt) => myLlm.complete(prompt), {
+  systemPrompt: 'Legal documents.',
+});
+
+const result = await compress(messages, { classifier });
+```
+
+If the LLM throws, returns unparseable output, or returns confidence=0, the escalating classifier falls back to the built-in heuristic `classifyMessage()`. Hard T0 heuristic results become `preserve`, everything else becomes `compress`.
+
+## Classifier + Summarizer
+
+Both can be used together. The classifier decides _what_ to compress, the summarizer decides _how_:
+
+```ts
+const result = await compress(messages, {
+  classifier,
+  summarizer,
+  classifierMode: 'hybrid',
+});
+```
+
 ## Model recommendations
 
 Fast, cheap models work best for compression summarization. The task is straightforward (shorten text while preserving technical terms), so frontier models are overkill.

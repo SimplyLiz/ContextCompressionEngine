@@ -8,20 +8,21 @@ What gets preserved, what gets compressed, and why.
 
 Messages are evaluated in this order. The **first matching rule** determines the outcome:
 
-| Priority | Rule                                                        | Outcome         |
-| -------- | ----------------------------------------------------------- | --------------- |
-| 1        | Role in `preserve` list                                     | Preserved       |
-| 2        | Within `recencyWindow`                                      | Preserved       |
-| 3        | Has `tool_calls` array                                      | Preserved       |
-| 4        | Content < 120 chars                                         | Preserved       |
-| 5        | Already compressed (`[summary:`, `[summary#`, `[truncated`) | Preserved       |
-| 6        | Duplicate (exact or fuzzy)                                  | Dedup path      |
-| 7        | Code fences + prose >= 80 chars                             | Code-split path |
-| 8        | Code fences + prose < 80 chars                              | Preserved       |
-| 9        | Hard T0 classification                                      | Preserved       |
-| 10       | Custom `preservePatterns` match                             | Preserved       |
-| 11       | Valid JSON                                                  | Preserved       |
-| 12       | Everything else                                             | Compressed      |
+| Priority | Rule                                                        | Outcome                   |
+| -------- | ----------------------------------------------------------- | ------------------------- |
+| 1        | Role in `preserve` list                                     | Preserved                 |
+| 2        | Within `recencyWindow`                                      | Preserved                 |
+| 3        | Has `tool_calls` array                                      | Preserved                 |
+| 4        | Content < 120 chars                                         | Preserved                 |
+| 5        | Already compressed (`[summary:`, `[summary#`, `[truncated`) | Preserved                 |
+| 6        | Duplicate (exact or fuzzy)                                  | Dedup path                |
+| 7        | Code fences + prose >= 80 chars                             | Code-split path           |
+| 8        | Code fences + prose < 80 chars                              | Preserved                 |
+| 9        | Hard T0 classification (skipped in `full` mode)             | Preserved                 |
+| 10       | Custom `preservePatterns` match                             | Preserved                 |
+| 11       | LLM classifier (when `classifier` is provided)              | Preserved or fall through |
+| 12       | Valid JSON                                                  | Preserved                 |
+| 13       | Everything else                                             | Compressed                |
 
 Soft T0 classifications (file paths, URLs, version numbers, etc.) do **not** prevent compression — entities capture the important references, and the prose is still compressible.
 
@@ -192,6 +193,36 @@ preservePatterns: [
 ```
 
 The stat `compression.messages_pattern_preserved` reports how many messages were preserved by custom patterns.
+
+### `classifier` option
+
+LLM-powered classification for domain-specific content. When provided, `compress()` returns a `Promise`. The classifier runs once before the pipeline (pre-classification) so that `tokenBudget` binary search doesn't re-classify messages on each iteration.
+
+The `classifierMode` option controls how the LLM classifier interacts with heuristics:
+
+| Mode       | Behavior                                                               | When to use                                   |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| `'hybrid'` | Heuristics first; LLM only for messages that aren't hard T0 (default)  | Best cost/accuracy tradeoff. Most use cases.  |
+| `'full'`   | Heuristic classification skipped; LLM classifies all eligible messages | Domain content where heuristics add no value. |
+
+In both modes, standard preservation rules (role, recency window, tool_calls, short content, already-compressed) still apply — the classifier only sees messages that pass those checks.
+
+```ts
+import { createClassifier, compress } from 'context-compression-engine';
+
+const classifier = createClassifier(callLlm, {
+  systemPrompt: 'You are classifying content from medical records.',
+  alwaysPreserve: ['diagnoses', 'medication dosages', 'lab values'],
+});
+
+const result = await compress(messages, {
+  classifier,
+  classifierMode: 'hybrid',
+});
+
+console.log(result.compression.messages_llm_classified); // messages sent to LLM
+console.log(result.compression.messages_llm_preserved); // messages LLM decided to preserve
+```
 
 ---
 

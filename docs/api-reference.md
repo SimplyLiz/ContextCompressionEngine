@@ -14,11 +14,15 @@ export type { StoreLookup } from './expand.js';
 
 // Helpers (LLM integration)
 export { createSummarizer, createEscalatingSummarizer } from './summarizer.js';
+export { createClassifier, createEscalatingClassifier } from './classifier.js';
 
 // Types
 export type {
+  Classifier,
+  ClassifierResult,
   CompressOptions,
   CompressResult,
+  CreateClassifierOptions,
   CreateSummarizerOptions,
   Message,
   Summarizer,
@@ -32,7 +36,7 @@ export type {
 
 ## `compress`
 
-Deterministic compression by default. Returns a `Promise` when a `summarizer` is provided.
+Deterministic compression by default. Returns a `Promise` when a `summarizer` or `classifier` is provided.
 
 ### Signatures
 
@@ -41,6 +45,10 @@ function compress(messages: Message[], options?: CompressOptions): CompressResul
 function compress(
   messages: Message[],
   options: CompressOptions & { summarizer: Summarizer },
+): Promise<CompressResult>;
+function compress(
+  messages: Message[],
+  options: CompressOptions & { classifier: Classifier },
 ): Promise<CompressResult>;
 ```
 
@@ -53,21 +61,23 @@ function compress(
 
 ### CompressOptions
 
-| Option             | Type                                   | Default               | Description                                                                                                        |
-| ------------------ | -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `preserve`         | `string[]`                             | `['system']`          | Roles to never compress                                                                                            |
-| `recencyWindow`    | `number`                               | `4`                   | Protect the last N messages from compression                                                                       |
-| `sourceVersion`    | `number`                               | `0`                   | Version tag for [provenance tracking](provenance.md)                                                               |
-| `summarizer`       | `Summarizer`                           | -                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md) |
-| `tokenBudget`      | `number`                               | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md)                    |
-| `minRecencyWindow` | `number`                               | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                                                 |
-| `dedup`            | `boolean`                              | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md)           |
-| `fuzzyDedup`       | `boolean`                              | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md)                  |
-| `fuzzyThreshold`   | `number`                               | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                                         |
-| `embedSummaryId`   | `boolean`                              | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md)                 |
-| `forceConverge`    | `boolean`                              | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md)             |
-| `preservePatterns` | `Array<{ re: RegExp; label: string }>` | -                     | Custom regex patterns that force hard T0 preservation. See [Preservation rules](preservation-rules.md)             |
-| `tokenCounter`     | `(msg: Message) => number`             | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                                              |
+| Option             | Type                                   | Default               | Description                                                                                                                    |
+| ------------------ | -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `preserve`         | `string[]`                             | `['system']`          | Roles to never compress                                                                                                        |
+| `recencyWindow`    | `number`                               | `4`                   | Protect the last N messages from compression                                                                                   |
+| `sourceVersion`    | `number`                               | `0`                   | Version tag for [provenance tracking](provenance.md)                                                                           |
+| `summarizer`       | `Summarizer`                           | -                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)             |
+| `tokenBudget`      | `number`                               | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md)                                |
+| `minRecencyWindow` | `number`                               | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                                                             |
+| `dedup`            | `boolean`                              | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md)                       |
+| `fuzzyDedup`       | `boolean`                              | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md)                              |
+| `fuzzyThreshold`   | `number`                               | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                                                     |
+| `embedSummaryId`   | `boolean`                              | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md)                             |
+| `forceConverge`    | `boolean`                              | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md)                         |
+| `preservePatterns` | `Array<{ re: RegExp; label: string }>` | -                     | Custom regex patterns that force hard T0 preservation. See [Preservation rules](preservation-rules.md)                         |
+| `classifier`       | `Classifier`                           | -                     | LLM-powered classifier. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)             |
+| `classifierMode`   | `'hybrid' \| 'full'`                   | `'hybrid'`            | Classification mode. `'hybrid'`: heuristics first, LLM for prose. `'full'`: LLM for all eligible. Ignored without `classifier` |
+| `tokenCounter`     | `(msg: Message) => number`             | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                                                          |
 
 ### CompressResult
 
@@ -83,6 +93,8 @@ function compress(
 | `compression.messages_deduped`           | `number \| undefined`  | Exact duplicates replaced (when `dedup: true`)                                      |
 | `compression.messages_fuzzy_deduped`     | `number \| undefined`  | Near-duplicates replaced (when `fuzzyDedup: true`)                                  |
 | `compression.messages_pattern_preserved` | `number \| undefined`  | Messages preserved by `preservePatterns` (when patterns are provided)               |
+| `compression.messages_llm_classified`    | `number \| undefined`  | Messages classified by LLM (when `classifier` is provided)                          |
+| `compression.messages_llm_preserved`     | `number \| undefined`  | Messages where LLM decided to preserve (when `classifier` is provided)              |
 | `fits`                                   | `boolean \| undefined` | Whether result fits within `tokenBudget`. Present when `tokenBudget` is set         |
 | `tokenCount`                             | `number \| undefined`  | Estimated token count. Present when `tokenBudget` is set                            |
 | `recencyWindow`                          | `number \| undefined`  | The `recencyWindow` the binary search settled on. Present when `tokenBudget` is set |
@@ -253,6 +265,68 @@ Same as `CreateSummarizerOptions` but without `mode` (managed internally).
 
 ---
 
+## `createClassifier`
+
+Creates an LLM-powered classifier that decides whether messages should be preserved or compressed. See [LLM integration](llm-integration.md) for domain examples.
+
+### Signature
+
+```ts
+function createClassifier(
+  callLlm: (prompt: string) => string | Promise<string>,
+  options?: CreateClassifierOptions,
+): Classifier;
+```
+
+### CreateClassifierOptions
+
+| Option              | Type       | Default | Description                                                         |
+| ------------------- | ---------- | ------- | ------------------------------------------------------------------- |
+| `maxResponseTokens` | `number`   | `100`   | Hint for maximum tokens in the LLM response                         |
+| `systemPrompt`      | `string`   | -       | Domain-specific instructions prepended to the classification prompt |
+| `alwaysPreserve`    | `string[]` | -       | Content types to always preserve, injected as bullet points         |
+| `alwaysCompress`    | `string[]` | -       | Content types always safe to compress, injected as bullet points    |
+
+### Example
+
+```ts
+import { createClassifier, compress } from 'context-compression-engine';
+
+const classifier = createClassifier(async (prompt) => myLlm.complete(prompt), {
+  systemPrompt: 'You are classifying content from legal documents.',
+  alwaysPreserve: ['clause references', 'defined terms', 'party names'],
+  alwaysCompress: ['boilerplate acknowledgments', 'scheduling correspondence'],
+});
+
+const result = await compress(messages, { classifier });
+```
+
+---
+
+## `createEscalatingClassifier`
+
+Two-level escalation classifier. Tries LLM first, falls back to heuristic `classifyMessage()` on failure.
+
+### Signature
+
+```ts
+function createEscalatingClassifier(
+  callLlm: (prompt: string) => string | Promise<string>,
+  options?: CreateClassifierOptions,
+): Classifier;
+```
+
+### Escalation levels
+
+1. **Level 1: LLM** - send content to LLM, parse structured JSON response
+2. **Level 2: Heuristic** - if LLM throws, returns unparseable output, or confidence=0, fall back to `classifyMessage()`. Hard T0 heuristic results map to `preserve`, everything else to `compress`.
+
+### Options
+
+Same as `CreateClassifierOptions`.
+
+---
+
 ## Types
 
 ### `Message`
@@ -279,6 +353,22 @@ type Summarizer = (text: string) => string | Promise<string>;
 
 ```ts
 type VerbatimMap = Record<string, Message>;
+```
+
+### `Classifier`
+
+```ts
+type Classifier = (content: string) => ClassifierResult | Promise<ClassifierResult>;
+```
+
+### `ClassifierResult`
+
+```ts
+type ClassifierResult = {
+  decision: 'preserve' | 'compress';
+  confidence: number;
+  reason: string;
+};
 ```
 
 ### `StoreLookup`

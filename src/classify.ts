@@ -218,6 +218,23 @@ function inferProseTier(text: string): 'T2' | 'T3' {
 
 // -- Main classifier entry point --
 
+// Hard T0 reasons: genuinely structural content that can't be summarized.
+// Soft T0 reasons (file_path, url, version_number, etc.): incidental
+// references in prose — entities capture them, prose is still compressible.
+export const HARD_T0_REASONS = new Set([
+  'code_fence',
+  'indented_code',
+  'json_structure',
+  'yaml_structure',
+  'high_special_char_ratio',
+  'high_line_length_variance',
+  'api_key',
+  'latex_math',
+  'unicode_math',
+  'sql_content',
+  'verse_pattern',
+]);
+
 export function classifyMessage(content: string): ClassifyResult {
   const structural = detectStructuralPatterns(content);
   const contentTypes = detectContentTypes(content);
