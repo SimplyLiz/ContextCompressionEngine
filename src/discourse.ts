@@ -118,13 +118,31 @@ function splitClauses(sentence: string): string[] {
 
 /**
  * Score EDUs using an external scorer function.
- * Falls back to length-based scoring if no scorer provided.
+ * Default scorer rewards information density: technical identifiers,
+ * numbers with units, emphasis phrases — same signals as the main scorer.
  */
 export function scoreEDUs(edus: EDU[], scorer?: (text: string) => number): EDU[] {
   return edus.map((edu) => ({
     ...edu,
-    score: scorer ? scorer(edu.text) : edu.text.length / 20, // simple length heuristic
+    score: scorer ? scorer(edu.text) : defaultEduScore(edu.text),
   }));
+}
+
+function defaultEduScore(text: string): number {
+  let score = 0;
+  // Technical identifiers
+  score += (text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g) ?? []).length * 3; // camelCase
+  score += (text.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g) ?? []).length * 3; // PascalCase
+  score += (text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? []).length * 3; // snake_case
+  // Numbers with units
+  score += (text.match(/\b\d+(?:\.\d+)?\s*(?:seconds?|ms|MB|GB|retries?|%)\b/gi) ?? []).length * 2;
+  // Emphasis
+  if (/\b(?:important|critical|must|never|always|require)\b/i.test(text)) score += 4;
+  // Penalize filler starts
+  if (/^(?:well|sure|ok|thanks|great|right|yes)\b/i.test(text.trim())) score -= 5;
+  // Baseline: modest length bonus (prefer substance over brevity, but not bloat)
+  score += Math.min(text.length / 50, 2);
+  return score;
 }
 
 /**

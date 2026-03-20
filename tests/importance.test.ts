@@ -99,7 +99,7 @@ describe('computeImportance', () => {
 });
 
 describe('DEFAULT_IMPORTANCE_THRESHOLD', () => {
-  it('is 0.35', () => {
-    expect(DEFAULT_IMPORTANCE_THRESHOLD).toBe(0.35);
+  it('is 0.65', () => {
+    expect(DEFAULT_IMPORTANCE_THRESHOLD).toBe(0.65);
   });
 });

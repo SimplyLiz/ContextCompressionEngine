@@ -134,7 +134,7 @@ export type CompressOptions = {
    *  and forceConverge truncates low-importance messages first. Default: false. */
   importanceScoring?: boolean;
   /** Importance threshold for preservation (0–1). Messages scoring above this
-   *  are preserved even outside the recency window. Default: 0.35. */
+   *  are preserved even outside the recency window. Default: 0.65. */
   importanceThreshold?: number;
   /** Enable contradiction detection. When true, later messages that correct
    *  earlier ones cause the earlier message to be compressed while the

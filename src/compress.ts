@@ -919,6 +919,16 @@ function* compressGen(
   while (i < classified.length) {
     const { msg, preserved } = classified[i];
 
+    // Skip messages already consumed by a processed flow chain or cluster
+    if (flowChainMap.has(i) && processedFlowChains.has(flowChainMap.get(i)!)) {
+      i++;
+      continue;
+    }
+    if (clusterMap.has(i) && processedClusters.has(clusterMap.get(i)!)) {
+      i++;
+      continue;
+    }
+
     // Flow chain: compress the entire chain as a unit
     if (flowChainMap.has(i) && !processedFlowChains.has(flowChainMap.get(i)!)) {
       const chain = flowChainMap.get(i)!;
@@ -969,9 +979,10 @@ function* compressGen(
             }
           }
 
-          // Skip all chain members
-          const maxIdx = Math.max(...chain.indices);
-          if (i <= maxIdx) i = maxIdx + 1;
+          // Advance past current index only — non-chain messages between
+          // chain members will be processed normally on subsequent iterations.
+          // The processedFlowChains set prevents re-entering this chain.
+          i++;
           continue;
         }
       }
@@ -1021,8 +1032,7 @@ function* compressGen(
               });
             }
           }
-          const maxIdx = Math.max(...cluster.indices);
-          if (i <= maxIdx) i = maxIdx + 1;
+          i++;
           continue;
         }
       }
