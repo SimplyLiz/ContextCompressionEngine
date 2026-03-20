@@ -276,6 +276,17 @@ export function clusterMessages(
     .filter((c) => c.length >= 2)
     .map((indices) => {
       indices.sort((a, b) => a - b);
+      return indices;
+    })
+    // Only keep clusters with consecutive indices — non-consecutive merges
+    // break round-trip because uncompress can't restore interleaved ordering
+    .filter((indices) => {
+      for (let k = 1; k < indices.length; k++) {
+        if (indices[k] !== indices[k - 1] + 1) return false;
+      }
+      return true;
+    })
+    .map((indices) => {
       // Find shared entities
       const entityCounts = new Map<string, number>();
       for (const idx of indices) {

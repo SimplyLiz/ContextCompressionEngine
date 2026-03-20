@@ -8,25 +8,25 @@ function msg(id: string, content: string, role = 'user'): Message {
 }
 
 describe('clusterMessages', () => {
-  it('clusters messages with shared entities', () => {
+  it('clusters consecutive messages with shared entities', () => {
     const messages: Message[] = [
       msg(
         '1',
         'The fetchData function handles API calls with retry logic and exponential backoff.',
       ),
-      msg('2', 'The getUserProfile function returns the complete user object from the database.'),
-      msg('3', 'Update fetchData to add circuit breaker pattern for better fault tolerance.'),
+      msg('2', 'Update fetchData to add circuit breaker pattern for better fault tolerance.'),
+      msg('3', 'The getUserProfile function returns the complete user object from the database.'),
       msg('4', 'The getUserProfile query should be optimized with proper indexes.'),
     ];
 
     const clusters = clusterMessages(messages, [0, 1, 2, 3], 0.1);
-    // Should group messages about fetchData together and getUserProfile together
+    // Should group consecutive messages about fetchData together
     expect(clusters.length).toBeGreaterThan(0);
 
     const fetchCluster = clusters.find((c) => c.sharedEntities.includes('fetchData'));
     if (fetchCluster) {
       expect(fetchCluster.indices).toContain(0);
-      expect(fetchCluster.indices).toContain(2);
+      expect(fetchCluster.indices).toContain(1);
     }
   });
 

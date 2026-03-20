@@ -932,7 +932,6 @@ function* compressGen(
     // Flow chain: compress the entire chain as a unit
     if (flowChainMap.has(i) && !processedFlowChains.has(flowChainMap.get(i)!)) {
       const chain = flowChainMap.get(i)!;
-      processedFlowChains.add(chain);
 
       // Check if chain members can be flow-compressed. Allow overriding soft
       // preservation (recency, short_content, soft T0) but not hard blocks
@@ -961,6 +960,7 @@ function* compressGen(
         const tag = `[summary: ${chainSummary} (${chain.indices.length} messages, ${chain.type})]`;
 
         if (tag.length < combinedLength) {
+          processedFlowChains.add(chain);
           const base: Message = { ...sourceMsgs[0] };
           result.push(
             buildCompressedMessage(base, chainIds, tag, sourceVersion, verbatim, sourceMsgs),
@@ -992,7 +992,6 @@ function* compressGen(
     // Semantic cluster: compress all cluster members as a unit
     if (clusterMap.has(i) && !processedClusters.has(clusterMap.get(i)!)) {
       const cluster = clusterMap.get(i)!;
-      processedClusters.add(cluster);
 
       const allCompressible = cluster.indices.every((idx) => {
         const c = classified[idx];
@@ -1015,6 +1014,7 @@ function* compressGen(
         const tag = `[summary: ${clusterSummary}]`;
 
         if (tag.length < combinedLength) {
+          processedClusters.add(cluster);
           const base: Message = { ...sourceMsgs[0] };
           result.push(
             buildCompressedMessage(base, clusterIds, tag, sourceVersion, verbatim, sourceMsgs),
