@@ -1,6 +1,6 @@
 {
   "name": "context-compression-engine",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lossless context compression engine for LLMs",
   "type": "module",
   "engines": {
@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary --coverage.reportsDirectory=coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

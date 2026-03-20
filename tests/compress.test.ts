@@ -3035,4 +3035,210 @@ describe('compression decision audit trail (trace)', () => {
     expect(truncated.length).toBeGreaterThan(0);
     expect(truncated[0].reason).toBe('force_converge');
   });
+
+  describe('reasoning chain preservation', () => {
+    it('preserves reasoning chain as hard T0 through compression', () => {
+      const reasoning =
+        'Given that the connection pool is exhausted, new requests queue up. ' +
+        'Thus the response latency increases exponentially. ' +
+        'Consequently the health check fails and the node is removed from rotation.';
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Why is the service slow?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: reasoning }),
+      ];
+      const result = compress(messages);
+      const preserved = result.messages.find((m) => m.content === reasoning);
+      expect(preserved).toBeDefined();
+    });
+
+    it('still compresses prose with a single "therefore"', () => {
+      const prose =
+        'The deployment was delayed and therefore the release notes were updated to reflect the new timeline. ' +
+        'The team worked through the weekend to prepare the documentation. ' +
+        'Everyone was pleased with the final outcome of the project. ' +
+        'The stakeholders approved the changes and we moved forward with the plan.';
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'What happened?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: prose }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks for explaining.' }),
+        msg({ id: '4', index: 3, role: 'assistant', content: 'You are welcome.' }),
+        msg({ id: '5', index: 4, role: 'user', content: 'One more question.' }),
+        msg({ id: '6', index: 5, role: 'assistant', content: 'Go ahead.' }),
+      ];
+      const result = compress(messages, { recencyWindow: 2 });
+      const original = result.messages.find((m) => m.content === prose);
+      // Single "therefore" should not prevent compression — message should be summarized
+      expect(original).toBeUndefined();
+    });
+  });
+
+  describe('compressionThreshold', () => {
+    const longProse = 'This is a detailed explanation of the architecture. '.repeat(30);
+    const messages: Message[] = [
+      msg({ id: '1', index: 0, role: 'user', content: longProse }),
+      msg({ id: '2', index: 1, role: 'assistant', content: longProse }),
+      msg({ id: '3', index: 2, role: 'user', content: 'Follow up question here.' }),
+      msg({ id: '4', index: 3, role: 'assistant', content: 'Short answer.' }),
+    ];
+
+    function totalTokens(msgs: Message[]): number {
+      return msgs.reduce((sum, m) => sum + estimateTokens(m), 0);
+    }
+
+    it('returns messages unmodified when below threshold', () => {
+      const total = totalTokens(messages);
+      const result = compress(messages, { compressionThreshold: total + 100 });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.ratio).toBe(1);
+      expect(result.compression.messages_compressed).toBe(0);
+      expect(result.compression.messages_preserved).toBe(messages.length);
+      expect(result.verbatim).toEqual({});
+    });
+
+    it('runs compression at exact threshold', () => {
+      const total = totalTokens(messages);
+      const result = compress(messages, { compressionThreshold: total, recencyWindow: 2 });
+      // At threshold (not below), compression should run
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('runs compression above threshold', () => {
+      const result = compress(messages, { compressionThreshold: 1, recencyWindow: 2 });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('works with custom tokenCounter', () => {
+      const counter = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
+      const total = messages.reduce((sum, m) => sum + counter(m), 0);
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        tokenCounter: counter,
+      });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.ratio).toBe(1);
+    });
+
+    it('works alongside tokenBudget', () => {
+      const total = totalTokens(messages);
+      // Below threshold: skip compression even though tokenBudget is set
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        tokenBudget: 50,
+      });
+      expect(result.messages).toBe(messages);
+      expect(result.compression.messages_compressed).toBe(0);
+    });
+
+    it('returns Promise when summarizer is set and below threshold', async () => {
+      const total = totalTokens(messages);
+      const summarizer = vi.fn().mockResolvedValue('summary');
+      const result = compress(messages, {
+        compressionThreshold: total + 100,
+        summarizer,
+      });
+      expect(result).toBeInstanceOf(Promise);
+      const resolved = await result;
+      expect(resolved.messages).toBe(messages);
+      expect(resolved.compression.ratio).toBe(1);
+      expect(summarizer).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('observationThreshold', () => {
+    const largeProse =
+      'This is a detailed explanation of the system architecture and design decisions. '.repeat(60);
+
+    it('compresses large recency-window messages that exceed threshold', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'What happened?' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: largeProse }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks.' }),
+      ];
+      // recencyWindow covers all messages, but observationThreshold forces compression of the large one
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+      // The large message should be compressed
+      const compressed = result.messages.find((m) => m.id === '2');
+      expect(compressed?.content).not.toBe(largeProse);
+    });
+
+    it('preserves small messages in recency window even when threshold is set', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Short question.' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: 'Short answer.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      expect(result.compression.messages_compressed).toBe(0);
+    });
+
+    it('always preserves system role regardless of observation threshold', () => {
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'system', content: largeProse }),
+        msg({ id: '2', index: 1, role: 'user', content: 'Hello.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      const systemMsg = result.messages.find((m) => m.role === 'system');
+      expect(systemMsg?.content).toBe(largeProse);
+    });
+
+    it('always preserves tool_calls messages regardless of observation threshold', () => {
+      const messages: Message[] = [
+        msg({
+          id: '1',
+          index: 0,
+          role: 'assistant',
+          content: largeProse,
+          tool_calls: [{ id: 'call_1', function: { name: 'test' } }],
+        }),
+        msg({ id: '2', index: 1, role: 'user', content: 'Done.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      const toolMsg = result.messages.find((m) => m.id === '1');
+      expect(toolMsg?.content).toBe(largeProse);
+    });
+
+    it('compresses large JSON in recency window when threshold exceeded', () => {
+      const bigJson = JSON.stringify({
+        data: Array.from({ length: 200 }, (_, i) => ({ id: i, value: `item_${i}` })),
+      });
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Get data.' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: bigJson }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Thanks.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 100,
+      });
+      // JSON would normally be preserved, but exceeds observation threshold
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+
+    it('works with custom tokenCounter', () => {
+      const counter = (m: Message) => (typeof m.content === 'string' ? m.content.length : 0);
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Q' }),
+        msg({ id: '2', index: 1, role: 'assistant', content: largeProse }),
+        msg({ id: '3', index: 2, role: 'user', content: 'Ok.' }),
+      ];
+      const result = compress(messages, {
+        recencyWindow: 10,
+        observationThreshold: 500,
+        tokenCounter: counter,
+      });
+      expect(result.compression.messages_compressed).toBeGreaterThan(0);
+    });
+  });
 });

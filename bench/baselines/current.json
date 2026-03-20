@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "generated": "2026-03-10T00:15:20.299Z",
+  "version": "1.1.0",
+  "generated": "2026-03-20T15:50:37.630Z",
   "results": {
     "basic": {
       "Coding assistant": {
@@ -187,13 +187,21 @@
       }
     },
     "bundleSize": {
+      "adapters.js": {
+        "bytes": 4196,
+        "gzipBytes": 1363
+      },
+      "classifier.js": {
+        "bytes": 4611,
+        "gzipBytes": 1593
+      },
       "classify.js": {
-        "bytes": 8074,
-        "gzipBytes": 3443
+        "bytes": 10994,
+        "gzipBytes": 4452
       },
       "compress.js": {
-        "bytes": 34466,
-        "gzipBytes": 8914
+        "bytes": 48312,
+        "gzipBytes": 10901
       },
       "dedup.js": {
         "bytes": 10260,
@@ -203,9 +211,13 @@
         "bytes": 2795,
         "gzipBytes": 934
       },
+      "feedback.js": {
+        "bytes": 11923,
+        "gzipBytes": 2941
+      },
       "index.js": {
-        "bytes": 225,
-        "gzipBytes": 159
+        "bytes": 608,
+        "gzipBytes": 311
       },
       "summarizer.js": {
         "bytes": 2542,
@@ -216,8 +228,50 @@
         "gzipBytes": 31
       },
       "total": {
-        "bytes": 58373,
-        "gzipBytes": 17338
+        "bytes": 96252,
+        "gzipBytes": 26383
+      }
+    },
+    "retention": {
+      "Coding assistant": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Long Q&A": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Tool-heavy": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Short conversation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Deep conversation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Technical explanation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Structured content": {
+        "keywordRetention": 1,
+        "entityRetention": 0.92,
+        "structuralRetention": 1
+      },
+      "Agentic coding session": {
+        "keywordRetention": 0.9166666666666666,
+        "entityRetention": 0.918918918918919,
+        "structuralRetention": 1
       }
     }
   }

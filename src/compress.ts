@@ -46,6 +46,9 @@ const FILLER_RE =
 const EMPHASIS_RE =
   /\b(?:importantly|note that|however|critical|crucial|essential|significant|notably|key point|in particular|specifically|must|require[ds]?|never|always)\b/i;
 
+const REASONING_SCORE_RE =
+  /\b(?:therefore|hence|thus|consequently|accordingly|it follows that|we can (?:conclude|deduce|infer)|this (?:implies|proves|means) that|as a result|given that|in conclusion)\b/i;
+
 function scoreSentence(sentence: string): number {
   let score = 0;
   // camelCase identifiers
@@ -56,6 +59,8 @@ function scoreSentence(sentence: string): number {
   score += (sentence.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? []).length * 3;
   // Emphasis phrases
   if (EMPHASIS_RE.test(sentence)) score += 4;
+  // Reasoning connectives — defense-in-depth so reasoning sentences survive summarization
+  if (REASONING_SCORE_RE.test(sentence)) score += 3;
   // Numbers with units
   score +=
     (
@@ -544,22 +549,29 @@ function classifyAll(
   classifierMode?: 'hybrid' | 'full',
   trace?: boolean,
   adapters?: FormatAdapter[],
+  observationThreshold?: number,
+  counter?: (msg: Message) => number,
 ): Classified[] {
   const recencyStart = Math.max(0, messages.length - recencyWindow);
 
   return messages.map((msg, idx) => {
     const content = typeof msg.content === 'string' ? msg.content : '';
 
+    // Per-message observation threshold: large messages get compressed even in recency window.
+    // System roles, tool_calls, and already-compressed messages are exempt.
+    const largeObservation =
+      observationThreshold != null && counter != null && counter(msg) > observationThreshold;
+
     if (msg.role && preserveRoles.has(msg.role)) {
       return { msg, preserved: true, ...(trace && { traceReason: 'preserved_role' }) };
     }
-    if (recencyWindow > 0 && idx >= recencyStart) {
+    if (!largeObservation && recencyWindow > 0 && idx >= recencyStart) {
       return { msg, preserved: true, ...(trace && { traceReason: 'recency_window' }) };
     }
     if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
       return { msg, preserved: true, ...(trace && { traceReason: 'tool_calls' }) };
     }
-    if (content.length < 120) {
+    if (!largeObservation && content.length < 120) {
       return { msg, preserved: true, ...(trace && { traceReason: 'short_content' }) };
     }
     if (
@@ -600,7 +612,7 @@ function classifyAll(
       const cls = classifyMessage(content);
       if (cls.decision === 'T0') {
         const hasHardReason = cls.reasons.some((r) => HARD_T0_REASONS.has(r));
-        if (hasHardReason) {
+        if (!largeObservation && hasHardReason) {
           const hardReasons = cls.reasons.filter((r) => HARD_T0_REASONS.has(r));
           return {
             msg,
@@ -635,7 +647,7 @@ function classifyAll(
       }
       // decision === 'compress' — fall through
     }
-    if (content && isValidJson(content)) {
+    if (!largeObservation && content && isValidJson(content)) {
       return { msg, preserved: true, ...(trace && { traceReason: 'json_structure' }) };
     }
 
@@ -838,6 +850,8 @@ function* compressGen(
     classifierMode,
     trace,
     options.adapters,
+    options.observationThreshold,
+    options.observationThreshold != null ? counter : undefined,
   );
 
   const result: Message[] = [];
@@ -1479,6 +1493,25 @@ export function compress(
     }
     if (m.id == null) {
       throw new TypeError(`compress(): messages[${i}] is missing required field "id"`);
+    }
+  }
+
+  if (options.compressionThreshold != null) {
+    const counter = options.tokenCounter ?? defaultTokenCounter;
+    const total = sumTokens(messages, counter);
+    if (total < options.compressionThreshold) {
+      const fast: CompressResult = {
+        messages,
+        compression: {
+          original_version: options.sourceVersion ?? 0,
+          ratio: 1,
+          token_ratio: 1,
+          messages_compressed: 0,
+          messages_preserved: messages.length,
+        },
+        verbatim: {},
+      };
+      return options.summarizer || options.classifier ? Promise.resolve(fast) : fast;
     }
   }
 
