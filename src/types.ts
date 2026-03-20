@@ -135,6 +135,10 @@ export type CompressOptions = {
    *  - 'replace': use entropy scores only (heuristic skipped)
    *  - 'augment': weighted average of both (default when entropyScorer is set) */
   entropyScorerMode?: 'replace' | 'augment';
+  /** Enable conversation flow detection. Groups Q&A pairs, request→action→confirmation
+   *  chains, and correction sequences into compression units for better summaries.
+   *  Default: false. */
+  conversationFlow?: boolean;
   /** Budget strategy when tokenBudget is set.
    *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
    *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content

@@ -37,6 +37,10 @@ export {
 } from './importance.js';
 export type { ImportanceMap } from './importance.js';
 
+// Conversation flow detection
+export { detectFlowChains, summarizeChain } from './flow.js';
+export type { FlowChain } from './flow.js';
+
 // Entropy scoring utilities
 export { splitSentences, normalizeScores, combineScores } from './entropy.js';
 

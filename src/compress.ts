@@ -8,6 +8,7 @@ import {
 import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
 import { extractEntities, computeQualityScore } from './entities.js';
 import { combineScores } from './entropy.js';
+import { detectFlowChains, summarizeChain, type FlowChain } from './flow.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -828,6 +829,18 @@ function* compressGen(
     contradictionAnnotations,
   );
 
+  // Conversation flow detection
+  const flowChainMap = new Map<number, FlowChain>(); // message index → chain
+  if (options.conversationFlow) {
+    const recencyStart = Math.max(0, messages.length - recencyWindow);
+    const flowChains = detectFlowChains(messages, recencyStart, preserveRoles);
+    for (const chain of flowChains) {
+      for (const idx of chain.indices) {
+        flowChainMap.set(idx, chain);
+      }
+    }
+  }
+
   const result: Message[] = [];
   const verbatim: Record<string, Message> = {};
   const decisions: CompressDecision[] = [];
@@ -840,10 +853,70 @@ function* compressGen(
   let messagesRelevanceDropped = 0;
   let messagesPatternPreserved = 0;
   let messagesLlmPreserved = 0;
+  const processedFlowChains = new Set<FlowChain>();
   let i = 0;
 
   while (i < classified.length) {
     const { msg, preserved } = classified[i];
+
+    // Flow chain: compress the entire chain as a unit
+    if (flowChainMap.has(i) && !processedFlowChains.has(flowChainMap.get(i)!)) {
+      const chain = flowChainMap.get(i)!;
+      processedFlowChains.add(chain);
+
+      // Check if chain members can be flow-compressed. Allow overriding soft
+      // preservation (recency, short_content, soft T0) but not hard blocks
+      // (system role, dedup, tool_calls, already compressed).
+      const allCompressible = chain.indices.every((idx) => {
+        const c = classified[idx];
+        if (c.dedup || c.codeSplit || c.adapterMatch) return false;
+        if (c.preserved) {
+          // Block: system role, tool_calls, already compressed
+          const m = c.msg;
+          if (m.role && preserveRoles.has(m.role)) return false;
+          if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) return false;
+          const content = typeof m.content === 'string' ? m.content : '';
+          if (content.startsWith('[summary:') || content.startsWith('[truncated')) return false;
+          // Allow: recency, short_content, soft T0, hard T0 (flow chain wins)
+        }
+        return true;
+      });
+
+      if (allCompressible) {
+        const chainSummary = summarizeChain(chain, messages);
+        const chainIds = chain.indices.map((idx) => messages[idx].id);
+        const sourceMsgs = chain.indices.map((idx) => messages[idx]);
+        const combinedLength = sourceMsgs.reduce((sum, m) => sum + contentLength(m), 0);
+
+        const tag = `[summary: ${chainSummary} (${chain.indices.length} messages, ${chain.type})]`;
+
+        if (tag.length < combinedLength) {
+          const base: Message = { ...sourceMsgs[0] };
+          result.push(
+            buildCompressedMessage(base, chainIds, tag, sourceVersion, verbatim, sourceMsgs),
+          );
+          messagesCompressed += chain.indices.length;
+          if (trace) {
+            for (const idx of chain.indices) {
+              decisions.push({
+                messageId: messages[idx].id,
+                messageIndex: idx,
+                action: 'compressed',
+                reason: `flow:${chain.type}`,
+                inputChars: contentLength(messages[idx]),
+                outputChars: Math.round(tag.length / chain.indices.length),
+              });
+            }
+          }
+
+          // Skip all chain members
+          const maxIdx = Math.max(...chain.indices);
+          if (i <= maxIdx) i = maxIdx + 1;
+          continue;
+        }
+      }
+      // If chain compression didn't work, fall through to normal processing
+    }
 
     if (preserved) {
       result.push(msg);
