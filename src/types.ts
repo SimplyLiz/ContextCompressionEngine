@@ -162,10 +162,13 @@ export type CompressOptions = {
    *  into compressed text. T0 rules still override for code/structured content.
    *  Can be sync or async. When async, compress() returns a Promise. */
   mlTokenClassifier?: MLTokenClassifier;
-  /** Enable discourse-aware summarization (EDU-lite). Breaks content into
-   *  Elementary Discourse Units with dependency tracking. When an EDU is
-   *  selected for the summary, its dependency parents are included to
-   *  maintain coherence. Default: false. */
+  /** **Experimental.** Enable discourse-aware summarization (EDU-lite).
+   *  Breaks content into Elementary Discourse Units with dependency tracking.
+   *  **Warning:** reduces compression ratio by 8–28% with the built-in scorer.
+   *  The dependency tracking keeps more text than standard summarization.
+   *  Recommended only with a custom ML-backed scorer via `scoreEDUs()`.
+   *  Use the exported `segmentEDUs`/`scoreEDUs`/`selectEDUs` directly instead.
+   *  Default: false. */
   discourseAware?: boolean;
   /** Enable semantic clustering. Groups messages by topic using TF-IDF and
    *  entity overlap, then compresses each cluster as a unit. Scattered

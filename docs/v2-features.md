@@ -6,19 +6,19 @@ New compression features added in v2. All features are **opt-in** with backward-
 
 ## Quick reference
 
-| Feature                                           | Option                     | Default                    | Effect                                                                                            | Tradeoff                                                                        |
-| ------------------------------------------------- | -------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [Quality metrics](#quality-metrics)               | _automatic_                | on when compression occurs | Adds `entity_retention`, `structural_integrity`, `reference_coherence`, `quality_score` to result | ~1% overhead from entity extraction                                             |
-| [Relevance threshold](#relevance-threshold)       | `relevanceThreshold`       | off                        | Drops low-value messages to stubs                                                                 | Higher ratio, may lose context in filler-heavy conversations                    |
-| [Tiered budget](#tiered-budget-strategy)          | `budgetStrategy: 'tiered'` | `'binary-search'`          | Compresses old prose first, protects recent messages                                              | Better quality at the same budget; slightly slower (tightening passes)          |
-| [Entropy scorer](#entropy-scorer)                 | `entropyScorer`            | off                        | Information-theoretic sentence scoring via external LM                                            | Better sentence selection; requires a local model or API                        |
-| [Adaptive budgets](#adaptive-summary-budgets)     | _automatic_                | on                         | Scales summary budget with content density                                                        | Entity-dense content gets more room; sparse filler compresses harder            |
-| [Conversation flow](#conversation-flow)           | `conversationFlow`         | `false`                    | Groups Q&A / request→action chains                                                                | More coherent summaries; reduces ratio on conversations without clear patterns  |
-| [Discourse-aware](#discourse-aware-summarization) | `discourseAware`           | `false`                    | EDU decomposition with dependency tracking                                                        | Prevents incoherent summaries; slightly more CPU than sentence scoring          |
-| [Coreference](#cross-message-coreference)         | `coreference`              | `false`                    | Inlines entity definitions into compressed summaries                                              | Prevents orphaned references; adds bytes to summaries                           |
-| [Semantic clustering](#semantic-clustering)       | `semanticClustering`       | `false`                    | Groups messages by topic for cluster-aware compression                                            | Better coherence on topic-scattered conversations; O(n²) similarity computation |
-| [Compression depth](#compression-depth)           | `compressionDepth`         | `'gentle'`                 | Controls aggressiveness: gentle/moderate/aggressive/auto                                          | Higher depth = higher ratio but lower quality                                   |
-| [ML token classifier](#ml-token-classifier)       | `mlTokenClassifier`        | off                        | Per-token keep/remove via external ML model                                                       | Highest quality compression; requires a trained model (~500MB)                  |
+| Feature                                                          | Option                     | Default                    | Effect                                                                                            | Tradeoff                                                                                    |
+| ---------------------------------------------------------------- | -------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Quality metrics](#quality-metrics)                              | _automatic_                | on when compression occurs | Adds `entity_retention`, `structural_integrity`, `reference_coherence`, `quality_score` to result | ~1% overhead from entity extraction                                                         |
+| [Relevance threshold](#relevance-threshold)                      | `relevanceThreshold`       | off                        | Drops low-value messages to stubs                                                                 | Higher ratio, may lose context in filler-heavy conversations                                |
+| [Tiered budget](#tiered-budget-strategy)                         | `budgetStrategy: 'tiered'` | `'binary-search'`          | Compresses old prose first, protects recent messages                                              | Better quality at the same budget; slightly slower (tightening passes)                      |
+| [Entropy scorer](#entropy-scorer)                                | `entropyScorer`            | off                        | Information-theoretic sentence scoring via external LM                                            | Better sentence selection; requires a local model or API                                    |
+| [Adaptive budgets](#adaptive-summary-budgets)                    | _automatic_                | on                         | Scales summary budget with content density                                                        | Entity-dense content gets more room; sparse filler compresses harder                        |
+| [Conversation flow](#conversation-flow)                          | `conversationFlow`         | `false`                    | Groups Q&A / request→action chains                                                                | More coherent summaries; reduces ratio on conversations without clear patterns              |
+| [Discourse-aware](#discourse-aware-summarization) (experimental) | `discourseAware`           | `false`                    | EDU decomposition with dependency tracking                                                        | **Reduces ratio 8–28%** without an ML scorer. Infrastructure only — provide your own scorer |
+| [Coreference](#cross-message-coreference)                        | `coreference`              | `false`                    | Inlines entity definitions into compressed summaries                                              | Prevents orphaned references; adds bytes to summaries                                       |
+| [Semantic clustering](#semantic-clustering)                      | `semanticClustering`       | `false`                    | Groups messages by topic for cluster-aware compression                                            | Better coherence on topic-scattered conversations; O(n²) similarity computation             |
+| [Compression depth](#compression-depth)                          | `compressionDepth`         | `'gentle'`                 | Controls aggressiveness: gentle/moderate/aggressive/auto                                          | Higher depth = higher ratio but lower quality                                               |
+| [ML token classifier](#ml-token-classifier)                      | `mlTokenClassifier`        | off                        | Per-token keep/remove via external ML model                                                       | Highest quality compression; requires a trained model (~500MB)                              |
 
 ---
 
@@ -210,32 +210,44 @@ Follow-up confirmations (`perfect`, `thanks`) are included in Q&A and request ch
 
 ---
 
-## Discourse-aware summarization
+## Discourse-aware summarization (experimental)
+
+> **Status: experimental.** The infrastructure is in place (EDU segmentation, dependency graph, greedy selector) but the built-in rule-based scorer **reduces compression ratio by 8–28%** with no measurable quality gain over the default sentence scorer. The dependency tracking inherently fights compression — pulling in parent EDUs when selecting children keeps more text than necessary. This feature needs an ML-backed scorer to identify which dependencies are actually load-bearing. Until then, leave it off unless you provide a custom scorer.
 
 Breaks content into Elementary Discourse Units (EDUs) with dependency tracking. Based on [From Context to EDUs (arXiv 2025)](https://arxiv.org/abs/2512.14244).
 
 ### Usage
 
 ```ts
+// Not recommended without a custom scorer — reduces ratio
 const result = compress(messages, {
   discourseAware: true,
 });
+
+// With a custom scorer (e.g., backed by an ML model) — the intended use
+import { segmentEDUs, scoreEDUs, selectEDUs } from 'context-compression-engine';
+
+const edus = segmentEDUs(text);
+const scored = scoreEDUs(edus, (text) => myModel.importance(text));
+const selected = selectEDUs(scored, budget);
 ```
 
 ### How it works
 
 1. Segment text into EDUs at clause boundaries (discourse markers: `then`, `because`, `which`, `however`, etc.)
 2. Build dependency edges: pronoun references (`it`, `this`) → preceding EDU; temporal chains (`first...then...finally`); causal chains (`because...therefore`)
-3. Score EDUs (length-based by default, or custom scorer)
+3. Score EDUs (information-density heuristic by default, or custom scorer)
 4. Greedy selection: highest-scored EDUs first, pulling in dependency parents (up to 2 levels)
+
+### Why it underperforms without an ML scorer
+
+The rule-based scorer rewards technical identifiers and penalizes filler — the same signals as the default sentence scorer. But the dependency tracking adds a tax: selecting one high-value EDU forces inclusion of its parent EDUs, which may be low-value. The default scorer can't distinguish load-bearing dependencies (removing the parent makes the child meaningless) from decorative ones (the parent adds context but the child stands alone). An ML scorer trained on discourse coherence would solve this.
 
 ### Tradeoffs
 
-- Prevents incoherent summaries where removing a sentence orphans a pronoun reference in the next sentence
-- More CPU than flat sentence scoring (clause parsing + dependency resolution)
-- The rule-based parser is an approximation — it catches common patterns (commas + discourse markers, pronouns, temporal/causal chains) but misses complex discourse structures that would require an ML parser
-- Best for technical prose with clear logical flow. Less beneficial for bullet-point or list-heavy content
-- Mutually exclusive with `entropyScorer` in practice — when both are set, `discourseAware` takes priority in the sync runner
+- Prevents incoherent summaries where removing a sentence orphans a pronoun reference — **in theory**, but the ratio cost currently outweighs the coherence benefit
+- The EDU segmenter, dependency builder, and selector are fully functional and exported — use them directly with a custom scorer via `segmentEDUs`, `scoreEDUs`, `selectEDUs`
+- Mutually exclusive with `entropyScorer` — when both are set, `discourseAware` takes priority
 
 ---
 
@@ -461,7 +473,7 @@ const result = compress(messages, {
 ### Feature interaction notes
 
 - `conversationFlow` and `semanticClustering` cooperate — flow chains are detected first, remaining messages are clustered
-- `discourseAware` and `entropyScorer` are alternatives — `discourseAware` takes priority when both are set
+- `discourseAware` is experimental and not included in any recommended combination — it reduces ratio without a custom ML scorer
 - `mlTokenClassifier` takes priority over `discourseAware` and `entropyScorer`
 - `relevanceThreshold` applies after flow/cluster detection — messages already grouped into chains/clusters are not individually threshold-checked
 - `compressionDepth` affects all summarization (groups, code-split prose, contradictions) — not just the main group path
