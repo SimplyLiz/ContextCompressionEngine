@@ -382,15 +382,15 @@ T3 filler:           0%            (removed entirely)
 
 | Phase | Item                          | Effort  | Ratio Impact              | Quality Impact    | Status |
 | ----- | ----------------------------- | ------- | ------------------------- | ----------------- | ------ |
-| 1.1   | Entity retention metric       | Low     | —                         | Observability     | [ ]    |
-| 1.2   | Relevance threshold           | Low     | +15-30% on weak scenarios | Neutral           | [ ]    |
-| 1.3   | Quality score composite       | Low     | —                         | Observability     | [ ]    |
-| 2.1   | Tiered budget allocation      | Medium  | +10-20% overall           | +Quality          | [ ]    |
-| 2.2   | Self-information scoring      | Medium  | +20-30% on prose          | +Quality          | [ ]    |
-| 2.3   | Adaptive summary budget       | Low-Med | +5-10%                    | +Entity retention | [ ]    |
+| 1.1   | Entity retention metric       | Low     | —                         | Observability     | [x]    |
+| 1.2   | Relevance threshold           | Low     | +15-30% on weak scenarios | Neutral           | [x]    |
+| 1.3   | Quality score composite       | Low     | —                         | Observability     | [x]    |
+| 2.1   | Tiered budget allocation      | Medium  | +10-20% overall           | +Quality          | [x]    |
+| 2.2   | Self-information scoring      | Medium  | +20-30% on prose          | +Quality          | [x]    |
+| 2.3   | Adaptive summary budget       | Low-Med | +5-10%                    | +Entity retention | [x]    |
 | 3.1   | EDU-lite decomposition        | High    | Neutral                   | +Coherence        | [ ]    |
 | 3.2   | Cross-message coreference     | High    | Neutral                   | +Coherence        | [ ]    |
-| 3.3   | Conversation flow compression | Medium  | +15-25% on conv.          | +Coherence        | [ ]    |
+| 3.3   | Conversation flow compression | Medium  | +15-25% on conv.          | +Coherence        | [x]    |
 | 4.1   | ML token classifier           | High    | +30-50% on prose          | +Quality          | [ ]    |
 | 4.2   | Progressive compression       | Medium  | +50-100% on deep          | +Quality          | [ ]    |
 | 4.3   | Semantic clustering           | High    | +20-40% on long           | +Coherence        | [ ]    |
