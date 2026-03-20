@@ -41,6 +41,14 @@ export type { ImportanceMap } from './importance.js';
 export { detectFlowChains, summarizeChain } from './flow.js';
 export type { FlowChain } from './flow.js';
 
+// ML token classifier
+export {
+  compressWithTokenClassifier,
+  compressWithTokenClassifierSync,
+  whitespaceTokenize,
+  createMockTokenClassifier,
+} from './ml-classifier.js';
+
 // Discourse decomposition (EDU-lite)
 export { segmentEDUs, scoreEDUs, selectEDUs, summarizeWithEDUs } from './discourse.js';
 export type { EDU } from './discourse.js';
@@ -79,9 +87,11 @@ export type {
   FeedbackResult,
   FormatAdapter,
   Message,
+  MLTokenClassifier,
   OverPreservationResult,
   Summarizer,
   TaskOutcome,
+  TokenClassification,
   UncompressOptions,
   UncompressResult,
   VerbatimMap,

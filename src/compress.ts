@@ -16,6 +16,7 @@ import {
 } from './coreference.js';
 import { clusterMessages, summarizeCluster, type MessageCluster } from './cluster.js';
 import { summarizeWithEDUs } from './discourse.js';
+import { compressWithTokenClassifierSync, compressWithTokenClassifier } from './ml-classifier.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -1474,11 +1475,15 @@ function runCompressSync(
   entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
   entropyScorerMode: 'replace' | 'augment' = 'augment',
   discourseAware?: boolean,
+  mlTokenClassifier?: CompressOptions['mlTokenClassifier'],
 ): CompressResult {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    if (discourseAware) {
+    if (mlTokenClassifier) {
+      const compressed = compressWithTokenClassifierSync(text, mlTokenClassifier);
+      next = gen.next(compressed.length < text.length ? compressed : summarize(text, budget));
+    } else if (discourseAware) {
       next = gen.next(summarizeWithEDUs(text, budget));
     } else if (entropyScorer) {
       const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
@@ -1503,11 +1508,15 @@ async function runCompressAsync(
   entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
   entropyScorerMode: 'replace' | 'augment' = 'augment',
   discourseAware?: boolean,
+  mlTokenClassifier?: CompressOptions['mlTokenClassifier'],
 ): Promise<CompressResult> {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    if (discourseAware && !userSummarizer) {
+    if (mlTokenClassifier) {
+      const compressed = await compressWithTokenClassifier(text, mlTokenClassifier);
+      next = gen.next(compressed.length < text.length ? compressed : summarize(text, budget));
+    } else if (discourseAware && !userSummarizer) {
       next = gen.next(summarizeWithEDUs(text, budget));
     } else if (entropyScorer) {
       const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
@@ -1533,6 +1542,7 @@ function compressSync(messages: Message[], options: CompressOptions = {}): Compr
     options.entropyScorer,
     options.entropyScorerMode ?? 'augment',
     options.discourseAware,
+    options.mlTokenClassifier,
   );
 }
 
@@ -1556,6 +1566,7 @@ async function compressAsync(
       options.entropyScorer,
       options.entropyScorerMode ?? 'augment',
       options.discourseAware,
+      options.mlTokenClassifier,
     );
   }
   return runCompressAsync(
@@ -1564,6 +1575,7 @@ async function compressAsync(
     options.entropyScorer,
     options.entropyScorerMode ?? 'augment',
     options.discourseAware,
+    options.mlTokenClassifier,
   );
 }
 

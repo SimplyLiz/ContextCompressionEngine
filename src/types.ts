@@ -8,6 +8,28 @@ export type ClassifierResult = {
 
 export type Classifier = (content: string) => ClassifierResult | Promise<ClassifierResult>;
 
+/** Per-token classification result from an ML token classifier (LLMLingua-2 style). */
+export type TokenClassification = {
+  /** The original token. */
+  token: string;
+  /** Whether to keep this token in the compressed output. */
+  keep: boolean;
+  /** Confidence score (0–1). */
+  confidence: number;
+};
+
+/**
+ * ML token-level classifier. Takes content and returns per-token keep/remove
+ * decisions. Based on LLMLingua-2 (ACL 2024) — a small encoder model
+ * (e.g., XLM-RoBERTa) classifies each token with full bidirectional context.
+ *
+ * The function can be sync or async (e.g., backed by a local ONNX model
+ * or a remote inference endpoint).
+ */
+export type MLTokenClassifier = (
+  content: string,
+) => TokenClassification[] | Promise<TokenClassification[]>;
+
 export type CreateClassifierOptions = {
   /** Domain-specific instructions for the LLM. */
   systemPrompt?: string;
@@ -135,6 +157,11 @@ export type CompressOptions = {
    *  - 'replace': use entropy scores only (heuristic skipped)
    *  - 'augment': weighted average of both (default when entropyScorer is set) */
   entropyScorerMode?: 'replace' | 'augment';
+  /** ML token-level classifier (LLMLingua-2 style). When provided, T2 prose
+   *  content is classified at the token level: kept tokens are reconstructed
+   *  into compressed text. T0 rules still override for code/structured content.
+   *  Can be sync or async. When async, compress() returns a Promise. */
+  mlTokenClassifier?: MLTokenClassifier;
   /** Enable discourse-aware summarization (EDU-lite). Breaks content into
    *  Elementary Discourse Units with dependency tracking. When an EDU is
    *  selected for the summary, its dependency parents are included to
