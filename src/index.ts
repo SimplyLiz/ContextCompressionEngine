@@ -41,6 +41,18 @@ export type { ImportanceMap } from './importance.js';
 export { detectFlowChains, summarizeChain } from './flow.js';
 export type { FlowChain } from './flow.js';
 
+// Semantic clustering
+export { clusterMessages, summarizeCluster } from './cluster.js';
+export type { MessageCluster } from './cluster.js';
+
+// Cross-message coreference
+export {
+  buildCoreferenceMap,
+  findOrphanedReferences,
+  generateInlineDefinitions,
+} from './coreference.js';
+export type { EntityDefinition } from './coreference.js';
+
 // Entropy scoring utilities
 export { splitSentences, normalizeScores, combineScores } from './entropy.js';
 

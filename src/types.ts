@@ -135,6 +135,17 @@ export type CompressOptions = {
    *  - 'replace': use entropy scores only (heuristic skipped)
    *  - 'augment': weighted average of both (default when entropyScorer is set) */
   entropyScorerMode?: 'replace' | 'augment';
+  /** Enable semantic clustering. Groups messages by topic using TF-IDF and
+   *  entity overlap, then compresses each cluster as a unit. Scattered
+   *  messages about the same topic get merged into a single compressed block.
+   *  Default: false. */
+  semanticClustering?: boolean;
+  /** Similarity threshold for semantic clustering (0–1). Default: 0.15. */
+  clusterThreshold?: number;
+  /** Enable cross-message coreference tracking. When a compressed message defines
+   *  an entity referenced by a preserved message, the definition is inlined into
+   *  the compressed summary to prevent orphaned references. Default: false. */
+  coreference?: boolean;
   /** Enable conversation flow detection. Groups Q&A pairs, request→action→confirmation
    *  chains, and correction sequences into compression units for better summaries.
    *  Default: false. */

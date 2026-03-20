@@ -9,6 +9,12 @@ import { analyzeContradictions, type ContradictionAnnotation } from './contradic
 import { extractEntities, computeQualityScore } from './entities.js';
 import { combineScores } from './entropy.js';
 import { detectFlowChains, summarizeChain, type FlowChain } from './flow.js';
+import {
+  buildCoreferenceMap,
+  findOrphanedReferences,
+  generateInlineDefinitions,
+} from './coreference.js';
+import { clusterMessages, summarizeCluster, type MessageCluster } from './cluster.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -870,6 +876,28 @@ function* compressGen(
     }
   }
 
+  // Semantic clustering
+  const clusterMap = new Map<number, MessageCluster>(); // message index → cluster
+  if (options.semanticClustering) {
+    const recencyStart = Math.max(0, messages.length - recencyWindow);
+    // Find eligible indices: not in recency, not system, not already in flow chains
+    const eligible: number[] = [];
+    for (let idx = 0; idx < recencyStart; idx++) {
+      if (flowChainMap.has(idx)) continue;
+      const m = messages[idx];
+      if (m.role && preserveRoles.has(m.role)) continue;
+      const content = (m.content as string | undefined) ?? '';
+      if (content.length < 80) continue;
+      eligible.push(idx);
+    }
+    const clusters = clusterMessages(messages, eligible, options.clusterThreshold ?? 0.15);
+    for (const cluster of clusters) {
+      for (const idx of cluster.indices) {
+        clusterMap.set(idx, cluster);
+      }
+    }
+  }
+
   const result: Message[] = [];
   const verbatim: Record<string, Message> = {};
   const decisions: CompressDecision[] = [];
@@ -883,6 +911,7 @@ function* compressGen(
   let messagesPatternPreserved = 0;
   let messagesLlmPreserved = 0;
   const processedFlowChains = new Set<FlowChain>();
+  const processedClusters = new Set<MessageCluster>();
   let i = 0;
 
   while (i < classified.length) {
@@ -945,6 +974,56 @@ function* compressGen(
         }
       }
       // If chain compression didn't work, fall through to normal processing
+    }
+
+    // Semantic cluster: compress all cluster members as a unit
+    if (clusterMap.has(i) && !processedClusters.has(clusterMap.get(i)!)) {
+      const cluster = clusterMap.get(i)!;
+      processedClusters.add(cluster);
+
+      const allCompressible = cluster.indices.every((idx) => {
+        const c = classified[idx];
+        if (c.dedup || c.codeSplit || c.adapterMatch) return false;
+        if (c.preserved) {
+          const m = c.msg;
+          if (m.role && preserveRoles.has(m.role)) return false;
+          if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) return false;
+          const content = typeof m.content === 'string' ? m.content : '';
+          if (content.startsWith('[summary:') || content.startsWith('[truncated')) return false;
+        }
+        return true;
+      });
+
+      if (allCompressible) {
+        const clusterSummary = summarizeCluster(cluster, messages);
+        const clusterIds = cluster.indices.map((idx) => messages[idx].id);
+        const sourceMsgs = cluster.indices.map((idx) => messages[idx]);
+        const combinedLength = sourceMsgs.reduce((sum, m) => sum + contentLength(m), 0);
+        const tag = `[summary: ${clusterSummary}]`;
+
+        if (tag.length < combinedLength) {
+          const base: Message = { ...sourceMsgs[0] };
+          result.push(
+            buildCompressedMessage(base, clusterIds, tag, sourceVersion, verbatim, sourceMsgs),
+          );
+          messagesCompressed += cluster.indices.length;
+          if (trace) {
+            for (const idx of cluster.indices) {
+              decisions.push({
+                messageId: messages[idx].id,
+                messageIndex: idx,
+                action: 'compressed',
+                reason: `cluster:${cluster.label}`,
+                inputChars: contentLength(messages[idx]),
+                outputChars: Math.round(tag.length / cluster.indices.length),
+              });
+            }
+          }
+          const maxIdx = Math.max(...cluster.indices);
+          if (i <= maxIdx) i = maxIdx + 1;
+          continue;
+        }
+      }
     }
 
     if (preserved) {
@@ -1273,6 +1352,52 @@ function* compressGen(
             inputChars: content.length,
             outputChars: summary.length,
           });
+        }
+      }
+    }
+  }
+
+  // Coreference inlining: prepend entity definitions to compressed messages
+  // when a preserved message references an entity defined only in a compressed message.
+  if (options.coreference && messagesCompressed > 0) {
+    const corefDefs = buildCoreferenceMap(messages);
+    const compressedSet = new Set<number>();
+    const preservedSet = new Set<number>();
+    for (let ri = 0; ri < result.length; ri++) {
+      const orig = result[ri].metadata?._cce_original as Record<string, unknown> | undefined;
+      if (orig) {
+        // Find original message index from the id
+        const ids = orig.ids as string[] | undefined;
+        if (ids) {
+          for (const id of ids) {
+            const origIdx = messages.findIndex((m) => m.id === id);
+            if (origIdx >= 0) compressedSet.add(origIdx);
+          }
+        }
+      } else {
+        const origIdx = messages.findIndex((m) => m.id === result[ri].id);
+        if (origIdx >= 0) preservedSet.add(origIdx);
+      }
+    }
+
+    const orphaned = findOrphanedReferences(corefDefs, compressedSet, preservedSet);
+    if (orphaned.size > 0) {
+      for (let ri = 0; ri < result.length; ri++) {
+        const orig = result[ri].metadata?._cce_original as Record<string, unknown> | undefined;
+        if (!orig) continue;
+        const ids = orig.ids as string[] | undefined;
+        if (!ids) continue;
+        for (const id of ids) {
+          const origIdx = messages.findIndex((m) => m.id === id);
+          if (origIdx >= 0 && orphaned.has(origIdx)) {
+            const entities = orphaned.get(origIdx)!;
+            const sourceContent =
+              typeof messages[origIdx].content === 'string' ? messages[origIdx].content : '';
+            const inline = generateInlineDefinitions(entities, sourceContent);
+            if (inline && result[ri].content) {
+              result[ri] = { ...result[ri], content: inline + result[ri].content };
+            }
+          }
         }
       }
     }
