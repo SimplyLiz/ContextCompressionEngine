@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary --coverage.reportsDirectory=coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
