@@ -6,6 +6,7 @@ import {
   type ImportanceMap,
 } from './importance.js';
 import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
+import { extractEntities, computeQualityScore } from './entities.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -85,6 +86,22 @@ function scoreSentence(sentence: string): number {
   // Filler penalty
   if (FILLER_RE.test(sentence.trim())) score -= 10;
   return score;
+}
+
+/**
+ * Compute the best (highest) sentence score in a text.
+ * Used for the relevance threshold: if the best score is below the threshold,
+ * the content is too low-value to produce a useful summary.
+ */
+export function bestSentenceScore(text: string): number {
+  const sentences = text.match(/[^.!?\n]+[.!?]+/g);
+  if (!sentences || sentences.length === 0) return scoreSentence(text.trim());
+  let best = -Infinity;
+  for (const s of sentences) {
+    const score = scoreSentence(s.trim());
+    if (score > best) best = score;
+  }
+  return best;
 }
 
 function summarize(text: string, maxBudget?: number): string {
@@ -259,149 +276,8 @@ function summarizeStructured(text: string, maxBudget: number): string {
   return result;
 }
 
-const COMMON_STARTERS = new Set([
-  'The',
-  'This',
-  'That',
-  'These',
-  'Those',
-  'When',
-  'Where',
-  'What',
-  'Which',
-  'Who',
-  'How',
-  'Why',
-  'Here',
-  'There',
-  'Now',
-  'Then',
-  'But',
-  'And',
-  'Or',
-  'So',
-  'If',
-  'It',
-  'Its',
-  'My',
-  'Your',
-  'His',
-  'Her',
-  'Our',
-  'They',
-  'We',
-  'You',
-  'He',
-  'She',
-  'In',
-  'On',
-  'At',
-  'To',
-  'For',
-  'With',
-  'From',
-  'As',
-  'By',
-  'An',
-  'Each',
-  'Every',
-  'Some',
-  'All',
-  'Most',
-  'Many',
-  'Much',
-  'Any',
-  'No',
-  'Not',
-  'Also',
-  'Just',
-  'Only',
-  'Even',
-  'Still',
-  'Yet',
-  'Let',
-  'See',
-  'Note',
-  'Yes',
-  'Sure',
-  'Great',
-  'Thanks',
-  'Well',
-  'First',
-  'Second',
-  'Third',
-  'Next',
-  'Last',
-  'Finally',
-  'However',
-  'After',
-  'Before',
-  'Since',
-  'Once',
-  'While',
-  'Although',
-  'Because',
-  'Unless',
-  'Until',
-  'About',
-  'Over',
-  'Under',
-  'Between',
-  'Into',
-]);
-
 function computeBudget(contentLength: number): number {
   return Math.max(200, Math.min(Math.round(contentLength * 0.3), 600));
-}
-
-function extractEntities(text: string): string[] {
-  const entities = new Set<string>();
-
-  // Proper nouns: capitalized words not at common sentence starters
-  const properNouns = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g);
-  if (properNouns) {
-    for (const noun of properNouns) {
-      const first = noun.split(/\s+/)[0];
-      if (!COMMON_STARTERS.has(first)) {
-        entities.add(noun);
-      }
-    }
-  }
-
-  // PascalCase identifiers (TypeScript, WebSocket, JavaScript, etc.)
-  const pascalCase = text.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g);
-  if (pascalCase) {
-    for (const id of pascalCase) entities.add(id);
-  }
-
-  // camelCase identifiers
-  const camelCase = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g);
-  if (camelCase) {
-    for (const id of camelCase) entities.add(id);
-  }
-
-  // snake_case identifiers
-  const snakeCase = text.match(/\b[a-z]+(?:_[a-z]+)+\b/g);
-  if (snakeCase) {
-    for (const id of snakeCase) entities.add(id);
-  }
-
-  // Vowelless words (3+ consonants, no aeiou/y) — abbreviations/tool names: pnpm, npm, ssh, grpc
-  const vowelless = text.match(/\b[bcdfghjklmnpqrstvwxz]{3,}\b/gi);
-  if (vowelless) {
-    for (const w of vowelless) entities.add(w.toLowerCase());
-  }
-
-  // Numbers with context
-  const numbersCtx = text.match(
-    /\b\d+(?:\.\d+)?\s*(?:seconds?|retries?|attempts?|MB|GB|TB|KB|ms|minutes?|hours?|days?|bytes?|workers?|threads?|nodes?|replicas?|instances?|users?|requests?|errors?|percent|%)\b/gi,
-  );
-  if (numbersCtx) {
-    for (const n of numbersCtx) entities.add(n.trim());
-  }
-
-  const maxEntities = Math.max(3, Math.min(Math.round(text.length / 200), 15));
-  return Array.from(entities).slice(0, maxEntities);
 }
 
 function splitCodeAndProse(text: string): Array<{ type: 'prose' | 'code'; content: string }> {
@@ -723,6 +599,7 @@ function computeStats(
   messagesLlmPreserved?: number,
   messagesContradicted?: number,
   messagesImportancePreserved?: number,
+  messagesRelevanceDropped?: number,
 ): CompressResult['compression'] {
   const originalTotalChars = originalMessages.reduce((sum, m) => sum + contentLength(m), 0);
   const compressedTotalChars = resultMessages.reduce((sum, m) => sum + contentLength(m), 0);
@@ -757,6 +634,9 @@ function computeStats(
       : {}),
     ...(messagesImportancePreserved && messagesImportancePreserved > 0
       ? { messages_importance_preserved: messagesImportancePreserved }
+      : {}),
+    ...(messagesRelevanceDropped && messagesRelevanceDropped > 0
+      ? { messages_relevance_dropped: messagesRelevanceDropped }
       : {}),
   };
 }
@@ -928,6 +808,7 @@ function* compressGen(
   let messagesFuzzyDeduped = 0;
   let messagesContradicted = 0;
   let messagesImportancePreserved = 0;
+  let messagesRelevanceDropped = 0;
   let messagesPatternPreserved = 0;
   let messagesLlmPreserved = 0;
   let i = 0;
@@ -1132,6 +1013,38 @@ function* compressGen(
     const allContent = group
       .map((g) => (typeof g.msg.content === 'string' ? g.msg.content : ''))
       .join(' ');
+
+    // Relevance threshold: if the best sentence score is below the threshold,
+    // replace the entire group with a compact stub instead of a summary.
+    const relevanceThreshold = options.relevanceThreshold;
+    if (relevanceThreshold != null && relevanceThreshold > 0) {
+      const topScore = bestSentenceScore(allContent);
+      if (topScore < relevanceThreshold) {
+        const stub = `[${group.length} message${group.length > 1 ? 's' : ''} of general discussion omitted]`;
+        const sourceMsgs = group.map((g) => g.msg);
+        const mergeIds = group.map((g) => g.msg.id);
+        const base: Message = { ...sourceMsgs[0] };
+        result.push(
+          buildCompressedMessage(base, mergeIds, stub, sourceVersion, verbatim, sourceMsgs),
+        );
+        messagesRelevanceDropped += group.length;
+        messagesCompressed += group.length;
+        if (trace) {
+          for (let gi = 0; gi < group.length; gi++) {
+            decisions.push({
+              messageId: group[gi].msg.id,
+              messageIndex: groupStartIdx + gi,
+              action: 'compressed',
+              reason: `relevance_dropped:${topScore}`,
+              inputChars: contentLength(group[gi].msg),
+              outputChars: Math.round(stub.length / group.length),
+            });
+          }
+        }
+        continue;
+      }
+    }
+
     const contentBudget = computeBudget(allContent.length);
     const summaryText = isStructuredOutput(allContent)
       ? summarizeStructured(allContent, contentBudget)
@@ -1236,10 +1149,20 @@ function* compressGen(
     messagesLlmPreserved,
     messagesContradicted,
     messagesImportancePreserved,
+    messagesRelevanceDropped,
   );
 
   if (trace) {
     stats.decisions = decisions;
+  }
+
+  // Quality metrics (always computed when compression occurred)
+  if (messagesCompressed > 0 || messagesDeduped > 0 || messagesContradicted > 0) {
+    const quality = computeQualityScore(messages, result);
+    stats.entity_retention = Math.round(quality.entity_retention * 1000) / 1000;
+    stats.structural_integrity = Math.round(quality.structural_integrity * 1000) / 1000;
+    stats.reference_coherence = Math.round(quality.reference_coherence * 1000) / 1000;
+    stats.quality_score = Math.round(quality.quality_score * 1000) / 1000;
   }
 
   return {

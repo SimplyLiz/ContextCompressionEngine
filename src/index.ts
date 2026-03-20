@@ -1,5 +1,5 @@
 // Primary
-export { compress, defaultTokenCounter } from './compress.js';
+export { compress, defaultTokenCounter, bestSentenceScore } from './compress.js';
 export { uncompress } from './expand.js';
 export type { StoreLookup } from './expand.js';
 
@@ -18,6 +18,16 @@ export {
 
 // Format adapters
 export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
+
+// Entity extraction & quality metrics
+export {
+  extractEntities,
+  collectMessageEntities,
+  computeEntityRetention,
+  computeStructuralIntegrity,
+  computeReferenceCoherence,
+  computeQualityScore,
+} from './entities.js';
 
 // Importance scoring (ANCS-inspired)
 export {

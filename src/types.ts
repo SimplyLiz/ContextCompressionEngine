@@ -120,6 +120,11 @@ export type CompressOptions = {
   contradictionDetection?: boolean;
   /** Topic overlap threshold for contradiction detection (0–1). Default: 0.15. */
   contradictionTopicThreshold?: number;
+  /** Relevance threshold for summarization (0–1). When set, messages whose best
+   *  sentence score falls below this threshold are replaced with a compact stub
+   *  instead of a low-quality summary. Higher values = more aggressive dropping.
+   *  Default: undefined (disabled). */
+  relevanceThreshold?: number;
 };
 
 export type VerbatimMap = Record<string, Message>;
@@ -158,6 +163,16 @@ export type CompressResult = {
     messages_contradicted?: number;
     /** Messages preserved due to high importance score (when importanceScoring is enabled). */
     messages_importance_preserved?: number;
+    /** Messages dropped to a stub because their best sentence score fell below the relevance threshold. */
+    messages_relevance_dropped?: number;
+    /** Fraction of technical entities (identifiers, abbreviations, numbers) preserved after compression (0–1). */
+    entity_retention?: number;
+    /** Fraction of structural elements (code fences, JSON blocks, tables) preserved after compression (0–1). */
+    structural_integrity?: number;
+    /** Fraction of output entity references whose defining message is still present (0–1). */
+    reference_coherence?: number;
+    /** Composite quality score: 0.4 * entity_retention + 0.4 * structural_integrity + 0.2 * reference_coherence. */
+    quality_score?: number;
     decisions?: CompressDecision[];
   };
   /**
