@@ -1094,8 +1094,11 @@ function* compressGen(
       const annotation = classified[i].contradiction!;
       const supersederId = messages[annotation.supersededByIndex].id;
       const content = typeof msg.content === 'string' ? msg.content : '';
-      const contradictionEntityCount = extractEntities(content, 500).length;
       const depth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveC = depth != null && depth !== 'gentle';
+      const contradictionEntityCount = useAdaptiveC
+        ? extractEntities(content, 500).length
+        : undefined;
       const contentBudget = computeBudget(content.length, contradictionEntityCount, depth);
       const summaryText: string = yield { text: content, budget: contentBudget };
       let tag = `[cce:superseded by ${supersederId} (${annotation.signal}) — ${summaryText}]`;
@@ -1144,8 +1147,9 @@ function* compressGen(
         .map((s) => s.content)
         .join(' ');
       const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
-      const proseEntityCount = extractEntities(proseText, 500).length;
       const codeDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveCS = codeDepth != null && codeDepth !== 'gentle';
+      const proseEntityCount = useAdaptiveCS ? extractEntities(proseText, 500).length : undefined;
       const proseBudget = computeBudget(proseText.length, proseEntityCount, codeDepth);
       const summaryText: string = yield { text: proseText, budget: proseBudget };
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
@@ -1193,9 +1197,10 @@ function* compressGen(
       const preserved = adapter.extractPreserved(content);
       const compressible = adapter.extractCompressible(content);
       const proseText = compressible.join(' ');
-      const adapterEntityCount = extractEntities(proseText, 500).length;
       const adapterDepth =
         options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveA = adapterDepth != null && adapterDepth !== 'gentle';
+      const adapterEntityCount = useAdaptiveA ? extractEntities(proseText, 500).length : undefined;
       const proseBudget = computeBudget(proseText.length, adapterEntityCount, adapterDepth);
       const summaryText: string =
         proseText.length > 0 ? yield { text: proseText, budget: proseBudget } : '';
@@ -1274,8 +1279,10 @@ function* compressGen(
       }
     }
 
-    const entityCount = extractEntities(allContent, 500).length;
     const groupDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+    // Adaptive budget (entity-aware) only activates when depth is explicitly non-gentle
+    const useAdaptive = groupDepth != null && groupDepth !== 'gentle';
+    const entityCount = useAdaptive ? extractEntities(allContent, 500).length : undefined;
     const contentBudget = computeBudget(allContent.length, entityCount, groupDepth);
     const summaryText =
       groupDepth === 'aggressive'

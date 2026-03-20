@@ -73,7 +73,7 @@ describe('entropyScorer integration', () => {
     const messages: Message[] = [
       msg(
         '1',
-        'The fetchData function is critical for the service. Sure, sounds good. The retry logic uses exponential backoff with jitter.',
+        'The fetchData function is critical for the service layer communication. Sure, that sounds good and we should proceed. The retry logic uses exponential backoff with jitter and circuit breaker pattern for fault tolerance.',
       ),
       msg('2', 'Latest update.'),
       msg('3', 'Current state.'),
