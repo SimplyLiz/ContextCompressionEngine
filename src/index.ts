@@ -37,6 +37,9 @@ export {
 } from './importance.js';
 export type { ImportanceMap } from './importance.js';
 
+// Entropy scoring utilities
+export { splitSentences, normalizeScores, combineScores } from './entropy.js';
+
 // Contradiction detection (ANCS-inspired)
 export { analyzeContradictions } from './contradiction.js';
 export type { ContradictionAnnotation } from './contradiction.js';

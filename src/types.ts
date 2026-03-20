@@ -125,6 +125,16 @@ export type CompressOptions = {
    *  instead of a low-quality summary. Higher values = more aggressive dropping.
    *  Default: undefined (disabled). */
   relevanceThreshold?: number;
+  /** Optional entropy scorer for information-theoretic sentence scoring.
+   *  When provided, augments or replaces the heuristic sentence scorer.
+   *  The function receives an array of sentences and returns per-sentence
+   *  self-information scores (higher = more informative = preserve).
+   *  Can be sync or async (e.g., backed by a small local LM). */
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>;
+  /** How to combine entropy and heuristic scores.
+   *  - 'replace': use entropy scores only (heuristic skipped)
+   *  - 'augment': weighted average of both (default when entropyScorer is set) */
+  entropyScorerMode?: 'replace' | 'augment';
   /** Budget strategy when tokenBudget is set.
    *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
    *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content

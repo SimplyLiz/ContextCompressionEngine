@@ -7,6 +7,7 @@ import {
 } from './importance.js';
 import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
 import { extractEntities, computeQualityScore } from './entities.js';
+import { combineScores } from './entropy.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -104,7 +105,16 @@ export function bestSentenceScore(text: string): number {
   return best;
 }
 
-function summarize(text: string, maxBudget?: number): string {
+/**
+ * Deterministic summarization with optional external score overrides.
+ *
+ * @param text - text to summarize
+ * @param maxBudget - character budget for the summary
+ * @param externalScores - optional per-sentence scores (from entropy scorer).
+ *   When provided, replaces the heuristic scorer for sentence ranking.
+ *   Map key is the sentence index (matches paragraph/sentence iteration order).
+ */
+function summarize(text: string, maxBudget?: number, externalScores?: Map<number, number>): string {
   const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
 
   type Scored = { text: string; score: number; origIdx: number; primary: boolean };
@@ -116,9 +126,10 @@ function summarize(text: string, maxBudget?: number): string {
     if (!sentences || sentences.length === 0) {
       const trimmed = para.trim();
       if (trimmed.length > 0) {
+        const score = externalScores?.get(globalIdx) ?? scoreSentence(trimmed);
         allSentences.push({
           text: trimmed,
-          score: scoreSentence(trimmed),
+          score,
           origIdx: globalIdx++,
           primary: true,
         });
@@ -131,7 +142,7 @@ function summarize(text: string, maxBudget?: number): string {
     const paraSentences: Scored[] = [];
     for (let i = 0; i < sentences.length; i++) {
       const s = sentences[i].trim();
-      const sc = scoreSentence(s);
+      const sc = externalScores?.get(globalIdx + i) ?? scoreSentence(s);
       paraSentences.push({ text: s, score: sc, origIdx: globalIdx + i, primary: false });
       if (sc > bestScore) {
         bestScore = sc;
@@ -1194,11 +1205,55 @@ function* compressGen(
   };
 }
 
-function runCompressSync(gen: Generator<SummarizeRequest, CompressResult, string>): CompressResult {
+/**
+ * Build external score map from entropy scorer for use in summarize().
+ * Splits text into sentences, scores them, and combines with heuristic scores.
+ */
+function buildEntropyScores(
+  text: string,
+  rawScores: number[],
+  mode: 'replace' | 'augment',
+): Map<number, number> {
+  const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+  const scoreMap = new Map<number, number>();
+
+  if (mode === 'replace') {
+    for (let i = 0; i < Math.min(sentences.length, rawScores.length); i++) {
+      scoreMap.set(i, rawScores[i]);
+    }
+  } else {
+    // augment: weighted average of heuristic and entropy
+    const heuristicScores = sentences.map((s) => scoreSentence(s.trim()));
+    const combined = combineScores(heuristicScores, rawScores.slice(0, sentences.length));
+    for (let i = 0; i < combined.length; i++) {
+      scoreMap.set(i, combined[i] * 20); // scale to heuristic range
+    }
+  }
+
+  return scoreMap;
+}
+
+function runCompressSync(
+  gen: Generator<SummarizeRequest, CompressResult, string>,
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
+  entropyScorerMode: 'replace' | 'augment' = 'augment',
+): CompressResult {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    next = gen.next(summarize(text, budget));
+    if (entropyScorer) {
+      const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+      const result = entropyScorer(sentences.map((s) => s.trim()));
+      if (result instanceof Promise) {
+        throw new Error(
+          'compress(): entropyScorer returned a Promise in sync mode. Use a summarizer to enable async.',
+        );
+      }
+      const externalScores = buildEntropyScores(text, result, entropyScorerMode);
+      next = gen.next(summarize(text, budget, externalScores));
+    } else {
+      next = gen.next(summarize(text, budget));
+    }
   }
   return next.value;
 }
@@ -1206,17 +1261,36 @@ function runCompressSync(gen: Generator<SummarizeRequest, CompressResult, string
 async function runCompressAsync(
   gen: Generator<SummarizeRequest, CompressResult, string>,
   userSummarizer?: Summarizer,
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
+  entropyScorerMode: 'replace' | 'augment' = 'augment',
 ): Promise<CompressResult> {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    next = gen.next(await withFallback(text, userSummarizer, budget));
+    if (entropyScorer) {
+      const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+      const rawScores = await Promise.resolve(entropyScorer(sentences.map((s) => s.trim())));
+      const externalScores = buildEntropyScores(text, rawScores, entropyScorerMode);
+      // When entropy scorer is set, use deterministic summarize with external scores
+      // unless a user summarizer is also provided
+      if (userSummarizer) {
+        next = gen.next(await withFallback(text, userSummarizer, budget));
+      } else {
+        next = gen.next(summarize(text, budget, externalScores));
+      }
+    } else {
+      next = gen.next(await withFallback(text, userSummarizer, budget));
+    }
   }
   return next.value;
 }
 
 function compressSync(messages: Message[], options: CompressOptions = {}): CompressResult {
-  return runCompressSync(compressGen(messages, options));
+  return runCompressSync(
+    compressGen(messages, options),
+    options.entropyScorer,
+    options.entropyScorerMode ?? 'augment',
+  );
 }
 
 async function compressAsync(
@@ -1233,9 +1307,19 @@ async function compressAsync(
       preserveRoles,
     );
     const opts: _InternalOptions = { ...options, _llmResults: llmResults };
-    return runCompressAsync(compressGen(messages, opts), options.summarizer);
+    return runCompressAsync(
+      compressGen(messages, opts),
+      options.summarizer,
+      options.entropyScorer,
+      options.entropyScorerMode ?? 'augment',
+    );
   }
-  return runCompressAsync(compressGen(messages, options), options.summarizer);
+  return runCompressAsync(
+    compressGen(messages, options),
+    options.summarizer,
+    options.entropyScorer,
+    options.entropyScorerMode ?? 'augment',
+  );
 }
 
 // ---------------------------------------------------------------------------
