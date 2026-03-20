@@ -15,6 +15,7 @@ import {
   generateInlineDefinitions,
 } from './coreference.js';
 import { clusterMessages, summarizeCluster, type MessageCluster } from './cluster.js';
+import { summarizeWithEDUs } from './discourse.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -1472,11 +1473,14 @@ function runCompressSync(
   gen: Generator<SummarizeRequest, CompressResult, string>,
   entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
   entropyScorerMode: 'replace' | 'augment' = 'augment',
+  discourseAware?: boolean,
 ): CompressResult {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    if (entropyScorer) {
+    if (discourseAware) {
+      next = gen.next(summarizeWithEDUs(text, budget));
+    } else if (entropyScorer) {
       const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
       const result = entropyScorer(sentences.map((s) => s.trim()));
       if (result instanceof Promise) {
@@ -1498,11 +1502,14 @@ async function runCompressAsync(
   userSummarizer?: Summarizer,
   entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
   entropyScorerMode: 'replace' | 'augment' = 'augment',
+  discourseAware?: boolean,
 ): Promise<CompressResult> {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    if (entropyScorer) {
+    if (discourseAware && !userSummarizer) {
+      next = gen.next(summarizeWithEDUs(text, budget));
+    } else if (entropyScorer) {
       const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
       const rawScores = await Promise.resolve(entropyScorer(sentences.map((s) => s.trim())));
       const externalScores = buildEntropyScores(text, rawScores, entropyScorerMode);
@@ -1525,6 +1532,7 @@ function compressSync(messages: Message[], options: CompressOptions = {}): Compr
     compressGen(messages, options),
     options.entropyScorer,
     options.entropyScorerMode ?? 'augment',
+    options.discourseAware,
   );
 }
 
@@ -1547,6 +1555,7 @@ async function compressAsync(
       options.summarizer,
       options.entropyScorer,
       options.entropyScorerMode ?? 'augment',
+      options.discourseAware,
     );
   }
   return runCompressAsync(
@@ -1554,6 +1563,7 @@ async function compressAsync(
     options.summarizer,
     options.entropyScorer,
     options.entropyScorerMode ?? 'augment',
+    options.discourseAware,
   );
 }
 

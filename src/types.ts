@@ -135,6 +135,11 @@ export type CompressOptions = {
    *  - 'replace': use entropy scores only (heuristic skipped)
    *  - 'augment': weighted average of both (default when entropyScorer is set) */
   entropyScorerMode?: 'replace' | 'augment';
+  /** Enable discourse-aware summarization (EDU-lite). Breaks content into
+   *  Elementary Discourse Units with dependency tracking. When an EDU is
+   *  selected for the summary, its dependency parents are included to
+   *  maintain coherence. Default: false. */
+  discourseAware?: boolean;
   /** Enable semantic clustering. Groups messages by topic using TF-IDF and
    *  entity overlap, then compresses each cluster as a unit. Scattered
    *  messages about the same topic get merged into a single compressed block.

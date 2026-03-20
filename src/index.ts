@@ -41,6 +41,10 @@ export type { ImportanceMap } from './importance.js';
 export { detectFlowChains, summarizeChain } from './flow.js';
 export type { FlowChain } from './flow.js';
 
+// Discourse decomposition (EDU-lite)
+export { segmentEDUs, scoreEDUs, selectEDUs, summarizeWithEDUs } from './discourse.js';
+export type { EDU } from './discourse.js';
+
 // Semantic clustering
 export { clusterMessages, summarizeCluster } from './cluster.js';
 export type { MessageCluster } from './cluster.js';
