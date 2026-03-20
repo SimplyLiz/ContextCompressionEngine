@@ -125,6 +125,12 @@ export type CompressOptions = {
    *  instead of a low-quality summary. Higher values = more aggressive dropping.
    *  Default: undefined (disabled). */
   relevanceThreshold?: number;
+  /** Budget strategy when tokenBudget is set.
+   *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
+   *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content
+   *    by priority tier. System/T0/recent messages are protected; older prose is
+   *    compressed first, then stubbed, then truncated. Better preserves recent context. */
+  budgetStrategy?: 'binary-search' | 'tiered';
 };
 
 export type VerbatimMap = Record<string, Message>;
