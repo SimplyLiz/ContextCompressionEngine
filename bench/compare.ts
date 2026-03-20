@@ -36,7 +36,13 @@ type Scenario = { name: string; messages: Message[] };
 
 function buildScenarios(): Scenario[] {
   nextId = 1;
-  return [codingAssistant(), deepConversation(), agenticSession()];
+  return [
+    codingAssistant(),
+    longQA(),
+    deepConversation(),
+    technicalExplanation(),
+    agenticSession(),
+  ];
 }
 
 function codingAssistant(): Scenario {
@@ -64,6 +70,30 @@ function codingAssistant(): Scenario {
   };
 }
 
+function longQA(): Scenario {
+  const longAnswer =
+    'The architecture of modern distributed systems relies on several foundational principles including service isolation, eventual consistency, and fault tolerance. Each service maintains its own data store, communicating through asynchronous message queues or synchronous RPC calls depending on latency requirements. Circuit breakers prevent cascading failures by monitoring error rates. ';
+  return {
+    name: 'Long Q&A',
+    messages: [
+      msg('system', 'You are a software architecture consultant.'),
+      msg('user', 'What is event sourcing?'),
+      msg('assistant', longAnswer.repeat(4)),
+      msg('user', 'How does CQRS relate to it?'),
+      msg('assistant', longAnswer.repeat(5)),
+      msg('user', 'What about saga patterns?'),
+      msg('assistant', longAnswer.repeat(6)),
+      msg('user', 'Can you compare these approaches?'),
+      msg('assistant', longAnswer.repeat(4)),
+      msg('user', 'Thanks, that was very thorough!'),
+      msg(
+        'assistant',
+        'Happy to help! Let me know if you want to dive deeper into any of these topics.',
+      ),
+    ],
+  };
+}
+
 function deepConversation(): Scenario {
   const filler =
     'I think that sounds reasonable and we should continue with the current approach. ';
@@ -84,6 +114,23 @@ function deepConversation(): Scenario {
         ),
       ),
       msg('user', 'What should we do next?'),
+    ],
+  };
+}
+
+function technicalExplanation(): Scenario {
+  const prose =
+    'The event-driven architecture we adopted grew out of a series of scaling problems we encountered when the monolith started buckling under peak traffic. The core idea is that services communicate through immutable events published to a central log rather than making synchronous calls. ';
+  return {
+    name: 'Technical explanation',
+    messages: [
+      msg('system', 'You are a principal engineer.'),
+      msg('user', 'How does our event-driven architecture work?'),
+      msg('assistant', prose.repeat(6)),
+      msg('user', 'What about schema evolution?'),
+      msg('assistant', prose.repeat(5)),
+      msg('user', 'How do we handle ordering guarantees?'),
+      msg('assistant', prose.repeat(5)),
     ],
   };
 }
@@ -142,10 +189,9 @@ const optionSets: OptionSet[] = [
     options: { recencyWindow: 4 },
   },
   {
-    name: 'V2 features',
+    name: 'V2 balanced',
     options: {
       recencyWindow: 4,
-      relevanceThreshold: 3,
       conversationFlow: true,
       coreference: true,
       importanceScoring: true,

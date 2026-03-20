@@ -49,6 +49,8 @@ export function detectFlowChains(
     const content = typeof m.content === 'string' ? m.content : '';
     if (content.length < 10) return false;
     if (content.startsWith('[summary:') || content.startsWith('[summary#')) return false;
+    // Don't include messages with code fences — they need code-split handling
+    if (content.includes('```')) return false;
     return true;
   };
 

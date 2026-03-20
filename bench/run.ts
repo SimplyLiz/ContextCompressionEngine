@@ -943,6 +943,10 @@ interface Result {
   preserved: number;
   roundTrip: 'PASS' | 'FAIL';
   timeMs: string;
+  entityRetention: number | undefined;
+  structuralIntegrity: number | undefined;
+  referenceCoherence: number | undefined;
+  qualityScore: number | undefined;
 }
 
 async function run(): Promise<void> {
@@ -991,6 +995,10 @@ async function run(): Promise<void> {
       preserved: cr.compression.messages_preserved,
       roundTrip,
       timeMs: (t1 - t0).toFixed(2),
+      entityRetention: cr.compression.entity_retention,
+      structuralIntegrity: cr.compression.structural_integrity,
+      referenceCoherence: cr.compression.reference_coherence,
+      qualityScore: cr.compression.quality_score,
     });
 
     benchResults.basic[scenario.name] = {
@@ -999,6 +1007,17 @@ async function run(): Promise<void> {
       compressed: cr.compression.messages_compressed,
       preserved: cr.compression.messages_preserved,
     };
+
+    // Quality metrics
+    if (cr.compression.quality_score != null) {
+      if (!benchResults.quality) benchResults.quality = {};
+      benchResults.quality[scenario.name] = {
+        entityRetention: cr.compression.entity_retention!,
+        structuralIntegrity: cr.compression.structural_integrity!,
+        referenceCoherence: cr.compression.reference_coherence!,
+        qualityScore: cr.compression.quality_score!,
+      };
+    }
 
     // Retention analysis
     const originalText = scenario.messages
@@ -1108,6 +1127,51 @@ async function run(): Promise<void> {
     }
 
     console.log(retSep);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quality metrics (v2)
+  // ---------------------------------------------------------------------------
+
+  if (benchResults.quality && Object.keys(benchResults.quality).length > 0) {
+    console.log();
+    console.log('Quality Metrics (v2)');
+
+    const qHeader = [
+      'Scenario'.padEnd(24),
+      'Entities'.padStart(9),
+      'Structure'.padStart(10),
+      'Coherence'.padStart(10),
+      'Quality'.padStart(8),
+    ].join('  ');
+    const qSep = '-'.repeat(qHeader.length);
+
+    console.log(qSep);
+    console.log(qHeader);
+    console.log(qSep);
+
+    for (const [name, q] of Object.entries(benchResults.quality)) {
+      console.log(
+        [
+          name.padEnd(24),
+          `${(q.entityRetention * 100).toFixed(0)}%`.padStart(9),
+          `${(q.structuralIntegrity * 100).toFixed(0)}%`.padStart(10),
+          `${(q.referenceCoherence * 100).toFixed(0)}%`.padStart(10),
+          q.qualityScore.toFixed(3).padStart(8),
+        ].join('  '),
+      );
+    }
+
+    console.log(qSep);
+
+    // Quality regression check
+    const lowQuality = Object.entries(benchResults.quality).filter(([, q]) => q.qualityScore < 0.8);
+    if (lowQuality.length > 0) {
+      console.log();
+      console.log(
+        `WARNING: ${lowQuality.length} scenario(s) below 0.80 quality: ${lowQuality.map(([n]) => n).join(', ')}`,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------

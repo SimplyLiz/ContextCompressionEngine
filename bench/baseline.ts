@@ -46,6 +46,13 @@ export interface RetentionResult {
   structuralRetention: number;
 }
 
+export interface QualityResult {
+  entityRetention: number;
+  structuralIntegrity: number;
+  referenceCoherence: number;
+  qualityScore: number;
+}
+
 export interface AncsResult {
   baselineRatio: number;
   importanceRatio: number;
@@ -62,6 +69,7 @@ export interface BenchmarkResults {
   fuzzyDedup: Record<string, FuzzyDedupResult>;
   bundleSize: Record<string, BundleSizeResult>;
   retention?: Record<string, RetentionResult>;
+  quality?: Record<string, QualityResult>;
   ancs?: Record<string, AncsResult>;
 }
 
@@ -1192,6 +1200,13 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   lines.push(`| Average compression | ${fix(avgR)}x |`);
   lines.push(`| Best compression | ${fix(Math.max(...ratios))}x |`);
   lines.push(`| Round-trip integrity | all PASS |`);
+  if (latest.results.quality && Object.keys(latest.results.quality).length > 0) {
+    const qualityEntries = Object.values(latest.results.quality);
+    const avgQ = qualityEntries.reduce((s, q) => s + q.qualityScore, 0) / qualityEntries.length;
+    lines.push(`| Average quality score | ${fix(avgQ, 3)} |`);
+    const avgER = qualityEntries.reduce((s, q) => s + q.entityRetention, 0) / qualityEntries.length;
+    lines.push(`| Average entity retention | ${(avgER * 100).toFixed(0)}% |`);
+  }
   lines.push('');
 
   // --- Pie chart: message outcome distribution ---
@@ -1216,6 +1231,22 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   const ancsSection = generateAncsSection(latest.results);
   if (ancsSection.length > 0) {
     lines.push(...ancsSection);
+    lines.push('');
+  }
+
+  // --- Quality ---
+  if (latest.results.quality && Object.keys(latest.results.quality).length > 0) {
+    lines.push('## Quality Metrics');
+    lines.push('');
+    lines.push(
+      '| Scenario | Entity Retention | Structural Integrity | Reference Coherence | Quality Score |',
+    );
+    lines.push('| --- | --- | --- | --- | --- |');
+    for (const [name, q] of Object.entries(latest.results.quality)) {
+      lines.push(
+        `| ${name} | ${(q.entityRetention * 100).toFixed(0)}% | ${(q.structuralIntegrity * 100).toFixed(0)}% | ${(q.referenceCoherence * 100).toFixed(0)}% | ${q.qualityScore.toFixed(3)} |`,
+      );
+    }
     lines.push('');
   }
 
