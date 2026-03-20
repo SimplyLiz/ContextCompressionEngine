@@ -91,7 +91,7 @@ describe('computeImportance', () => {
     ];
 
     const scores = computeImportance(messages);
-    for (const [_, score] of scores) {
+    for (const score of scores.values()) {
       expect(score).toBeGreaterThanOrEqual(0);
       expect(score).toBeLessThanOrEqual(1);
     }

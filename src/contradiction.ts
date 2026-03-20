@@ -22,19 +22,27 @@ export type ContradictionAnnotation = {
 
 // ── Topic overlap (IDF-weighted Sørensen-Dice) ──────────────────
 
-/** Extract all lowercase words (3+ chars) from content. */
+/** Extract topic words from content: plain words (3+ chars) plus technical identifiers. */
 function extractRawWords(content: string): Set<string> {
   const words = new Set<string>();
-  const matches = content.toLowerCase().match(/\b[a-z]{3,}\b/g);
-  if (matches) {
-    for (const w of matches) words.add(w);
+  // Plain lowercase words (3+ chars)
+  const plain = content.toLowerCase().match(/\b[a-z]{3,}\b/g);
+  if (plain) {
+    for (const w of plain) words.add(w);
+  }
+  // camelCase, PascalCase, snake_case — lowercased for uniform matching
+  const identifiers = content.match(
+    /\b[a-z]+(?:[A-Z][a-z]+)+\b|\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b|\b[a-z]+(?:_[a-z]+)+\b/g,
+  );
+  if (identifiers) {
+    for (const id of identifiers) words.add(id.toLowerCase());
   }
   return words;
 }
 
 /**
  * Compute IDF weights for all words across a set of documents.
- * Uses BM25-style IDF: `log((N - df + 0.5) / (df + 0.5))`.
+ * Uses smoothed IDF: `log(1 + N/df)`.
  *
  * Language-agnostic: common words get low weight regardless of language.
  * No hardcoded stopword list needed.
