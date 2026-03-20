@@ -272,40 +272,42 @@ export function clusterMessages(
   }
 
   // Convert to MessageCluster format (only multi-message clusters)
-  return clusters
-    .filter((c) => c.length >= 2)
-    .map((indices) => {
-      indices.sort((a, b) => a - b);
-      return indices;
-    })
-    // Only keep clusters with consecutive indices — non-consecutive merges
-    // break round-trip because uncompress can't restore interleaved ordering
-    .filter((indices) => {
-      for (let k = 1; k < indices.length; k++) {
-        if (indices[k] !== indices[k - 1] + 1) return false;
-      }
-      return true;
-    })
-    .map((indices) => {
-      // Find shared entities
-      const entityCounts = new Map<string, number>();
-      for (const idx of indices) {
-        for (const e of entitySets.get(idx)!) {
-          entityCounts.set(e, (entityCounts.get(e) ?? 0) + 1);
+  return (
+    clusters
+      .filter((c) => c.length >= 2)
+      .map((indices) => {
+        indices.sort((a, b) => a - b);
+        return indices;
+      })
+      // Only keep clusters with consecutive indices — non-consecutive merges
+      // break round-trip because uncompress can't restore interleaved ordering
+      .filter((indices) => {
+        for (let k = 1; k < indices.length; k++) {
+          if (indices[k] !== indices[k - 1] + 1) return false;
         }
-      }
-      const shared = [...entityCounts.entries()]
-        .filter(([, count]) => count >= 2)
-        .sort((a, b) => b[1] - a[1])
-        .map(([e]) => e)
-        .slice(0, 5);
+        return true;
+      })
+      .map((indices) => {
+        // Find shared entities
+        const entityCounts = new Map<string, number>();
+        for (const idx of indices) {
+          for (const e of entitySets.get(idx)!) {
+            entityCounts.set(e, (entityCounts.get(e) ?? 0) + 1);
+          }
+        }
+        const shared = [...entityCounts.entries()]
+          .filter(([, count]) => count >= 2)
+          .sort((a, b) => b[1] - a[1])
+          .map(([e]) => e)
+          .slice(0, 5);
 
-      return {
-        indices,
-        sharedEntities: shared,
-        label: shared.length > 0 ? shared.slice(0, 3).join(', ') : `cluster-${indices[0]}`,
-      };
-    });
+        return {
+          indices,
+          sharedEntities: shared,
+          label: shared.length > 0 ? shared.slice(0, 3).join(', ') : `cluster-${indices[0]}`,
+        };
+      })
+  );
 }
 
 /**
