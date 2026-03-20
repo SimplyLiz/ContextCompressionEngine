@@ -8,6 +8,28 @@ export type ClassifierResult = {
 
 export type Classifier = (content: string) => ClassifierResult | Promise<ClassifierResult>;
 
+/** Per-token classification result from an ML token classifier (LLMLingua-2 style). */
+export type TokenClassification = {
+  /** The original token. */
+  token: string;
+  /** Whether to keep this token in the compressed output. */
+  keep: boolean;
+  /** Confidence score (0–1). */
+  confidence: number;
+};
+
+/**
+ * ML token-level classifier. Takes content and returns per-token keep/remove
+ * decisions. Based on LLMLingua-2 (ACL 2024) — a small encoder model
+ * (e.g., XLM-RoBERTa) classifies each token with full bidirectional context.
+ *
+ * The function can be sync or async (e.g., backed by a local ONNX model
+ * or a remote inference endpoint).
+ */
+export type MLTokenClassifier = (
+  content: string,
+) => TokenClassification[] | Promise<TokenClassification[]>;
+
 export type CreateClassifierOptions = {
   /** Domain-specific instructions for the LLM. */
   systemPrompt?: string;
@@ -112,7 +134,7 @@ export type CompressOptions = {
    *  and forceConverge truncates low-importance messages first. Default: false. */
   importanceScoring?: boolean;
   /** Importance threshold for preservation (0–1). Messages scoring above this
-   *  are preserved even outside the recency window. Default: 0.35. */
+   *  are preserved even outside the recency window. Default: 0.65. */
   importanceThreshold?: number;
   /** Enable contradiction detection. When true, later messages that correct
    *  earlier ones cause the earlier message to be compressed while the
@@ -120,6 +142,61 @@ export type CompressOptions = {
   contradictionDetection?: boolean;
   /** Topic overlap threshold for contradiction detection (0–1). Default: 0.15. */
   contradictionTopicThreshold?: number;
+  /** Relevance threshold for summarization (0–1). When set, messages whose best
+   *  sentence score falls below this threshold are replaced with a compact stub
+   *  instead of a low-quality summary. Higher values = more aggressive dropping.
+   *  Default: undefined (disabled). */
+  relevanceThreshold?: number;
+  /** Optional entropy scorer for information-theoretic sentence scoring.
+   *  When provided, augments or replaces the heuristic sentence scorer.
+   *  The function receives an array of sentences and returns per-sentence
+   *  self-information scores (higher = more informative = preserve).
+   *  Can be sync or async (e.g., backed by a small local LM). */
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>;
+  /** How to combine entropy and heuristic scores.
+   *  - 'replace': use entropy scores only (heuristic skipped)
+   *  - 'augment': weighted average of both (default when entropyScorer is set) */
+  entropyScorerMode?: 'replace' | 'augment';
+  /** ML token-level classifier (LLMLingua-2 style). When provided, T2 prose
+   *  content is classified at the token level: kept tokens are reconstructed
+   *  into compressed text. T0 rules still override for code/structured content.
+   *  Can be sync or async. When async, compress() returns a Promise. */
+  mlTokenClassifier?: MLTokenClassifier;
+  /** **Experimental.** Enable discourse-aware summarization (EDU-lite).
+   *  Breaks content into Elementary Discourse Units with dependency tracking.
+   *  **Warning:** reduces compression ratio by 8–28% with the built-in scorer.
+   *  The dependency tracking keeps more text than standard summarization.
+   *  Recommended only with a custom ML-backed scorer via `scoreEDUs()`.
+   *  Use the exported `segmentEDUs`/`scoreEDUs`/`selectEDUs` directly instead.
+   *  Default: false. */
+  discourseAware?: boolean;
+  /** Enable semantic clustering. Groups messages by topic using TF-IDF and
+   *  entity overlap, then compresses each cluster as a unit. Scattered
+   *  messages about the same topic get merged into a single compressed block.
+   *  Default: false. */
+  semanticClustering?: boolean;
+  /** Similarity threshold for semantic clustering (0–1). Default: 0.15. */
+  clusterThreshold?: number;
+  /** Enable cross-message coreference tracking. When a compressed message defines
+   *  an entity referenced by a preserved message, the definition is inlined into
+   *  the compressed summary to prevent orphaned references. Default: false. */
+  coreference?: boolean;
+  /** Enable conversation flow detection. Groups Q&A pairs, request→action→confirmation
+   *  chains, and correction sequences into compression units for better summaries.
+   *  Default: false. */
+  conversationFlow?: boolean;
+  /** Compression depth controls aggressiveness.
+   *  - 'gentle': standard sentence selection (~2x, default)
+   *  - 'moderate': tighter budgets + clause pruning (~3-4x)
+   *  - 'aggressive': entity-only stubs (~6-8x)
+   *  - 'auto': progressively increases depth until tokenBudget fits or quality drops below 0.80 */
+  compressionDepth?: 'gentle' | 'moderate' | 'aggressive' | 'auto';
+  /** Budget strategy when tokenBudget is set.
+   *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
+   *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content
+   *    by priority tier. System/T0/recent messages are protected; older prose is
+   *    compressed first, then stubbed, then truncated. Better preserves recent context. */
+  budgetStrategy?: 'binary-search' | 'tiered';
 };
 
 export type VerbatimMap = Record<string, Message>;
@@ -158,6 +235,16 @@ export type CompressResult = {
     messages_contradicted?: number;
     /** Messages preserved due to high importance score (when importanceScoring is enabled). */
     messages_importance_preserved?: number;
+    /** Messages dropped to a stub because their best sentence score fell below the relevance threshold. */
+    messages_relevance_dropped?: number;
+    /** Fraction of technical entities (identifiers, abbreviations, numbers) preserved after compression (0–1). */
+    entity_retention?: number;
+    /** Fraction of structural elements (code fences, JSON blocks, tables) preserved after compression (0–1). */
+    structural_integrity?: number;
+    /** Fraction of output entity references whose defining message is still present (0–1). */
+    reference_coherence?: number;
+    /** Composite quality score: 0.4 * entity_retention + 0.4 * structural_integrity + 0.2 * reference_coherence. */
+    quality_score?: number;
     decisions?: CompressDecision[];
   };
   /**

@@ -1,6 +1,6 @@
 {
   "name": "context-compression-engine",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Lossless context compression engine for LLMs",
   "type": "module",
   "engines": {
@@ -17,6 +17,7 @@
     "bench:llm": "npx tsx bench/run.ts --llm",
     "bench:save": "npx tsx bench/run.ts --save",
     "bench:check": "npx tsx bench/run.ts --check",
+    "bench:compare": "npx tsx bench/compare.ts",
     "test:e2e": "npm run build && npm pack && npm run test:e2e:lint && npm run test:e2e:smoke; EXIT=$?; npm run test:e2e:cleanup; exit $EXIT",
     "test:e2e:lint": "publint ./context-compression-engine-*.tgz --strict && attw ./context-compression-engine-*.tgz --ignore-rules cjs-resolves-to-esm",
     "test:e2e:smoke": "cd e2e && npm install ../context-compression-engine-*.tgz && npm test",

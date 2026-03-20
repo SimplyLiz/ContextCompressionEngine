@@ -126,4 +126,4 @@ export function computeImportance(messages: Message[]): ImportanceMap {
  * Default importance threshold for preservation.
  * Messages scoring above this are preserved even outside the recency window.
  */
-export const DEFAULT_IMPORTANCE_THRESHOLD = 0.35;
+export const DEFAULT_IMPORTANCE_THRESHOLD = 0.65;

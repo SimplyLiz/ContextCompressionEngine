@@ -138,6 +138,34 @@ Truncated messages get `_cce_original` provenance metadata, so `uncompress()` re
 
 Without `forceConverge`, the result may exceed the budget when conversations are heavily system-message or short-message dominated (since those are preserved).
 
+## Tiered budget strategy
+
+An alternative to binary search that keeps the recency window fixed. Instead of shrinking `recencyWindow` to fit, it progressively compresses older messages through tightening passes.
+
+```ts
+const result = compress(messages, {
+  tokenBudget: 4000,
+  budgetStrategy: 'tiered',
+  forceConverge: true,
+});
+```
+
+See [V2 features — Tiered budget](v2-features.md#tiered-budget-strategy) for the full algorithm and tradeoff comparison.
+
+## Compression depth with budget
+
+When `compressionDepth: 'auto'` is combined with `tokenBudget`, the engine progressively tries gentle → moderate → aggressive until the budget fits:
+
+```ts
+const result = compress(messages, {
+  tokenBudget: 2000,
+  compressionDepth: 'auto',
+  forceConverge: true,
+});
+```
+
+This is the most adaptive budget mode — it finds the minimum aggressiveness needed. See [V2 features — Compression depth](v2-features.md#compression-depth).
+
 ## Budget with LLM summarizer
 
 ```ts
@@ -153,6 +181,7 @@ The binary search calls the LLM at each iteration, so cost and latency scale wit
 
 ## See also
 
+- [V2 features](v2-features.md) - tiered budget, compression depth, quality metrics
 - [Compression pipeline](compression-pipeline.md) - overall pipeline flow
 - [LLM integration](llm-integration.md) - setting up summarizers
 - [API reference](api-reference.md) - `tokenBudget`, `minRecencyWindow`, `forceConverge`, `tokenCounter`

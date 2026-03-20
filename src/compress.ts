@@ -6,6 +6,17 @@ import {
   type ImportanceMap,
 } from './importance.js';
 import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
+import { extractEntities, computeQualityScore } from './entities.js';
+import { combineScores } from './entropy.js';
+import { detectFlowChains, summarizeChain, type FlowChain } from './flow.js';
+import {
+  buildCoreferenceMap,
+  findOrphanedReferences,
+  generateInlineDefinitions,
+} from './coreference.js';
+import { clusterMessages, summarizeCluster, type MessageCluster } from './cluster.js';
+import { summarizeWithEDUs } from './discourse.js';
+import { compressWithTokenClassifierSync, compressWithTokenClassifier } from './ml-classifier.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -87,7 +98,32 @@ function scoreSentence(sentence: string): number {
   return score;
 }
 
-function summarize(text: string, maxBudget?: number): string {
+/**
+ * Compute the best (highest) sentence score in a text.
+ * Used for the relevance threshold: if the best score is below the threshold,
+ * the content is too low-value to produce a useful summary.
+ */
+export function bestSentenceScore(text: string): number {
+  const sentences = text.match(/[^.!?\n]+[.!?]+/g);
+  if (!sentences || sentences.length === 0) return scoreSentence(text.trim());
+  let best = -Infinity;
+  for (const s of sentences) {
+    const score = scoreSentence(s.trim());
+    if (score > best) best = score;
+  }
+  return best;
+}
+
+/**
+ * Deterministic summarization with optional external score overrides.
+ *
+ * @param text - text to summarize
+ * @param maxBudget - character budget for the summary
+ * @param externalScores - optional per-sentence scores (from entropy scorer).
+ *   When provided, replaces the heuristic scorer for sentence ranking.
+ *   Map key is the sentence index (matches paragraph/sentence iteration order).
+ */
+function summarize(text: string, maxBudget?: number, externalScores?: Map<number, number>): string {
   const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
 
   type Scored = { text: string; score: number; origIdx: number; primary: boolean };
@@ -99,9 +135,10 @@ function summarize(text: string, maxBudget?: number): string {
     if (!sentences || sentences.length === 0) {
       const trimmed = para.trim();
       if (trimmed.length > 0) {
+        const score = externalScores?.get(globalIdx) ?? scoreSentence(trimmed);
         allSentences.push({
           text: trimmed,
-          score: scoreSentence(trimmed),
+          score,
           origIdx: globalIdx++,
           primary: true,
         });
@@ -114,7 +151,7 @@ function summarize(text: string, maxBudget?: number): string {
     const paraSentences: Scored[] = [];
     for (let i = 0; i < sentences.length; i++) {
       const s = sentences[i].trim();
-      const sc = scoreSentence(s);
+      const sc = externalScores?.get(globalIdx + i) ?? scoreSentence(s);
       paraSentences.push({ text: s, score: sc, origIdx: globalIdx + i, primary: false });
       if (sc > bestScore) {
         bestScore = sc;
@@ -259,149 +296,55 @@ function summarizeStructured(text: string, maxBudget: number): string {
   return result;
 }
 
-const COMMON_STARTERS = new Set([
-  'The',
-  'This',
-  'That',
-  'These',
-  'Those',
-  'When',
-  'Where',
-  'What',
-  'Which',
-  'Who',
-  'How',
-  'Why',
-  'Here',
-  'There',
-  'Now',
-  'Then',
-  'But',
-  'And',
-  'Or',
-  'So',
-  'If',
-  'It',
-  'Its',
-  'My',
-  'Your',
-  'His',
-  'Her',
-  'Our',
-  'They',
-  'We',
-  'You',
-  'He',
-  'She',
-  'In',
-  'On',
-  'At',
-  'To',
-  'For',
-  'With',
-  'From',
-  'As',
-  'By',
-  'An',
-  'Each',
-  'Every',
-  'Some',
-  'All',
-  'Most',
-  'Many',
-  'Much',
-  'Any',
-  'No',
-  'Not',
-  'Also',
-  'Just',
-  'Only',
-  'Even',
-  'Still',
-  'Yet',
-  'Let',
-  'See',
-  'Note',
-  'Yes',
-  'Sure',
-  'Great',
-  'Thanks',
-  'Well',
-  'First',
-  'Second',
-  'Third',
-  'Next',
-  'Last',
-  'Finally',
-  'However',
-  'After',
-  'Before',
-  'Since',
-  'Once',
-  'While',
-  'Although',
-  'Because',
-  'Unless',
-  'Until',
-  'About',
-  'Over',
-  'Under',
-  'Between',
-  'Into',
-]);
+/**
+ * Adaptive summary budget: scales with content density.
+ * Dense content (many entities per char) gets more budget to preserve identifiers.
+ * Sparse content (general discussion) gets tighter budget for more aggressive compression.
+ *
+ * @param contentLength - character length of the content
+ * @param entityCount - optional entity count for density-adaptive scaling
+ */
+/** Depth multiplier: how much to scale the budget down by depth level. */
+const DEPTH_MULTIPLIERS: Record<string, number> = {
+  gentle: 1.0,
+  moderate: 0.5,
+  aggressive: 0.15,
+};
 
-function computeBudget(contentLength: number): number {
-  return Math.max(200, Math.min(Math.round(contentLength * 0.3), 600));
+function computeBudget(
+  contentLength: number,
+  entityCount?: number,
+  depth?: 'gentle' | 'moderate' | 'aggressive',
+): number {
+  const depthMul = DEPTH_MULTIPLIERS[depth ?? 'gentle'] ?? 1.0;
+  const baseRatio = 0.3 * depthMul;
+
+  if (entityCount != null && contentLength > 0) {
+    const density = entityCount / contentLength;
+    const densityBonus = Math.min(density * 500, 0.5) * depthMul;
+    const adaptiveRatio = Math.max(
+      0.05,
+      Math.min(baseRatio + densityBonus - 0.15 * depthMul, 0.45 * depthMul),
+    );
+    return Math.max(
+      depth === 'aggressive' ? 40 : 100,
+      Math.min(Math.round(contentLength * adaptiveRatio), 800 * depthMul),
+    );
+  }
+
+  const min = depth === 'aggressive' ? 40 : depth === 'moderate' ? 100 : 200;
+  const max = depth === 'aggressive' ? 120 : depth === 'moderate' ? 300 : 600;
+  return Math.max(min, Math.min(Math.round(contentLength * baseRatio), max));
 }
 
-function extractEntities(text: string): string[] {
-  const entities = new Set<string>();
-
-  // Proper nouns: capitalized words not at common sentence starters
-  const properNouns = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g);
-  if (properNouns) {
-    for (const noun of properNouns) {
-      const first = noun.split(/\s+/)[0];
-      if (!COMMON_STARTERS.has(first)) {
-        entities.add(noun);
-      }
-    }
-  }
-
-  // PascalCase identifiers (TypeScript, WebSocket, JavaScript, etc.)
-  const pascalCase = text.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g);
-  if (pascalCase) {
-    for (const id of pascalCase) entities.add(id);
-  }
-
-  // camelCase identifiers
-  const camelCase = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g);
-  if (camelCase) {
-    for (const id of camelCase) entities.add(id);
-  }
-
-  // snake_case identifiers
-  const snakeCase = text.match(/\b[a-z]+(?:_[a-z]+)+\b/g);
-  if (snakeCase) {
-    for (const id of snakeCase) entities.add(id);
-  }
-
-  // Vowelless words (3+ consonants, no aeiou/y) — abbreviations/tool names: pnpm, npm, ssh, grpc
-  const vowelless = text.match(/\b[bcdfghjklmnpqrstvwxz]{3,}\b/gi);
-  if (vowelless) {
-    for (const w of vowelless) entities.add(w.toLowerCase());
-  }
-
-  // Numbers with context
-  const numbersCtx = text.match(
-    /\b\d+(?:\.\d+)?\s*(?:seconds?|retries?|attempts?|MB|GB|TB|KB|ms|minutes?|hours?|days?|bytes?|workers?|threads?|nodes?|replicas?|instances?|users?|requests?|errors?|percent|%)\b/gi,
-  );
-  if (numbersCtx) {
-    for (const n of numbersCtx) entities.add(n.trim());
-  }
-
-  const maxEntities = Math.max(3, Math.min(Math.round(text.length / 200), 15));
-  return Array.from(entities).slice(0, maxEntities);
+/**
+ * Generate entity-only stub for aggressive compression.
+ * Returns just the key entities from the text.
+ */
+function entityOnlyStub(text: string): string {
+  const entities = extractEntities(text, 10);
+  if (entities.length === 0) return text.slice(0, 40).trim() + '...';
+  return entities.join(', ');
 }
 
 function splitCodeAndProse(text: string): Array<{ type: 'prose' | 'code'; content: string }> {
@@ -723,6 +666,7 @@ function computeStats(
   messagesLlmPreserved?: number,
   messagesContradicted?: number,
   messagesImportancePreserved?: number,
+  messagesRelevanceDropped?: number,
 ): CompressResult['compression'] {
   const originalTotalChars = originalMessages.reduce((sum, m) => sum + contentLength(m), 0);
   const compressedTotalChars = resultMessages.reduce((sum, m) => sum + contentLength(m), 0);
@@ -757,6 +701,9 @@ function computeStats(
       : {}),
     ...(messagesImportancePreserved && messagesImportancePreserved > 0
       ? { messages_importance_preserved: messagesImportancePreserved }
+      : {}),
+    ...(messagesRelevanceDropped && messagesRelevanceDropped > 0
+      ? { messages_relevance_dropped: messagesRelevanceDropped }
       : {}),
   };
 }
@@ -919,6 +866,40 @@ function* compressGen(
     contradictionAnnotations,
   );
 
+  // Conversation flow detection
+  const flowChainMap = new Map<number, FlowChain>(); // message index → chain
+  if (options.conversationFlow) {
+    const recencyStart = Math.max(0, messages.length - recencyWindow);
+    const flowChains = detectFlowChains(messages, recencyStart, preserveRoles);
+    for (const chain of flowChains) {
+      for (const idx of chain.indices) {
+        flowChainMap.set(idx, chain);
+      }
+    }
+  }
+
+  // Semantic clustering
+  const clusterMap = new Map<number, MessageCluster>(); // message index → cluster
+  if (options.semanticClustering) {
+    const recencyStart = Math.max(0, messages.length - recencyWindow);
+    // Find eligible indices: not in recency, not system, not already in flow chains
+    const eligible: number[] = [];
+    for (let idx = 0; idx < recencyStart; idx++) {
+      if (flowChainMap.has(idx)) continue;
+      const m = messages[idx];
+      if (m.role && preserveRoles.has(m.role)) continue;
+      const content = (m.content as string | undefined) ?? '';
+      if (content.length < 80) continue;
+      eligible.push(idx);
+    }
+    const clusters = clusterMessages(messages, eligible, options.clusterThreshold ?? 0.15);
+    for (const cluster of clusters) {
+      for (const idx of cluster.indices) {
+        clusterMap.set(idx, cluster);
+      }
+    }
+  }
+
   const result: Message[] = [];
   const verbatim: Record<string, Message> = {};
   const decisions: CompressDecision[] = [];
@@ -928,12 +909,134 @@ function* compressGen(
   let messagesFuzzyDeduped = 0;
   let messagesContradicted = 0;
   let messagesImportancePreserved = 0;
+  let messagesRelevanceDropped = 0;
   let messagesPatternPreserved = 0;
   let messagesLlmPreserved = 0;
+  const processedFlowChains = new Set<FlowChain>();
+  const processedClusters = new Set<MessageCluster>();
   let i = 0;
 
   while (i < classified.length) {
     const { msg, preserved } = classified[i];
+
+    // Skip messages already consumed by a processed flow chain or cluster
+    if (flowChainMap.has(i) && processedFlowChains.has(flowChainMap.get(i)!)) {
+      i++;
+      continue;
+    }
+    if (clusterMap.has(i) && processedClusters.has(clusterMap.get(i)!)) {
+      i++;
+      continue;
+    }
+
+    // Flow chain: compress the entire chain as a unit
+    if (flowChainMap.has(i) && !processedFlowChains.has(flowChainMap.get(i)!)) {
+      const chain = flowChainMap.get(i)!;
+
+      // Check if chain members can be flow-compressed. Allow overriding soft
+      // preservation (recency, short_content, soft T0) but not hard blocks
+      // (system role, dedup, tool_calls, already compressed).
+      const allCompressible = chain.indices.every((idx) => {
+        const c = classified[idx];
+        if (c.dedup || c.codeSplit || c.adapterMatch) return false;
+        if (c.preserved) {
+          // Block: system role, tool_calls, already compressed
+          const m = c.msg;
+          if (m.role && preserveRoles.has(m.role)) return false;
+          if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) return false;
+          const content = typeof m.content === 'string' ? m.content : '';
+          if (content.startsWith('[summary:') || content.startsWith('[truncated')) return false;
+          // Allow: recency, short_content, soft T0, hard T0 (flow chain wins)
+        }
+        return true;
+      });
+
+      if (allCompressible) {
+        const chainSummary = summarizeChain(chain, messages);
+        const chainIds = chain.indices.map((idx) => messages[idx].id);
+        const sourceMsgs = chain.indices.map((idx) => messages[idx]);
+        const combinedLength = sourceMsgs.reduce((sum, m) => sum + contentLength(m), 0);
+
+        const tag = `[summary: ${chainSummary} (${chain.indices.length} messages, ${chain.type})]`;
+
+        if (tag.length < combinedLength) {
+          processedFlowChains.add(chain);
+          const base: Message = { ...sourceMsgs[0] };
+          result.push(
+            buildCompressedMessage(base, chainIds, tag, sourceVersion, verbatim, sourceMsgs),
+          );
+          messagesCompressed += chain.indices.length;
+          if (trace) {
+            for (const idx of chain.indices) {
+              decisions.push({
+                messageId: messages[idx].id,
+                messageIndex: idx,
+                action: 'compressed',
+                reason: `flow:${chain.type}`,
+                inputChars: contentLength(messages[idx]),
+                outputChars: Math.round(tag.length / chain.indices.length),
+              });
+            }
+          }
+
+          // Advance past current index only — non-chain messages between
+          // chain members will be processed normally on subsequent iterations.
+          // The processedFlowChains set prevents re-entering this chain.
+          i++;
+          continue;
+        }
+      }
+      // If chain compression didn't work, fall through to normal processing
+    }
+
+    // Semantic cluster: compress all cluster members as a unit
+    if (clusterMap.has(i) && !processedClusters.has(clusterMap.get(i)!)) {
+      const cluster = clusterMap.get(i)!;
+
+      const allCompressible = cluster.indices.every((idx) => {
+        const c = classified[idx];
+        if (c.dedup || c.codeSplit || c.adapterMatch) return false;
+        if (c.preserved) {
+          const m = c.msg;
+          if (m.role && preserveRoles.has(m.role)) return false;
+          if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) return false;
+          const content = typeof m.content === 'string' ? m.content : '';
+          if (content.startsWith('[summary:') || content.startsWith('[truncated')) return false;
+        }
+        return true;
+      });
+
+      if (allCompressible) {
+        const clusterSummary = summarizeCluster(cluster, messages);
+        const clusterIds = cluster.indices.map((idx) => messages[idx].id);
+        const sourceMsgs = cluster.indices.map((idx) => messages[idx]);
+        const combinedLength = sourceMsgs.reduce((sum, m) => sum + contentLength(m), 0);
+        const tag = `[summary: ${clusterSummary}]`;
+
+        if (tag.length < combinedLength) {
+          processedClusters.add(cluster);
+          const base: Message = { ...sourceMsgs[0] };
+          result.push(
+            buildCompressedMessage(base, clusterIds, tag, sourceVersion, verbatim, sourceMsgs),
+          );
+          messagesCompressed += cluster.indices.length;
+          if (trace) {
+            for (const idx of cluster.indices) {
+              decisions.push({
+                messageId: messages[idx].id,
+                messageIndex: idx,
+                action: 'compressed',
+                reason: `cluster:${cluster.label}`,
+                inputChars: contentLength(messages[idx]),
+                outputChars: Math.round(tag.length / cluster.indices.length),
+              });
+            }
+          }
+          i++;
+          continue;
+        }
+      }
+    }
 
     if (preserved) {
       result.push(msg);
@@ -991,7 +1094,12 @@ function* compressGen(
       const annotation = classified[i].contradiction!;
       const supersederId = messages[annotation.supersededByIndex].id;
       const content = typeof msg.content === 'string' ? msg.content : '';
-      const contentBudget = computeBudget(content.length);
+      const depth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveC = depth != null && depth !== 'gentle';
+      const contradictionEntityCount = useAdaptiveC
+        ? extractEntities(content, 500).length
+        : undefined;
+      const contentBudget = computeBudget(content.length, contradictionEntityCount, depth);
       const summaryText: string = yield { text: content, budget: contentBudget };
       let tag = `[cce:superseded by ${supersederId} (${annotation.signal}) — ${summaryText}]`;
       // If full tag doesn't fit, use compact format
@@ -1039,7 +1147,10 @@ function* compressGen(
         .map((s) => s.content)
         .join(' ');
       const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
-      const proseBudget = computeBudget(proseText.length);
+      const codeDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveCS = codeDepth != null && codeDepth !== 'gentle';
+      const proseEntityCount = useAdaptiveCS ? extractEntities(proseText, 500).length : undefined;
+      const proseBudget = computeBudget(proseText.length, proseEntityCount, codeDepth);
       const summaryText: string = yield { text: proseText, budget: proseBudget };
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
       const compressed = `${formatSummary(summaryText, proseText, undefined, true, embeddedId)}\n\n${codeFences.join('\n\n')}`;
@@ -1086,7 +1197,11 @@ function* compressGen(
       const preserved = adapter.extractPreserved(content);
       const compressible = adapter.extractCompressible(content);
       const proseText = compressible.join(' ');
-      const proseBudget = computeBudget(proseText.length);
+      const adapterDepth =
+        options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const useAdaptiveA = adapterDepth != null && adapterDepth !== 'gentle';
+      const adapterEntityCount = useAdaptiveA ? extractEntities(proseText, 500).length : undefined;
+      const proseBudget = computeBudget(proseText.length, adapterEntityCount, adapterDepth);
       const summaryText: string =
         proseText.length > 0 ? yield { text: proseText, budget: proseBudget } : '';
       const compressed = adapter.reconstruct(preserved, summaryText);
@@ -1132,10 +1247,49 @@ function* compressGen(
     const allContent = group
       .map((g) => (typeof g.msg.content === 'string' ? g.msg.content : ''))
       .join(' ');
-    const contentBudget = computeBudget(allContent.length);
-    const summaryText = isStructuredOutput(allContent)
-      ? summarizeStructured(allContent, contentBudget)
-      : yield { text: allContent, budget: contentBudget };
+
+    // Relevance threshold: if the best sentence score is below the threshold,
+    // replace the entire group with a compact stub instead of a summary.
+    const relevanceThreshold = options.relevanceThreshold;
+    if (relevanceThreshold != null && relevanceThreshold > 0) {
+      const topScore = bestSentenceScore(allContent);
+      if (topScore < relevanceThreshold) {
+        const stub = `[${group.length} message${group.length > 1 ? 's' : ''} of general discussion omitted]`;
+        const sourceMsgs = group.map((g) => g.msg);
+        const mergeIds = group.map((g) => g.msg.id);
+        const base: Message = { ...sourceMsgs[0] };
+        result.push(
+          buildCompressedMessage(base, mergeIds, stub, sourceVersion, verbatim, sourceMsgs),
+        );
+        messagesRelevanceDropped += group.length;
+        messagesCompressed += group.length;
+        if (trace) {
+          for (let gi = 0; gi < group.length; gi++) {
+            decisions.push({
+              messageId: group[gi].msg.id,
+              messageIndex: groupStartIdx + gi,
+              action: 'compressed',
+              reason: `relevance_dropped:${topScore}`,
+              inputChars: contentLength(group[gi].msg),
+              outputChars: Math.round(stub.length / group.length),
+            });
+          }
+        }
+        continue;
+      }
+    }
+
+    const groupDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+    // Adaptive budget (entity-aware) only activates when depth is explicitly non-gentle
+    const useAdaptive = groupDepth != null && groupDepth !== 'gentle';
+    const entityCount = useAdaptive ? extractEntities(allContent, 500).length : undefined;
+    const contentBudget = computeBudget(allContent.length, entityCount, groupDepth);
+    const summaryText =
+      groupDepth === 'aggressive'
+        ? entityOnlyStub(allContent)
+        : isStructuredOutput(allContent)
+          ? summarizeStructured(allContent, contentBudget)
+          : yield { text: allContent, budget: contentBudget };
 
     if (group.length > 1) {
       const mergeIds = group.map((g) => g.msg.id);
@@ -1222,6 +1376,52 @@ function* compressGen(
     }
   }
 
+  // Coreference inlining: prepend entity definitions to compressed messages
+  // when a preserved message references an entity defined only in a compressed message.
+  if (options.coreference && messagesCompressed > 0) {
+    const corefDefs = buildCoreferenceMap(messages);
+    const compressedSet = new Set<number>();
+    const preservedSet = new Set<number>();
+    for (let ri = 0; ri < result.length; ri++) {
+      const orig = result[ri].metadata?._cce_original as Record<string, unknown> | undefined;
+      if (orig) {
+        // Find original message index from the id
+        const ids = orig.ids as string[] | undefined;
+        if (ids) {
+          for (const id of ids) {
+            const origIdx = messages.findIndex((m) => m.id === id);
+            if (origIdx >= 0) compressedSet.add(origIdx);
+          }
+        }
+      } else {
+        const origIdx = messages.findIndex((m) => m.id === result[ri].id);
+        if (origIdx >= 0) preservedSet.add(origIdx);
+      }
+    }
+
+    const orphaned = findOrphanedReferences(corefDefs, compressedSet, preservedSet);
+    if (orphaned.size > 0) {
+      for (let ri = 0; ri < result.length; ri++) {
+        const orig = result[ri].metadata?._cce_original as Record<string, unknown> | undefined;
+        if (!orig) continue;
+        const ids = orig.ids as string[] | undefined;
+        if (!ids) continue;
+        for (const id of ids) {
+          const origIdx = messages.findIndex((m) => m.id === id);
+          if (origIdx >= 0 && orphaned.has(origIdx)) {
+            const entities = orphaned.get(origIdx)!;
+            const sourceContent =
+              typeof messages[origIdx].content === 'string' ? messages[origIdx].content : '';
+            const inline = generateInlineDefinitions(entities, sourceContent);
+            if (inline && result[ri].content) {
+              result[ri] = { ...result[ri], content: inline + result[ri].content };
+            }
+          }
+        }
+      }
+    }
+  }
+
   const stats = computeStats(
     messages,
     result,
@@ -1236,10 +1436,20 @@ function* compressGen(
     messagesLlmPreserved,
     messagesContradicted,
     messagesImportancePreserved,
+    messagesRelevanceDropped,
   );
 
   if (trace) {
     stats.decisions = decisions;
+  }
+
+  // Quality metrics (always computed when compression occurred)
+  if (messagesCompressed > 0 || messagesDeduped > 0 || messagesContradicted > 0) {
+    const quality = computeQualityScore(messages, result);
+    stats.entity_retention = Math.round(quality.entity_retention * 1000) / 1000;
+    stats.structural_integrity = Math.round(quality.structural_integrity * 1000) / 1000;
+    stats.reference_coherence = Math.round(quality.reference_coherence * 1000) / 1000;
+    stats.quality_score = Math.round(quality.quality_score * 1000) / 1000;
   }
 
   return {
@@ -1249,11 +1459,62 @@ function* compressGen(
   };
 }
 
-function runCompressSync(gen: Generator<SummarizeRequest, CompressResult, string>): CompressResult {
+/**
+ * Build external score map from entropy scorer for use in summarize().
+ * Splits text into sentences, scores them, and combines with heuristic scores.
+ */
+function buildEntropyScores(
+  text: string,
+  rawScores: number[],
+  mode: 'replace' | 'augment',
+): Map<number, number> {
+  const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+  const scoreMap = new Map<number, number>();
+
+  if (mode === 'replace') {
+    for (let i = 0; i < Math.min(sentences.length, rawScores.length); i++) {
+      scoreMap.set(i, rawScores[i]);
+    }
+  } else {
+    // augment: weighted average of heuristic and entropy
+    const heuristicScores = sentences.map((s) => scoreSentence(s.trim()));
+    const combined = combineScores(heuristicScores, rawScores.slice(0, sentences.length));
+    for (let i = 0; i < combined.length; i++) {
+      scoreMap.set(i, combined[i] * 20); // scale to heuristic range
+    }
+  }
+
+  return scoreMap;
+}
+
+function runCompressSync(
+  gen: Generator<SummarizeRequest, CompressResult, string>,
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
+  entropyScorerMode: 'replace' | 'augment' = 'augment',
+  discourseAware?: boolean,
+  mlTokenClassifier?: CompressOptions['mlTokenClassifier'],
+): CompressResult {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    next = gen.next(summarize(text, budget));
+    if (mlTokenClassifier) {
+      const compressed = compressWithTokenClassifierSync(text, mlTokenClassifier);
+      next = gen.next(compressed.length < text.length ? compressed : summarize(text, budget));
+    } else if (discourseAware) {
+      next = gen.next(summarizeWithEDUs(text, budget));
+    } else if (entropyScorer) {
+      const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+      const result = entropyScorer(sentences.map((s) => s.trim()));
+      if (result instanceof Promise) {
+        throw new Error(
+          'compress(): entropyScorer returned a Promise in sync mode. Use a summarizer to enable async.',
+        );
+      }
+      const externalScores = buildEntropyScores(text, result, entropyScorerMode);
+      next = gen.next(summarize(text, budget, externalScores));
+    } else {
+      next = gen.next(summarize(text, budget));
+    }
   }
   return next.value;
 }
@@ -1261,17 +1522,45 @@ function runCompressSync(gen: Generator<SummarizeRequest, CompressResult, string
 async function runCompressAsync(
   gen: Generator<SummarizeRequest, CompressResult, string>,
   userSummarizer?: Summarizer,
+  entropyScorer?: (sentences: string[]) => number[] | Promise<number[]>,
+  entropyScorerMode: 'replace' | 'augment' = 'augment',
+  discourseAware?: boolean,
+  mlTokenClassifier?: CompressOptions['mlTokenClassifier'],
 ): Promise<CompressResult> {
   let next = gen.next();
   while (!next.done) {
     const { text, budget } = next.value;
-    next = gen.next(await withFallback(text, userSummarizer, budget));
+    if (mlTokenClassifier) {
+      const compressed = await compressWithTokenClassifier(text, mlTokenClassifier);
+      next = gen.next(compressed.length < text.length ? compressed : summarize(text, budget));
+    } else if (discourseAware && !userSummarizer) {
+      next = gen.next(summarizeWithEDUs(text, budget));
+    } else if (entropyScorer) {
+      const sentences = text.match(/[^.!?\n]+[.!?]+/g) ?? [text.trim()];
+      const rawScores = await Promise.resolve(entropyScorer(sentences.map((s) => s.trim())));
+      const externalScores = buildEntropyScores(text, rawScores, entropyScorerMode);
+      // When entropy scorer is set, use deterministic summarize with external scores
+      // unless a user summarizer is also provided
+      if (userSummarizer) {
+        next = gen.next(await withFallback(text, userSummarizer, budget));
+      } else {
+        next = gen.next(summarize(text, budget, externalScores));
+      }
+    } else {
+      next = gen.next(await withFallback(text, userSummarizer, budget));
+    }
   }
   return next.value;
 }
 
 function compressSync(messages: Message[], options: CompressOptions = {}): CompressResult {
-  return runCompressSync(compressGen(messages, options));
+  return runCompressSync(
+    compressGen(messages, options),
+    options.entropyScorer,
+    options.entropyScorerMode ?? 'augment',
+    options.discourseAware,
+    options.mlTokenClassifier,
+  );
 }
 
 async function compressAsync(
@@ -1288,9 +1577,23 @@ async function compressAsync(
       preserveRoles,
     );
     const opts: _InternalOptions = { ...options, _llmResults: llmResults };
-    return runCompressAsync(compressGen(messages, opts), options.summarizer);
+    return runCompressAsync(
+      compressGen(messages, opts),
+      options.summarizer,
+      options.entropyScorer,
+      options.entropyScorerMode ?? 'augment',
+      options.discourseAware,
+      options.mlTokenClassifier,
+    );
   }
-  return runCompressAsync(compressGen(messages, options), options.summarizer);
+  return runCompressAsync(
+    compressGen(messages, options),
+    options.summarizer,
+    options.entropyScorer,
+    options.entropyScorerMode ?? 'augment',
+    options.discourseAware,
+    options.mlTokenClassifier,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1444,6 +1747,361 @@ function forceConvergePass(
 
   const fits = tokenCount <= tokenBudget;
   return { ...cr, messages, verbatim, fits, tokenCount };
+}
+
+// ---------------------------------------------------------------------------
+// Tiered budget strategy
+// ---------------------------------------------------------------------------
+
+/**
+ * Tiered budget: keeps recencyWindow fixed and progressively compresses
+ * older content by priority tier instead of shrinking the recency window.
+ *
+ * Priority (protected → sacrificed):
+ *   1. System messages — never touched
+ *   2. T0 content (code, JSON, etc.) — never touched
+ *   3. Recent window messages — protected
+ *   4. Older compressed prose — tightened (re-summarize at smaller budget)
+ *   5. Low-value older prose — stubbed (relevance drop)
+ *   6. Remaining older prose — truncated (force-converge)
+ */
+function compressTieredSync(
+  messages: Message[],
+  tokenBudget: number,
+  options: CompressOptions,
+): CompressResult {
+  const sourceVersion = options.sourceVersion ?? 0;
+  const counter = options.tokenCounter ?? defaultTokenCounter;
+  const preserveRoles = new Set(options.preserve ?? ['system']);
+  const rw = options.recencyWindow ?? 4;
+
+  const fast = budgetFastPath(messages, tokenBudget, sourceVersion, counter);
+  if (fast) return fast;
+
+  // Step 1: Run standard compress with the user's recencyWindow
+  const cr = compressSync(messages, {
+    ...options,
+    recencyWindow: rw,
+    summarizer: undefined,
+    tokenBudget: undefined,
+  });
+  const result = addBudgetFields(cr, tokenBudget, rw, counter);
+
+  if (result.fits) return result;
+
+  // Step 2: Tighten older messages — re-summarize compressed messages with smaller budgets
+  const recencyStart = Math.max(0, result.messages.length - rw);
+  const resultMessages = result.messages.map((m) => ({
+    ...m,
+    metadata: m.metadata ? { ...m.metadata } : {},
+  }));
+  const resultVerbatim = { ...result.verbatim };
+  let tokenCount = result.tokenCount ?? sumTokens(resultMessages, counter);
+
+  // Collect tightenable candidates: older compressed messages (have _cce_original, not system/T0)
+  type TightenCandidate = { idx: number; tokens: number; content: string; isCompressed: boolean };
+  const candidates: TightenCandidate[] = [];
+
+  for (let i = 0; i < recencyStart; i++) {
+    const m = resultMessages[i];
+    if (m.role && preserveRoles.has(m.role)) continue;
+    const content = typeof m.content === 'string' ? m.content : '';
+    if (content.length <= 80) continue; // Already tiny
+    candidates.push({
+      idx: i,
+      tokens: counter(m),
+      content,
+      isCompressed: !!m.metadata?._cce_original,
+    });
+  }
+
+  // Sort: uncompressed first (more room to save), then by token count descending
+  candidates.sort((a, b) => {
+    if (a.isCompressed !== b.isCompressed) return a.isCompressed ? 1 : -1;
+    return b.tokens - a.tokens;
+  });
+
+  // Pass 2a: Re-summarize with half budget
+  for (const cand of candidates) {
+    if (tokenCount <= tokenBudget) break;
+    const m = resultMessages[cand.idx];
+    const content = typeof m.content === 'string' ? m.content : '';
+
+    // For already-compressed messages, try to tighten the summary
+    if (cand.isCompressed && content.startsWith('[summary')) {
+      const tighterBudget = Math.max(80, Math.round(content.length * 0.4));
+      const tighter = summarize(content, tighterBudget);
+      const tighterWrapped = `[summary: ${tighter}]`;
+      if (tighterWrapped.length < content.length) {
+        const oldTokens = counter(m);
+        resultMessages[cand.idx] = { ...m, content: tighterWrapped };
+        const newTokens = counter(resultMessages[cand.idx]);
+        tokenCount -= oldTokens - newTokens;
+      }
+    } else if (!cand.isCompressed) {
+      // Compress previously uncompressed messages with tight budget
+      const tightBudget = Math.max(80, Math.round(content.length * 0.15));
+      const summaryText = summarize(content, tightBudget);
+      const entities = extractEntities(content);
+      const entitySuffix =
+        entities.length > 0 ? ` | entities: ${entities.slice(0, 3).join(', ')}` : '';
+      const compressed = `[summary: ${summaryText}${entitySuffix}]`;
+      if (compressed.length < content.length) {
+        const oldTokens = counter(m);
+        resultVerbatim[m.id] = { ...m };
+        resultMessages[cand.idx] = {
+          ...m,
+          content: compressed,
+          metadata: {
+            ...(m.metadata ?? {}),
+            _cce_original: {
+              ids: [m.id],
+              summary_id: makeSummaryId([m.id]),
+              version: sourceVersion,
+            },
+          },
+        };
+        const newTokens = counter(resultMessages[cand.idx]);
+        tokenCount -= oldTokens - newTokens;
+      }
+    }
+  }
+
+  if (tokenCount <= tokenBudget) {
+    return {
+      ...result,
+      messages: resultMessages,
+      verbatim: resultVerbatim,
+      fits: true,
+      tokenCount,
+    };
+  }
+
+  // Pass 2b: Stub low-value messages (relevance drop)
+  for (const cand of candidates) {
+    if (tokenCount <= tokenBudget) break;
+    const m = resultMessages[cand.idx];
+    const content = typeof m.content === 'string' ? m.content : '';
+    if (content.length <= 80) continue;
+
+    const score = bestSentenceScore(content);
+    if (score < 3) {
+      const stub = '[message omitted]';
+      const oldTokens = counter(m);
+      if (!m.metadata?._cce_original) {
+        resultVerbatim[m.id] = { ...m };
+      }
+      resultMessages[cand.idx] = {
+        ...m,
+        content: stub,
+        metadata: {
+          ...(m.metadata ?? {}),
+          _cce_original: m.metadata?._cce_original ?? {
+            ids: [m.id],
+            summary_id: makeSummaryId([m.id]),
+            version: sourceVersion,
+          },
+        },
+      };
+      const newTokens = counter(resultMessages[cand.idx]);
+      tokenCount -= oldTokens - newTokens;
+    }
+  }
+
+  let finalResult: CompressResult = {
+    ...result,
+    messages: resultMessages,
+    verbatim: resultVerbatim,
+    fits: tokenCount <= tokenBudget,
+    tokenCount,
+  };
+
+  // Pass 3: Force-converge as last resort
+  if (!finalResult.fits && options.forceConverge) {
+    const impScores = options.importanceScoring ? computeImportance(messages) : undefined;
+    finalResult = forceConvergePass(
+      finalResult,
+      tokenBudget,
+      preserveRoles,
+      sourceVersion,
+      counter,
+      options.trace,
+      impScores,
+    );
+  }
+
+  return finalResult;
+}
+
+async function compressTieredAsync(
+  messages: Message[],
+  tokenBudget: number,
+  options: CompressOptions,
+): Promise<CompressResult> {
+  const sourceVersion = options.sourceVersion ?? 0;
+  const counter = options.tokenCounter ?? defaultTokenCounter;
+  const preserveRoles = new Set(options.preserve ?? ['system']);
+  const rw = options.recencyWindow ?? 4;
+
+  const fast = budgetFastPath(messages, tokenBudget, sourceVersion, counter);
+  if (fast) return fast;
+
+  // Pre-classify ONCE
+  let innerOpts: _InternalOptions = options;
+  if (options.classifier && !(options as _InternalOptions)._llmResults) {
+    const llmResults = await preClassify(
+      messages,
+      options.classifier,
+      options.classifierMode ?? 'hybrid',
+      preserveRoles,
+    );
+    innerOpts = { ...options, classifier: undefined, _llmResults: llmResults };
+  }
+
+  const cr = await compressAsync(messages, {
+    ...innerOpts,
+    recencyWindow: rw,
+    tokenBudget: undefined,
+  });
+  const result = addBudgetFields(cr, tokenBudget, rw, counter);
+
+  if (result.fits) return result;
+
+  // Reuse sync tightening passes (summarize is deterministic for tightening)
+  const recencyStart = Math.max(0, result.messages.length - rw);
+  const resultMessages = result.messages.map((m) => ({
+    ...m,
+    metadata: m.metadata ? { ...m.metadata } : {},
+  }));
+  const resultVerbatim = { ...result.verbatim };
+  let tokenCount = result.tokenCount ?? sumTokens(resultMessages, counter);
+
+  type TightenCandidate = { idx: number; tokens: number; content: string; isCompressed: boolean };
+  const candidates: TightenCandidate[] = [];
+
+  for (let i = 0; i < recencyStart; i++) {
+    const m = resultMessages[i];
+    if (m.role && preserveRoles.has(m.role)) continue;
+    const content = typeof m.content === 'string' ? m.content : '';
+    if (content.length <= 80) continue;
+    candidates.push({
+      idx: i,
+      tokens: counter(m),
+      content,
+      isCompressed: !!m.metadata?._cce_original,
+    });
+  }
+
+  candidates.sort((a, b) => {
+    if (a.isCompressed !== b.isCompressed) return a.isCompressed ? 1 : -1;
+    return b.tokens - a.tokens;
+  });
+
+  // Pass 2a: Tighten summaries
+  for (const cand of candidates) {
+    if (tokenCount <= tokenBudget) break;
+    const m = resultMessages[cand.idx];
+    const content = typeof m.content === 'string' ? m.content : '';
+
+    if (cand.isCompressed && content.startsWith('[summary')) {
+      const tighterBudget = Math.max(80, Math.round(content.length * 0.4));
+      const tighter = options.summarizer
+        ? await withFallback(content, options.summarizer, tighterBudget)
+        : summarize(content, tighterBudget);
+      const tighterWrapped = `[summary: ${tighter}]`;
+      if (tighterWrapped.length < content.length) {
+        const oldTokens = counter(m);
+        resultMessages[cand.idx] = { ...m, content: tighterWrapped };
+        tokenCount -= oldTokens - counter(resultMessages[cand.idx]);
+      }
+    } else if (!cand.isCompressed) {
+      const tightBudget = Math.max(80, Math.round(content.length * 0.15));
+      const summaryText = options.summarizer
+        ? await withFallback(content, options.summarizer, tightBudget)
+        : summarize(content, tightBudget);
+      const entities = extractEntities(content);
+      const entitySuffix =
+        entities.length > 0 ? ` | entities: ${entities.slice(0, 3).join(', ')}` : '';
+      const compressed = `[summary: ${summaryText}${entitySuffix}]`;
+      if (compressed.length < content.length) {
+        const oldTokens = counter(m);
+        resultVerbatim[m.id] = { ...m };
+        resultMessages[cand.idx] = {
+          ...m,
+          content: compressed,
+          metadata: {
+            ...(m.metadata ?? {}),
+            _cce_original: {
+              ids: [m.id],
+              summary_id: makeSummaryId([m.id]),
+              version: sourceVersion,
+            },
+          },
+        };
+        tokenCount -= oldTokens - counter(resultMessages[cand.idx]);
+      }
+    }
+  }
+
+  if (tokenCount <= tokenBudget) {
+    return {
+      ...result,
+      messages: resultMessages,
+      verbatim: resultVerbatim,
+      fits: true,
+      tokenCount,
+    };
+  }
+
+  // Pass 2b: Stub low-value messages
+  for (const cand of candidates) {
+    if (tokenCount <= tokenBudget) break;
+    const m = resultMessages[cand.idx];
+    const content = typeof m.content === 'string' ? m.content : '';
+    if (content.length <= 80) continue;
+    const score = bestSentenceScore(content);
+    if (score < 3) {
+      const stub = '[message omitted]';
+      const oldTokens = counter(m);
+      if (!m.metadata?._cce_original) resultVerbatim[m.id] = { ...m };
+      resultMessages[cand.idx] = {
+        ...m,
+        content: stub,
+        metadata: {
+          ...(m.metadata ?? {}),
+          _cce_original: m.metadata?._cce_original ?? {
+            ids: [m.id],
+            summary_id: makeSummaryId([m.id]),
+            version: sourceVersion,
+          },
+        },
+      };
+      tokenCount -= oldTokens - counter(resultMessages[cand.idx]);
+    }
+  }
+
+  let finalResult: CompressResult = {
+    ...result,
+    messages: resultMessages,
+    verbatim: resultVerbatim,
+    fits: tokenCount <= tokenBudget,
+    tokenCount,
+  };
+
+  if (!finalResult.fits && options.forceConverge) {
+    const impScores = options.importanceScoring ? computeImportance(messages) : undefined;
+    finalResult = forceConvergePass(
+      finalResult,
+      tokenBudget,
+      preserveRoles,
+      sourceVersion,
+      counter,
+      options.trace,
+      impScores,
+    );
+  }
+
+  return finalResult;
 }
 
 function compressSyncWithBudget(
@@ -1648,17 +2306,78 @@ export function compress(
   const hasClassifier = !!options.classifier;
   const hasBudget = options.tokenBudget != null;
 
+  const isTiered = options.budgetStrategy === 'tiered';
+  const isAutoDepth = options.compressionDepth === 'auto' && hasBudget;
+
+  // Auto depth: try gentle → moderate → aggressive until budget fits or quality threshold met
+  if (isAutoDepth && !(hasSummarizer || hasClassifier)) {
+    const depths: Array<'gentle' | 'moderate' | 'aggressive'> = [
+      'gentle',
+      'moderate',
+      'aggressive',
+    ];
+    for (const depth of depths) {
+      const depthOpts = {
+        ...options,
+        compressionDepth: depth as 'gentle' | 'moderate' | 'aggressive',
+      };
+      const cr = isTiered
+        ? compressTieredSync(messages, options.tokenBudget!, depthOpts)
+        : compressSyncWithBudget(messages, options.tokenBudget!, depthOpts);
+      if (cr.fits) return cr;
+      // Quality gate: if quality drops too low, stop and use the current result
+      if (
+        cr.compression.quality_score != null &&
+        cr.compression.quality_score < 0.6 &&
+        depth !== 'aggressive'
+      ) {
+        return cr;
+      }
+    }
+    // All depths tried, return the last (most aggressive) result
+    const aggressiveOpts = { ...options, compressionDepth: 'aggressive' as const };
+    return isTiered
+      ? compressTieredSync(messages, options.tokenBudget!, aggressiveOpts)
+      : compressSyncWithBudget(messages, options.tokenBudget!, aggressiveOpts);
+  }
+
   if (hasSummarizer || hasClassifier) {
     // Async paths
     if (hasBudget) {
-      return compressAsyncWithBudget(messages, options.tokenBudget!, options);
+      if (isAutoDepth) {
+        // Auto depth async: try each level progressively
+        return (async () => {
+          const depths: Array<'gentle' | 'moderate' | 'aggressive'> = [
+            'gentle',
+            'moderate',
+            'aggressive',
+          ];
+          let lastResult: CompressResult | undefined;
+          for (const depth of depths) {
+            const depthOpts = {
+              ...options,
+              compressionDepth: depth as 'gentle' | 'moderate' | 'aggressive',
+            };
+            lastResult = isTiered
+              ? await compressTieredAsync(messages, options.tokenBudget!, depthOpts)
+              : await compressAsyncWithBudget(messages, options.tokenBudget!, depthOpts);
+            if (lastResult.fits) return lastResult;
+          }
+          return lastResult!;
+        })();
+      }
+      return isTiered
+        ? compressTieredAsync(messages, options.tokenBudget!, options)
+        : compressAsyncWithBudget(messages, options.tokenBudget!, options);
     }
     return compressAsync(messages, options);
   }
 
   // Sync paths
   if (hasBudget) {
-    return compressSyncWithBudget(messages, options.tokenBudget!, options);
+    return isTiered
+      ? compressTieredSync(messages, options.tokenBudget!, options)
+      : compressSyncWithBudget(messages, options.tokenBudget!, options);
   }
   return compressSync(messages, options);
 }

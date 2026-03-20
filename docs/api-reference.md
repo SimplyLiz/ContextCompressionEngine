@@ -8,13 +8,54 @@ Complete reference for all exports from `context-compression-engine`.
 
 ```ts
 // Primary
-export { compress, defaultTokenCounter } from './compress.js';
+export { compress, defaultTokenCounter, bestSentenceScore } from './compress.js';
 export { uncompress } from './expand.js';
 export type { StoreLookup } from './expand.js';
 
 // Helpers (LLM integration)
 export { createSummarizer, createEscalatingSummarizer } from './summarizer.js';
 export { createClassifier, createEscalatingClassifier } from './classifier.js';
+
+// Entity extraction & quality metrics
+export {
+  extractEntities,
+  collectMessageEntities,
+  computeEntityRetention,
+  computeStructuralIntegrity,
+  computeReferenceCoherence,
+  computeQualityScore,
+} from './entities.js';
+
+// ML token classifier
+export {
+  compressWithTokenClassifier,
+  compressWithTokenClassifierSync,
+  whitespaceTokenize,
+  createMockTokenClassifier,
+} from './ml-classifier.js';
+
+// Discourse decomposition (EDU-lite)
+export { segmentEDUs, scoreEDUs, selectEDUs, summarizeWithEDUs } from './discourse.js';
+export type { EDU } from './discourse.js';
+
+// Semantic clustering
+export { clusterMessages, summarizeCluster } from './cluster.js';
+export type { MessageCluster } from './cluster.js';
+
+// Cross-message coreference
+export {
+  buildCoreferenceMap,
+  findOrphanedReferences,
+  generateInlineDefinitions,
+} from './coreference.js';
+export type { EntityDefinition } from './coreference.js';
+
+// Conversation flow detection
+export { detectFlowChains, summarizeChain } from './flow.js';
+export type { FlowChain } from './flow.js';
+
+// Entropy scoring utilities
+export { splitSentences, normalizeScores, combineScores } from './entropy.js';
 
 // Importance scoring
 export {
@@ -37,6 +78,8 @@ export type {
   CreateClassifierOptions,
   CreateSummarizerOptions,
   Message,
+  MLTokenClassifier,
+  TokenClassification,
   Summarizer,
   UncompressOptions,
   UncompressResult,
@@ -73,27 +116,38 @@ function compress(
 
 ### CompressOptions
 
-| Option                        | Type                                   | Default               | Description                                                                                                                                                                                                                                                                                                          |
-| ----------------------------- | -------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preserve`                    | `string[]`                             | `['system']`          | Roles to never compress                                                                                                                                                                                                                                                                                              |
-| `recencyWindow`               | `number`                               | `4`                   | Protect the last N messages from compression                                                                                                                                                                                                                                                                         |
-| `sourceVersion`               | `number`                               | `0`                   | Version tag for [provenance tracking](provenance.md)                                                                                                                                                                                                                                                                 |
-| `summarizer`                  | `Summarizer`                           | -                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)                                                                                                                                                                                                   |
-| `tokenBudget`                 | `number`                               | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md)                                                                                                                                                                                                                      |
-| `minRecencyWindow`            | `number`                               | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                                                                                                                                                                                                                                                   |
-| `dedup`                       | `boolean`                              | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md)                                                                                                                                                                                                             |
-| `fuzzyDedup`                  | `boolean`                              | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md)                                                                                                                                                                                                                    |
-| `fuzzyThreshold`              | `number`                               | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                                                                                                                                                                                                                                           |
-| `embedSummaryId`              | `boolean`                              | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md)                                                                                                                                                                                                                   |
-| `forceConverge`               | `boolean`                              | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md)                                                                                                                                                                                                               |
-| `preservePatterns`            | `Array<{ re: RegExp; label: string }>` | -                     | Custom regex patterns that force hard T0 preservation. See [Preservation rules](preservation-rules.md)                                                                                                                                                                                                               |
-| `classifier`                  | `Classifier`                           | -                     | LLM-powered classifier. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)                                                                                                                                                                                                   |
-| `classifierMode`              | `'hybrid' \| 'full'`                   | `'hybrid'`            | Classification mode. `'hybrid'`: heuristics first, LLM for prose. `'full'`: LLM for all eligible. Ignored without `classifier`                                                                                                                                                                                       |
-| `tokenCounter`                | `(msg: Message) => number`             | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                                                                                                                                                                                                                                                |
-| `importanceScoring`           | `boolean`                              | `false`               | Score messages by forward-reference density, decision/correction content, and recency. High-importance messages are preserved outside the recency window. `forceConverge` truncates low-importance first. **Note:** preserving extra messages reduces compression ratio, which may make `tokenBudget` harder to meet |
-| `importanceThreshold`         | `number`                               | `0.35`                | Importance score threshold for preservation (0–1). Only used when `importanceScoring: true`                                                                                                                                                                                                                          |
-| `contradictionDetection`      | `boolean`                              | `false`               | Detect later messages that correct/override earlier ones. Superseded messages are compressed with a provenance annotation                                                                                                                                                                                            |
-| `contradictionTopicThreshold` | `number`                               | `0.15`                | IDF-weighted Dice similarity threshold for topic overlap in contradiction detection (0–1)                                                                                                                                                                                                                            |
+| Option                        | Type                                               | Default               | Description                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | -------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preserve`                    | `string[]`                                         | `['system']`          | Roles to never compress                                                                                                                                                                                                                                                                                              |
+| `recencyWindow`               | `number`                                           | `4`                   | Protect the last N messages from compression                                                                                                                                                                                                                                                                         |
+| `sourceVersion`               | `number`                                           | `0`                   | Version tag for [provenance tracking](provenance.md)                                                                                                                                                                                                                                                                 |
+| `summarizer`                  | `Summarizer`                                       | -                     | LLM-powered summarizer. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)                                                                                                                                                                                                   |
+| `tokenBudget`                 | `number`                                           | -                     | Target token count. Binary-searches `recencyWindow` to fit. See [Token budget](token-budget.md)                                                                                                                                                                                                                      |
+| `minRecencyWindow`            | `number`                                           | `0`                   | Floor for `recencyWindow` when using `tokenBudget`                                                                                                                                                                                                                                                                   |
+| `dedup`                       | `boolean`                                          | `true`                | Replace earlier exact-duplicate messages with a compact reference. See [Deduplication](deduplication.md)                                                                                                                                                                                                             |
+| `fuzzyDedup`                  | `boolean`                                          | `false`               | Detect near-duplicate messages using line-level similarity. See [Deduplication](deduplication.md)                                                                                                                                                                                                                    |
+| `fuzzyThreshold`              | `number`                                           | `0.85`                | Similarity threshold for fuzzy dedup (0-1)                                                                                                                                                                                                                                                                           |
+| `embedSummaryId`              | `boolean`                                          | `false`               | Embed `summary_id` in compressed content for downstream reference. See [Provenance](provenance.md)                                                                                                                                                                                                                   |
+| `forceConverge`               | `boolean`                                          | `false`               | Hard-truncate non-recency messages when binary search bottoms out. See [Token budget](token-budget.md)                                                                                                                                                                                                               |
+| `preservePatterns`            | `Array<{ re: RegExp; label: string }>`             | -                     | Custom regex patterns that force hard T0 preservation. See [Preservation rules](preservation-rules.md)                                                                                                                                                                                                               |
+| `classifier`                  | `Classifier`                                       | -                     | LLM-powered classifier. When provided, `compress()` returns a `Promise`. See [LLM integration](llm-integration.md)                                                                                                                                                                                                   |
+| `classifierMode`              | `'hybrid' \| 'full'`                               | `'hybrid'`            | Classification mode. `'hybrid'`: heuristics first, LLM for prose. `'full'`: LLM for all eligible. Ignored without `classifier`                                                                                                                                                                                       |
+| `tokenCounter`                | `(msg: Message) => number`                         | `defaultTokenCounter` | Custom token counter per message. See [Token budget](token-budget.md)                                                                                                                                                                                                                                                |
+| `importanceScoring`           | `boolean`                                          | `false`               | Score messages by forward-reference density, decision/correction content, and recency. High-importance messages are preserved outside the recency window. `forceConverge` truncates low-importance first. **Note:** preserving extra messages reduces compression ratio, which may make `tokenBudget` harder to meet |
+| `importanceThreshold`         | `number`                                           | `0.65`                | Importance score threshold for preservation (0–1). Only used when `importanceScoring: true`                                                                                                                                                                                                                          |
+| `contradictionDetection`      | `boolean`                                          | `false`               | Detect later messages that correct/override earlier ones. Superseded messages are compressed with a provenance annotation                                                                                                                                                                                            |
+| `contradictionTopicThreshold` | `number`                                           | `0.15`                | IDF-weighted Dice similarity threshold for topic overlap in contradiction detection (0–1)                                                                                                                                                                                                                            |
+| `relevanceThreshold`          | `number`                                           | -                     | Sentence score threshold. Messages whose best sentence score falls below this are replaced with a stub. See [V2 features](v2-features.md#relevance-threshold)                                                                                                                                                        |
+| `budgetStrategy`              | `'binary-search' \| 'tiered'`                      | `'binary-search'`     | Budget strategy when `tokenBudget` is set. `'tiered'` keeps recency window fixed and progressively compresses older content. See [V2 features](v2-features.md#tiered-budget-strategy)                                                                                                                                |
+| `entropyScorer`               | `(sentences: string[]) => number[]`                | -                     | External self-information scorer. Can be sync or async. See [V2 features](v2-features.md#entropy-scorer)                                                                                                                                                                                                             |
+| `entropyScorerMode`           | `'replace' \| 'augment'`                           | `'augment'`           | How to combine entropy and heuristic scores. `'augment'` = weighted average, `'replace'` = entropy only                                                                                                                                                                                                              |
+| `conversationFlow`            | `boolean`                                          | `false`               | Group Q&A, request→action, correction, and acknowledgment chains into compression units. See [V2 features](v2-features.md#conversation-flow)                                                                                                                                                                         |
+| `discourseAware`              | `boolean`                                          | `false`               | **Experimental.** EDU decomposition with dependency-aware selection. Reduces ratio 8–28% without a custom ML scorer — use `segmentEDUs`/`scoreEDUs`/`selectEDUs` directly instead. See [V2 features](v2-features.md#discourse-aware-summarization)                                                                   |
+| `coreference`                 | `boolean`                                          | `false`               | Inline entity definitions into compressed summaries when references would be orphaned. See [V2 features](v2-features.md#cross-message-coreference)                                                                                                                                                                   |
+| `semanticClustering`          | `boolean`                                          | `false`               | Group messages by topic using TF-IDF + entity overlap, compress as units. See [V2 features](v2-features.md#semantic-clustering)                                                                                                                                                                                      |
+| `clusterThreshold`            | `number`                                           | `0.15`                | Similarity threshold for semantic clustering (0–1). Lower = larger clusters                                                                                                                                                                                                                                          |
+| `compressionDepth`            | `'gentle' \| 'moderate' \| 'aggressive' \| 'auto'` | `'gentle'`            | Controls summarization aggressiveness. `'auto'` tries each level until `tokenBudget` fits. See [V2 features](v2-features.md#compression-depth)                                                                                                                                                                       |
+| `mlTokenClassifier`           | `MLTokenClassifier`                                | -                     | Per-token keep/remove classifier. T0 rules still override for code/structured content. See [V2 features](v2-features.md#ml-token-classifier)                                                                                                                                                                         |
 
 ### CompressResult
 
@@ -113,6 +167,11 @@ function compress(
 | `compression.messages_llm_preserved`        | `number \| undefined`  | Messages where LLM decided to preserve (when `classifier` is provided)              |
 | `compression.messages_contradicted`         | `number \| undefined`  | Messages superseded by a later correction (when `contradictionDetection: true`)     |
 | `compression.messages_importance_preserved` | `number \| undefined`  | Messages preserved due to high importance score (when `importanceScoring: true`)    |
+| `compression.messages_relevance_dropped`    | `number \| undefined`  | Messages replaced with stubs (when `relevanceThreshold` is set)                     |
+| `compression.entity_retention`              | `number \| undefined`  | Fraction of technical identifiers preserved (0–1). Present when compression occurs  |
+| `compression.structural_integrity`          | `number \| undefined`  | Fraction of structural elements preserved (0–1). Present when compression occurs    |
+| `compression.reference_coherence`           | `number \| undefined`  | Fraction of entity references with surviving sources (0–1)                          |
+| `compression.quality_score`                 | `number \| undefined`  | Composite quality: `0.4×entity + 0.4×structural + 0.2×coherence`                    |
 | `fits`                                      | `boolean \| undefined` | Whether result fits within `tokenBudget`. Present when `tokenBudget` is set         |
 | `tokenCount`                                | `number \| undefined`  | Estimated token count. Present when `tokenBudget` is set                            |
 | `recencyWindow`                             | `number \| undefined`  | The `recencyWindow` the binary search settled on. Present when `tokenBudget` is set |
@@ -389,6 +448,24 @@ type ClassifierResult = {
 };
 ```
 
+### `MLTokenClassifier`
+
+```ts
+type MLTokenClassifier = (
+  content: string,
+) => TokenClassification[] | Promise<TokenClassification[]>;
+```
+
+### `TokenClassification`
+
+```ts
+type TokenClassification = {
+  token: string;
+  keep: boolean;
+  confidence: number;
+};
+```
+
 ### `StoreLookup`
 
 ```ts
@@ -399,6 +476,7 @@ type StoreLookup = VerbatimMap | ((id: string) => Message | undefined);
 
 ## See also
 
+- [V2 features](v2-features.md) - quality metrics, flow detection, clustering, depth, ML classifier
 - [Compression pipeline](compression-pipeline.md) - how the engine processes messages
 - [Token budget](token-budget.md) - budget-driven compression
 - [LLM integration](llm-integration.md) - provider examples

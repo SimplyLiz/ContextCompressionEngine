@@ -943,6 +943,10 @@ interface Result {
   preserved: number;
   roundTrip: 'PASS' | 'FAIL';
   timeMs: string;
+  entityRetention: number | undefined;
+  structuralIntegrity: number | undefined;
+  referenceCoherence: number | undefined;
+  qualityScore: number | undefined;
 }
 
 async function run(): Promise<void> {
@@ -991,6 +995,10 @@ async function run(): Promise<void> {
       preserved: cr.compression.messages_preserved,
       roundTrip,
       timeMs: (t1 - t0).toFixed(2),
+      entityRetention: cr.compression.entity_retention,
+      structuralIntegrity: cr.compression.structural_integrity,
+      referenceCoherence: cr.compression.reference_coherence,
+      qualityScore: cr.compression.quality_score,
     });
 
     benchResults.basic[scenario.name] = {
@@ -999,6 +1007,17 @@ async function run(): Promise<void> {
       compressed: cr.compression.messages_compressed,
       preserved: cr.compression.messages_preserved,
     };
+
+    // Quality metrics
+    if (cr.compression.quality_score != null) {
+      if (!benchResults.quality) benchResults.quality = {};
+      benchResults.quality[scenario.name] = {
+        entityRetention: cr.compression.entity_retention!,
+        structuralIntegrity: cr.compression.structural_integrity!,
+        referenceCoherence: cr.compression.reference_coherence!,
+        qualityScore: cr.compression.quality_score!,
+      };
+    }
 
     // Retention analysis
     const originalText = scenario.messages
@@ -1108,6 +1127,51 @@ async function run(): Promise<void> {
     }
 
     console.log(retSep);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quality metrics (v2)
+  // ---------------------------------------------------------------------------
+
+  if (benchResults.quality && Object.keys(benchResults.quality).length > 0) {
+    console.log();
+    console.log('Quality Metrics (v2)');
+
+    const qHeader = [
+      'Scenario'.padEnd(24),
+      'Entities'.padStart(9),
+      'Structure'.padStart(10),
+      'Coherence'.padStart(10),
+      'Quality'.padStart(8),
+    ].join('  ');
+    const qSep = '-'.repeat(qHeader.length);
+
+    console.log(qSep);
+    console.log(qHeader);
+    console.log(qSep);
+
+    for (const [name, q] of Object.entries(benchResults.quality)) {
+      console.log(
+        [
+          name.padEnd(24),
+          `${(q.entityRetention * 100).toFixed(0)}%`.padStart(9),
+          `${(q.structuralIntegrity * 100).toFixed(0)}%`.padStart(10),
+          `${(q.referenceCoherence * 100).toFixed(0)}%`.padStart(10),
+          q.qualityScore.toFixed(3).padStart(8),
+        ].join('  '),
+      );
+    }
+
+    console.log(qSep);
+
+    // Quality regression check
+    const lowQuality = Object.entries(benchResults.quality).filter(([, q]) => q.qualityScore < 0.8);
+    if (lowQuality.length > 0) {
+      console.log();
+      console.log(
+        `WARNING: ${lowQuality.length} scenario(s) below 0.80 quality: ${lowQuality.map(([n]) => n).join(', ')}`,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1430,6 +1494,124 @@ async function run(): Promise<void> {
     console.error(`FAIL: ${ancsFails} ANCS scenario(s) failed round-trip`);
     process.exit(1);
   }
+
+  // ---------------------------------------------------------------------------
+  // V2 Features Comparison (default vs each feature vs recommended combo)
+  // ---------------------------------------------------------------------------
+
+  console.log();
+  console.log('V2 Features Comparison');
+
+  type V2Config = { name: string; options: CompressOptions };
+  const v2Configs: V2Config[] = [
+    { name: 'Default (v1)', options: { recencyWindow: 0 } },
+    { name: '+conversationFlow', options: { recencyWindow: 0, conversationFlow: true } },
+    { name: '+semanticClustering', options: { recencyWindow: 0, semanticClustering: true } },
+    { name: '+relevanceThresh=3', options: { recencyWindow: 0, relevanceThreshold: 3 } },
+    { name: '+depth=moderate', options: { recencyWindow: 0, compressionDepth: 'moderate' } },
+    { name: '+importanceScoring', options: { recencyWindow: 0, importanceScoring: true } },
+    { name: '+coreference', options: { recencyWindow: 0, coreference: true } },
+    {
+      name: 'Recommended combo',
+      options: {
+        recencyWindow: 0,
+        conversationFlow: true,
+        relevanceThreshold: 3,
+        compressionDepth: 'moderate',
+      },
+    },
+  ];
+
+  const v2Scenarios = buildScenarios();
+
+  // Compute all results
+  type V2Row = {
+    config: string;
+    scenario: string;
+    ratio: number;
+    quality: number | undefined;
+    rt: string;
+  };
+  const v2Rows: V2Row[] = [];
+  let v2Fails = 0;
+
+  for (const cfg of v2Configs) {
+    for (const scenario of v2Scenarios) {
+      const cr = compress(scenario.messages, cfg.options);
+      const er = uncompress(cr.messages, cr.verbatim);
+      const rt =
+        JSON.stringify(scenario.messages) === JSON.stringify(er.messages) &&
+        er.missing_ids.length === 0
+          ? 'PASS'
+          : 'FAIL';
+      if (rt === 'FAIL') v2Fails++;
+      v2Rows.push({
+        config: cfg.name,
+        scenario: scenario.name,
+        ratio: cr.compression.ratio,
+        quality: cr.compression.quality_score,
+        rt,
+      });
+    }
+  }
+
+  // Print matrix: rows = configs, columns = scenarios
+  const v2ScenarioNames = v2Scenarios.map((s) => s.name);
+  const scColW = 14;
+  const v2NameW = 22;
+
+  const v2Header = [
+    'Config'.padEnd(v2NameW),
+    ...v2ScenarioNames.map((n) => n.slice(0, scColW).padStart(scColW)),
+    'R/T'.padStart(5),
+  ].join('  ');
+  const v2Sep = '-'.repeat(v2Header.length);
+
+  console.log(v2Sep);
+  console.log(
+    ''.padEnd(v2NameW) +
+      '  ' +
+      v2ScenarioNames.map((_n) => 'ratio / qual'.padStart(scColW)).join('  '),
+  );
+  console.log(v2Header);
+  console.log(v2Sep);
+
+  for (const cfg of v2Configs) {
+    const cfgRows = v2Rows.filter((r) => r.config === cfg.name);
+    const allPass = cfgRows.every((r) => r.rt === 'PASS');
+    const cells = v2ScenarioNames.map((sn) => {
+      const row = cfgRows.find((r) => r.scenario === sn);
+      if (!row) return '—'.padStart(scColW);
+      const r = row.ratio.toFixed(1) + 'x';
+      const q = row.quality != null ? (row.quality * 100).toFixed(0) + '%' : '—';
+      return (r + '/' + q).padStart(scColW);
+    });
+    console.log(
+      [cfg.name.padEnd(v2NameW), ...cells, (allPass ? 'PASS' : 'FAIL').padStart(5)].join('  '),
+    );
+  }
+
+  // Print delta row (recommended combo vs default)
+  const defaultRows = v2Rows.filter((r) => r.config === 'Default (v1)');
+  const comboRows = v2Rows.filter((r) => r.config === 'Recommended combo');
+  const deltaCells = v2ScenarioNames.map((sn) => {
+    const def = defaultRows.find((r) => r.scenario === sn);
+    const combo = comboRows.find((r) => r.scenario === sn);
+    if (!def || !combo) return '—'.padStart(scColW);
+    const pct = ((combo.ratio / def.ratio - 1) * 100).toFixed(0);
+    return ((pct.startsWith('-') ? '' : '+') + pct + '%').padStart(scColW);
+  });
+  console.log(['Δ combo vs default'.padEnd(v2NameW), ...deltaCells, ''.padStart(5)].join('  '));
+
+  console.log(v2Sep);
+
+  if (v2Fails > 0) {
+    console.error(`FAIL: ${v2Fails} V2 scenario(s) failed round-trip`);
+    process.exit(1);
+  }
+
+  console.log();
+  console.log('All V2 scenarios passed round-trip verification.');
 
   // ---------------------------------------------------------------------------
   // Bundle size
