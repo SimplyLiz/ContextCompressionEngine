@@ -296,18 +296,47 @@ function summarizeStructured(text: string, maxBudget: number): string {
  * @param contentLength - character length of the content
  * @param entityCount - optional entity count for density-adaptive scaling
  */
-function computeBudget(contentLength: number, entityCount?: number): number {
-  const baseRatio = 0.3;
+/** Depth multiplier: how much to scale the budget down by depth level. */
+const DEPTH_MULTIPLIERS: Record<string, number> = {
+  gentle: 1.0,
+  moderate: 0.5,
+  aggressive: 0.15,
+};
+
+function computeBudget(
+  contentLength: number,
+  entityCount?: number,
+  depth?: 'gentle' | 'moderate' | 'aggressive',
+): number {
+  const depthMul = DEPTH_MULTIPLIERS[depth ?? 'gentle'] ?? 1.0;
+  const baseRatio = 0.3 * depthMul;
 
   if (entityCount != null && contentLength > 0) {
     const density = entityCount / contentLength;
-    // Dense content: up to 45% budget; sparse content: down to 15%
-    const densityBonus = Math.min(density * 500, 0.5); // 500 is a scaling factor
-    const adaptiveRatio = Math.max(0.15, Math.min(baseRatio + densityBonus - 0.15, 0.45));
-    return Math.max(100, Math.min(Math.round(contentLength * adaptiveRatio), 800));
+    const densityBonus = Math.min(density * 500, 0.5) * depthMul;
+    const adaptiveRatio = Math.max(
+      0.05,
+      Math.min(baseRatio + densityBonus - 0.15 * depthMul, 0.45 * depthMul),
+    );
+    return Math.max(
+      depth === 'aggressive' ? 40 : 100,
+      Math.min(Math.round(contentLength * adaptiveRatio), 800 * depthMul),
+    );
   }
 
-  return Math.max(200, Math.min(Math.round(contentLength * baseRatio), 600));
+  const min = depth === 'aggressive' ? 40 : depth === 'moderate' ? 100 : 200;
+  const max = depth === 'aggressive' ? 120 : depth === 'moderate' ? 300 : 600;
+  return Math.max(min, Math.min(Math.round(contentLength * baseRatio), max));
+}
+
+/**
+ * Generate entity-only stub for aggressive compression.
+ * Returns just the key entities from the text.
+ */
+function entityOnlyStub(text: string): string {
+  const entities = extractEntities(text, 10);
+  if (entities.length === 0) return text.slice(0, 40).trim() + '...';
+  return entities.join(', ');
 }
 
 function splitCodeAndProse(text: string): Array<{ type: 'prose' | 'code'; content: string }> {
@@ -975,7 +1004,8 @@ function* compressGen(
       const supersederId = messages[annotation.supersededByIndex].id;
       const content = typeof msg.content === 'string' ? msg.content : '';
       const contradictionEntityCount = extractEntities(content, 500).length;
-      const contentBudget = computeBudget(content.length, contradictionEntityCount);
+      const depth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const contentBudget = computeBudget(content.length, contradictionEntityCount, depth);
       const summaryText: string = yield { text: content, budget: contentBudget };
       let tag = `[cce:superseded by ${supersederId} (${annotation.signal}) — ${summaryText}]`;
       // If full tag doesn't fit, use compact format
@@ -1024,7 +1054,8 @@ function* compressGen(
         .join(' ');
       const codeFences = segments.filter((s) => s.type === 'code').map((s) => s.content);
       const proseEntityCount = extractEntities(proseText, 500).length;
-      const proseBudget = computeBudget(proseText.length, proseEntityCount);
+      const codeDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const proseBudget = computeBudget(proseText.length, proseEntityCount, codeDepth);
       const summaryText: string = yield { text: proseText, budget: proseBudget };
       const embeddedId = options.embedSummaryId ? makeSummaryId([msg.id]) : undefined;
       const compressed = `${formatSummary(summaryText, proseText, undefined, true, embeddedId)}\n\n${codeFences.join('\n\n')}`;
@@ -1072,7 +1103,9 @@ function* compressGen(
       const compressible = adapter.extractCompressible(content);
       const proseText = compressible.join(' ');
       const adapterEntityCount = extractEntities(proseText, 500).length;
-      const proseBudget = computeBudget(proseText.length, adapterEntityCount);
+      const adapterDepth =
+        options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+      const proseBudget = computeBudget(proseText.length, adapterEntityCount, adapterDepth);
       const summaryText: string =
         proseText.length > 0 ? yield { text: proseText, budget: proseBudget } : '';
       const compressed = adapter.reconstruct(preserved, summaryText);
@@ -1151,10 +1184,14 @@ function* compressGen(
     }
 
     const entityCount = extractEntities(allContent, 500).length;
-    const contentBudget = computeBudget(allContent.length, entityCount);
-    const summaryText = isStructuredOutput(allContent)
-      ? summarizeStructured(allContent, contentBudget)
-      : yield { text: allContent, budget: contentBudget };
+    const groupDepth = options.compressionDepth === 'auto' ? 'gentle' : options.compressionDepth;
+    const contentBudget = computeBudget(allContent.length, entityCount, groupDepth);
+    const summaryText =
+      groupDepth === 'aggressive'
+        ? entityOnlyStub(allContent)
+        : isStructuredOutput(allContent)
+          ? summarizeStructured(allContent, contentBudget)
+          : yield { text: allContent, budget: contentBudget };
 
     if (group.length > 1) {
       const mergeIds = group.map((g) => g.msg.id);
@@ -2106,10 +2143,65 @@ export function compress(
   const hasBudget = options.tokenBudget != null;
 
   const isTiered = options.budgetStrategy === 'tiered';
+  const isAutoDepth = options.compressionDepth === 'auto' && hasBudget;
+
+  // Auto depth: try gentle → moderate → aggressive until budget fits or quality threshold met
+  if (isAutoDepth && !(hasSummarizer || hasClassifier)) {
+    const depths: Array<'gentle' | 'moderate' | 'aggressive'> = [
+      'gentle',
+      'moderate',
+      'aggressive',
+    ];
+    for (const depth of depths) {
+      const depthOpts = {
+        ...options,
+        compressionDepth: depth as 'gentle' | 'moderate' | 'aggressive',
+      };
+      const cr = isTiered
+        ? compressTieredSync(messages, options.tokenBudget!, depthOpts)
+        : compressSyncWithBudget(messages, options.tokenBudget!, depthOpts);
+      if (cr.fits) return cr;
+      // Quality gate: if quality drops too low, stop and use the current result
+      if (
+        cr.compression.quality_score != null &&
+        cr.compression.quality_score < 0.6 &&
+        depth !== 'aggressive'
+      ) {
+        return cr;
+      }
+    }
+    // All depths tried, return the last (most aggressive) result
+    const aggressiveOpts = { ...options, compressionDepth: 'aggressive' as const };
+    return isTiered
+      ? compressTieredSync(messages, options.tokenBudget!, aggressiveOpts)
+      : compressSyncWithBudget(messages, options.tokenBudget!, aggressiveOpts);
+  }
 
   if (hasSummarizer || hasClassifier) {
     // Async paths
     if (hasBudget) {
+      if (isAutoDepth) {
+        // Auto depth async: try each level progressively
+        return (async () => {
+          const depths: Array<'gentle' | 'moderate' | 'aggressive'> = [
+            'gentle',
+            'moderate',
+            'aggressive',
+          ];
+          let lastResult: CompressResult | undefined;
+          for (const depth of depths) {
+            const depthOpts = {
+              ...options,
+              compressionDepth: depth as 'gentle' | 'moderate' | 'aggressive',
+            };
+            lastResult = isTiered
+              ? await compressTieredAsync(messages, options.tokenBudget!, depthOpts)
+              : await compressAsyncWithBudget(messages, options.tokenBudget!, depthOpts);
+            if (lastResult.fits) return lastResult;
+          }
+          return lastResult!;
+        })();
+      }
       return isTiered
         ? compressTieredAsync(messages, options.tokenBudget!, options)
         : compressAsyncWithBudget(messages, options.tokenBudget!, options);

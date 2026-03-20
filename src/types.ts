@@ -139,6 +139,12 @@ export type CompressOptions = {
    *  chains, and correction sequences into compression units for better summaries.
    *  Default: false. */
   conversationFlow?: boolean;
+  /** Compression depth controls aggressiveness.
+   *  - 'gentle': standard sentence selection (~2x, default)
+   *  - 'moderate': tighter budgets + clause pruning (~3-4x)
+   *  - 'aggressive': entity-only stubs (~6-8x)
+   *  - 'auto': progressively increases depth until tokenBudget fits or quality drops below 0.80 */
+  compressionDepth?: 'gentle' | 'moderate' | 'aggressive' | 'auto';
   /** Budget strategy when tokenBudget is set.
    *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
    *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content
