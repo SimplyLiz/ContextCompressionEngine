@@ -787,6 +787,147 @@ function agenticCodingSession(): Scenario {
   };
 }
 
+function iterativeDesign(): Scenario {
+  // Simulates a real design conversation where:
+  // 1. Early messages establish important architectural decisions (importance scoring target)
+  // 2. Some decisions get corrected/overridden later (contradiction detection target)
+  // 3. Filler prose separates the signals
+  const filler =
+    'The team has been making steady progress on the overall project timeline and the stakeholders ' +
+    'are generally satisfied with the direction things are heading. We should continue to monitor the ' +
+    'situation and adjust our approach as needed based on feedback from the beta testing group.';
+
+  return {
+    name: 'Iterative design',
+    messages: [
+      msg('system', 'You are a senior architect helping design a data pipeline.'),
+      // Important early decision — referenced by many later messages
+      msg(
+        'user',
+        'We need to decide on the message queue. I think we should use the RabbitMQ broker with ' +
+          'the AMQP protocol for our data pipeline because it supports complex routing topologies ' +
+          'and has mature client libraries for our TypeScript and Python services.',
+      ),
+      msg(
+        'assistant',
+        'RabbitMQ with AMQP is a solid choice for the data pipeline. The exchange-based routing ' +
+          'model lets you fan out events to multiple consumers without duplicating publish logic. ' +
+          'For the TypeScript services, use the amqplib client with channel pooling to avoid ' +
+          'connection churn. For Python, pika is the standard. Make sure to configure publisher ' +
+          'confirms and consumer acknowledgments to prevent message loss.',
+      ),
+      // Filler
+      msg('user', filler),
+      msg(
+        'assistant',
+        'That sounds like a reasonable assessment of the current project state. Keeping an eye on ' +
+          'the beta feedback loop is important for catching issues early. The weekly sync should give ' +
+          'enough visibility into any blockers that arise during the testing phase.',
+      ),
+      // Another important decision — serialization format
+      msg(
+        'user',
+        'For the serialization format in the data pipeline, lets use Protocol Buffers with the ' +
+          'protobuf-ts generator for the TypeScript side. The schema evolution story is better ' +
+          'than JSON and the binary encoding saves bandwidth on the RabbitMQ broker.',
+      ),
+      msg(
+        'assistant',
+        'Protocol Buffers are a strong fit here. The protobuf-ts generator produces clean ' +
+          'TypeScript interfaces with full type safety. Define your schemas in a shared proto ' +
+          'directory and generate both TypeScript and Python stubs from CI. Use proto3 syntax ' +
+          'and leverage the optional keyword for fields that might be added later. This keeps ' +
+          'backward compatibility without the versioning headaches of Avro.',
+      ),
+      // More filler
+      msg(
+        'user',
+        'The onboarding documentation for new developers needs some updates. Several sections ' +
+          'reference the old deployment process and the screenshots are from the previous version ' +
+          'of the admin dashboard.',
+      ),
+      msg(
+        'assistant',
+        'Updating the onboarding docs should be a priority before the next hiring cycle. Have each ' +
+          'recent joiner flag the sections that confused them during their own onboarding, then use ' +
+          'those annotations to prioritize which pages to rewrite first. Screenshots can be automated ' +
+          'with a headless browser script that captures the current UI state on each release.',
+      ),
+      // CONTRADICTION: override the RabbitMQ decision (shares vocabulary with original)
+      msg(
+        'user',
+        'Actually, we need to change the message queue broker for our data pipeline. The RabbitMQ ' +
+          'broker with AMQP protocol cannot handle our throughput requirements for the TypeScript ' +
+          'and Python services. We should use Apache Kafka as the message broker instead because ' +
+          'the partitioned log model supports complex routing topologies at higher scale and the ' +
+          'client libraries are mature.',
+      ),
+      msg(
+        'assistant',
+        "Good call switching to Kafka after the load test validated the concern. Kafka's " +
+          'partitioned log gives you the horizontal scaling RabbitMQ was missing. Use the kafkajs ' +
+          'client for TypeScript with the confluent-kafka-python library for the Python services. ' +
+          'Partition your topics by the pipeline entity ID to preserve ordering within each entity. ' +
+          'You will need to update the protobuf message wrappers to include Kafka headers for ' +
+          'tracing.',
+      ),
+      // Forward reference to the Kafka decision
+      msg(
+        'user',
+        'How should we handle dead letter processing in Kafka? When a consumer fails to process ' +
+          'a message from the data pipeline after retries, we need a recovery path.',
+      ),
+      msg(
+        'assistant',
+        'In Kafka, dead letter handling is a consumer-side concern unlike RabbitMQ which has ' +
+          'built-in DLX support. Implement a retry topic pattern: after N failed attempts, the ' +
+          'consumer publishes the message to a dedicated retry topic with a backoff delay header. ' +
+          'A separate retry consumer reads from the retry topic and re-publishes to the original ' +
+          'topic after the delay expires. After the final retry, send to a dead letter topic that ' +
+          'feeds into an alert and manual review workflow.',
+      ),
+      // CONTRADICTION: override the protobuf decision (shares vocabulary with original)
+      msg(
+        'user',
+        'Actually, the protobuf-ts generator for the serialization format in the data pipeline ' +
+          'has a bug with our nested message types. Lets switch to using Avro instead of Protocol ' +
+          'Buffers for the TypeScript side. The schema evolution story with the Confluent schema ' +
+          'registry is better and the binary encoding saves bandwidth on the Kafka broker.',
+      ),
+      msg(
+        'assistant',
+        'Avro with the Confluent Schema Registry is the standard pairing for Kafka pipelines. ' +
+          'The avsc library handles Avro encoding and schema resolution in Node. Register schemas ' +
+          'on first produce and cache the schema ID for subsequent messages. The wire format is ' +
+          'a magic byte, the 4-byte schema ID, then the Avro-encoded payload. This is a better ' +
+          'fit than protobuf for the Kafka ecosystem since the schema registry handles evolution.',
+      ),
+      // Forward references
+      msg(
+        'user',
+        'Can the Avro schemas we define for Kafka also be used to validate the REST API request ' +
+          'bodies in the ingestion service?',
+      ),
+      msg(
+        'assistant',
+        'Yes, you can share the Avro schemas between the Kafka producers and the REST validation ' +
+          'layer. The avsc library can compile an Avro schema into a validator function that checks ' +
+          'incoming JSON payloads. This gives you a single source of truth for the data pipeline ' +
+          'message format — the same schema validates HTTP input and serializes Kafka output.',
+      ),
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ANCS scenario builder (uses existing + new scenarios)
+// ---------------------------------------------------------------------------
+
+function buildAncsScenarios(): Scenario[] {
+  nextId = 10000; // offset to avoid ID collisions
+  return [deepConversation(), agenticCodingSession(), iterativeDesign()];
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -1182,6 +1323,111 @@ async function run(): Promise<void> {
 
   if (fuzzyFails > 0) {
     console.error(`FAIL: ${fuzzyFails} fuzzy dedup scenario(s) failed round-trip`);
+    process.exit(1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ANCS-inspired features (importance scoring + contradiction detection)
+  // ---------------------------------------------------------------------------
+
+  console.log();
+  console.log('ANCS Features (importanceScoring + contradictionDetection)');
+
+  const ancsScenarios = buildAncsScenarios();
+
+  const ancsHeader = [
+    'Scenario'.padEnd(cols.name),
+    'Msgs'.padStart(5),
+    'Base R'.padStart(7),
+    '+Imp R'.padStart(7),
+    '+Con R'.padStart(7),
+    'Both R'.padStart(7),
+    'ImpP'.padStart(5),
+    'Ctrd'.padStart(5),
+    'R/T'.padStart(cols.rt),
+    'Time'.padStart(cols.time),
+  ].join('  ');
+  const ancsSep = '-'.repeat(ancsHeader.length);
+
+  console.log(ancsSep);
+  console.log(ancsHeader);
+  console.log(ancsSep);
+
+  if (!benchResults.ancs) benchResults.ancs = {};
+  let ancsFails = 0;
+
+  for (const scenario of ancsScenarios) {
+    const t0 = performance.now();
+
+    // Baseline: small recency window to leave room for ANCS features to act
+    const baseline = compress(scenario.messages, { recencyWindow: 2 });
+
+    // Importance only
+    const withImportance = compress(scenario.messages, {
+      recencyWindow: 2,
+      importanceScoring: true,
+      importanceThreshold: 0.25,
+    });
+
+    // Contradiction only
+    const withContradiction = compress(scenario.messages, {
+      recencyWindow: 2,
+      contradictionDetection: true,
+    });
+
+    // Combined
+    const combined = compress(scenario.messages, {
+      recencyWindow: 2,
+      importanceScoring: true,
+      importanceThreshold: 0.25,
+      contradictionDetection: true,
+    });
+
+    const t1 = performance.now();
+
+    // Round-trip on combined (strictest test)
+    const er = uncompress(combined.messages, combined.verbatim);
+    const rt =
+      JSON.stringify(scenario.messages) === JSON.stringify(er.messages) &&
+      er.missing_ids.length === 0
+        ? 'PASS'
+        : 'FAIL';
+    if (rt === 'FAIL') ancsFails++;
+
+    // Report per-feature stats from their individual runs (not combined,
+    // where importance can shadow contradictions)
+    const impPreserved = withImportance.compression.messages_importance_preserved ?? 0;
+    const contradicted = withContradiction.compression.messages_contradicted ?? 0;
+
+    console.log(
+      [
+        scenario.name.padEnd(cols.name),
+        String(scenario.messages.length).padStart(5),
+        baseline.compression.ratio.toFixed(2).padStart(7),
+        withImportance.compression.ratio.toFixed(2).padStart(7),
+        withContradiction.compression.ratio.toFixed(2).padStart(7),
+        combined.compression.ratio.toFixed(2).padStart(7),
+        String(impPreserved).padStart(5),
+        String(contradicted).padStart(5),
+        rt.padStart(cols.rt),
+        ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
+      ].join('  '),
+    );
+
+    benchResults.ancs[scenario.name] = {
+      baselineRatio: baseline.compression.ratio,
+      importanceRatio: withImportance.compression.ratio,
+      contradictionRatio: withContradiction.compression.ratio,
+      combinedRatio: combined.compression.ratio,
+      importancePreserved: impPreserved,
+      contradicted,
+    };
+  }
+
+  console.log(ancsSep);
+
+  if (ancsFails > 0) {
+    console.error(`FAIL: ${ancsFails} ANCS scenario(s) failed round-trip`);
     process.exit(1);
   }
 

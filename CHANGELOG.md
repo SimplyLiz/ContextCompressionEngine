@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Importance-weighted retention** (`importanceScoring: true`) — per-message importance scoring based on forward-reference density (how many later messages share entities with this one), decision/correction content signals, and recency. Messages scoring above `importanceThreshold` (default 0.35) are preserved even outside the recency window. `forceConverge` truncates low-importance messages first. New stats: `messages_importance_preserved`.
+- **Contradiction detection** (`contradictionDetection: true`) — detects later messages that correct or override earlier ones using topic-overlap gating (word-level Jaccard) and correction signal patterns (`actually`, `don't use`, `instead`, `scratch that`, etc.). Superseded messages are compressed with a provenance annotation (`[cce:superseded by ...]`) linking to the correction. New stats: `messages_contradicted`. New decision action: `contradicted`.
+- New exports: `computeImportance`, `scoreContentSignals`, `DEFAULT_IMPORTANCE_THRESHOLD`, `analyzeContradictions` for standalone use outside `compress()`.
+- New types: `ImportanceMap`, `ContradictionAnnotation`.
+
 ## [1.1.0] - 2026-03-19
 
 ### Added

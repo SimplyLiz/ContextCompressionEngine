@@ -46,6 +46,15 @@ export interface RetentionResult {
   structuralRetention: number;
 }
 
+export interface AncsResult {
+  baselineRatio: number;
+  importanceRatio: number;
+  contradictionRatio: number;
+  combinedRatio: number;
+  importancePreserved: number;
+  contradicted: number;
+}
+
 export interface BenchmarkResults {
   basic: Record<string, BasicResult>;
   tokenBudget: Record<string, TokenBudgetResult>;
@@ -53,6 +62,7 @@ export interface BenchmarkResults {
   fuzzyDedup: Record<string, FuzzyDedupResult>;
   bundleSize: Record<string, BundleSizeResult>;
   retention?: Record<string, RetentionResult>;
+  ancs?: Record<string, AncsResult>;
 }
 
 export interface Baseline {
@@ -413,6 +423,71 @@ export function compareResults(
     checkNum(regressions, 'fuzzyDedup', name, 'ratio', exp.ratio, act.ratio, tolerance);
   }
 
+  // ANCS
+  if (baseline.ancs && current.ancs) {
+    for (const [name, exp] of Object.entries(baseline.ancs)) {
+      const act = current.ancs[name];
+      if (!act) {
+        missing(regressions, 'ancs', name);
+        continue;
+      }
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'baselineRatio',
+        exp.baselineRatio,
+        act.baselineRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'importanceRatio',
+        exp.importanceRatio,
+        act.importanceRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'contradictionRatio',
+        exp.contradictionRatio,
+        act.contradictionRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'combinedRatio',
+        exp.combinedRatio,
+        act.combinedRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'importancePreserved',
+        exp.importancePreserved,
+        act.importancePreserved,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'contradicted',
+        exp.contradicted,
+        act.contradicted,
+        tolerance,
+      );
+    }
+  }
+
   // Bundle size
   for (const [name, exp] of Object.entries(baseline.bundleSize ?? {})) {
     const act = current.bundleSize?.[name];
@@ -652,6 +727,7 @@ const SHORT_NAMES: Record<string, string> = {
   'Technical explanation': 'Technical',
   'Structured content': 'Structured',
   'Agentic coding session': 'Agentic',
+  'Iterative design': 'Iterative',
 };
 
 function shortName(name: string): string {
@@ -860,6 +936,29 @@ function generateDedupSection(r: BenchmarkResults): string[] {
         ? `+${Math.round(((v.ratio - baseRatio) / baseRatio) * 100)}%`
         : '-';
     lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} | ${improvement} |`);
+  }
+  return lines;
+}
+
+function generateAncsSection(r: BenchmarkResults): string[] {
+  if (!r.ancs || Object.keys(r.ancs).length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## ANCS-Inspired Features');
+  lines.push('');
+  lines.push(
+    '> Importance scoring preserves high-value messages outside the recency window. ' +
+      'Contradiction detection compresses superseded messages.',
+  );
+  lines.push('');
+  lines.push(
+    '| Scenario | Baseline | +Importance | +Contradiction | Combined | Imp. Preserved | Contradicted |',
+  );
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of Object.entries(r.ancs)) {
+    lines.push(
+      `| ${name} | ${fix(v.baselineRatio)} | ${fix(v.importanceRatio)} | ${fix(v.contradictionRatio)} | ${fix(v.combinedRatio)} | ${v.importancePreserved} | ${v.contradicted} |`,
+    );
   }
   return lines;
 }
@@ -1112,6 +1211,13 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   // --- Dedup ---
   lines.push(...generateDedupSection(latest.results));
   lines.push('');
+
+  // --- ANCS ---
+  const ancsSection = generateAncsSection(latest.results);
+  if (ancsSection.length > 0) {
+    lines.push(...ancsSection);
+    lines.push('');
+  }
 
   // --- Token budget ---
   lines.push(...generateTokenBudgetSection(latest.results));
