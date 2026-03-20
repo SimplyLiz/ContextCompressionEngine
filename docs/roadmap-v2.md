@@ -392,7 +392,7 @@ T3 filler:           0%            (removed entirely)
 | 3.2   | Cross-message coreference     | High    | Neutral                   | +Coherence        | [ ]    |
 | 3.3   | Conversation flow compression | Medium  | +15-25% on conv.          | +Coherence        | [x]    |
 | 4.1   | ML token classifier           | High    | +30-50% on prose          | +Quality          | [ ]    |
-| 4.2   | Progressive compression       | Medium  | +50-100% on deep          | +Quality          | [ ]    |
+| 4.2   | Progressive compression       | Medium  | +50-100% on deep          | +Quality          | [x]    |
 | 4.3   | Semantic clustering           | High    | +20-40% on long           | +Coherence        | [ ]    |
 | 5.1   | Quality benchmark suite       | Medium  | —                         | Infrastructure    | [ ]    |
 | 5.2   | Adversarial test cases        | Medium  | —                         | Infrastructure    | [ ]    |
