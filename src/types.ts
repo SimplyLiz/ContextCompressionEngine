@@ -46,7 +46,14 @@ export interface FormatAdapter {
 export type CompressDecision = {
   messageId: string;
   messageIndex: number;
-  action: 'preserved' | 'compressed' | 'deduped' | 'fuzzy_deduped' | 'truncated' | 'code_split';
+  action:
+    | 'preserved'
+    | 'compressed'
+    | 'deduped'
+    | 'fuzzy_deduped'
+    | 'truncated'
+    | 'code_split'
+    | 'contradicted';
   reason: string;
   inputChars: number;
   outputChars: number;
@@ -99,6 +106,20 @@ export type CompressOptions = {
    *  Messages exceeding this are compressed even if in the recency window.
    *  System-role and tool_calls messages are always exempt. */
   observationThreshold?: number;
+  /** Enable importance-weighted retention. When true, messages are scored by
+   *  forward-reference density, decision/correction content, and recency.
+   *  High-importance messages are preserved even outside the recency window,
+   *  and forceConverge truncates low-importance messages first. Default: false. */
+  importanceScoring?: boolean;
+  /** Importance threshold for preservation (0–1). Messages scoring above this
+   *  are preserved even outside the recency window. Default: 0.35. */
+  importanceThreshold?: number;
+  /** Enable contradiction detection. When true, later messages that correct
+   *  earlier ones cause the earlier message to be compressed while the
+   *  correction is preserved. Default: false. */
+  contradictionDetection?: boolean;
+  /** Topic overlap threshold for contradiction detection (0–1). Default: 0.15. */
+  contradictionTopicThreshold?: number;
 };
 
 export type VerbatimMap = Record<string, Message>;
@@ -133,6 +154,10 @@ export type CompressResult = {
     messages_llm_classified?: number;
     /** Messages where LLM decided to preserve (when classifier is provided). */
     messages_llm_preserved?: number;
+    /** Messages superseded by a later correction (when contradictionDetection is enabled). */
+    messages_contradicted?: number;
+    /** Messages preserved due to high importance score (when importanceScoring is enabled). */
+    messages_importance_preserved?: number;
     decisions?: CompressDecision[];
   };
   /**

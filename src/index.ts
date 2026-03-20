@@ -19,6 +19,18 @@ export {
 // Format adapters
 export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
 
+// Importance scoring (ANCS-inspired)
+export {
+  computeImportance,
+  scoreContentSignals,
+  DEFAULT_IMPORTANCE_THRESHOLD,
+} from './importance.js';
+export type { ImportanceMap } from './importance.js';
+
+// Contradiction detection (ANCS-inspired)
+export { analyzeContradictions } from './contradiction.js';
+export type { ContradictionAnnotation } from './contradiction.js';
+
 // Types
 export type {
   Classifier,

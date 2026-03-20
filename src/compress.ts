@@ -1,5 +1,11 @@
 import { classifyMessage, HARD_T0_REASONS } from './classify.js';
 import { analyzeDuplicates, analyzeFuzzyDuplicates, type DedupAnnotation } from './dedup.js';
+import {
+  computeImportance,
+  DEFAULT_IMPORTANCE_THRESHOLD,
+  type ImportanceMap,
+} from './importance.js';
+import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -463,8 +469,10 @@ type Classified = {
   preserved: boolean;
   codeSplit?: boolean;
   dedup?: DedupAnnotation;
+  contradiction?: ContradictionAnnotation;
   patternPreserved?: boolean;
   llmPreserved?: boolean;
+  importancePreserved?: boolean;
   traceReason?: string;
   adapterMatch?: FormatAdapter;
 };
@@ -551,6 +559,9 @@ function classifyAll(
   adapters?: FormatAdapter[],
   observationThreshold?: number,
   counter?: (msg: Message) => number,
+  importanceScores?: ImportanceMap,
+  importanceThreshold?: number,
+  contradictionAnnotations?: Map<number, ContradictionAnnotation>,
 ): Classified[] {
   const recencyStart = Math.max(0, messages.length - recencyWindow);
 
@@ -581,6 +592,23 @@ function classifyAll(
     ) {
       return { msg, preserved: true, ...(trace && { traceReason: 'already_compressed' }) };
     }
+    // Importance-based preservation: high-importance messages preserved even outside recency
+    if (
+      importanceScores &&
+      importanceThreshold != null &&
+      !largeObservation &&
+      importanceScores.has(idx)
+    ) {
+      const score = importanceScores.get(idx)!;
+      if (score >= importanceThreshold) {
+        return {
+          msg,
+          preserved: true,
+          importancePreserved: true,
+          ...(trace && { traceReason: `importance:${score.toFixed(2)}` }),
+        };
+      }
+    }
     if (dedupAnnotations?.has(idx)) {
       const ann = dedupAnnotations.get(idx)!;
       return {
@@ -589,6 +617,18 @@ function classifyAll(
         dedup: ann,
         ...(trace && {
           traceReason: ann.similarity != null ? 'fuzzy_duplicate' : 'exact_duplicate',
+        }),
+      };
+    }
+    // Contradiction: earlier message superseded by a later correction
+    if (contradictionAnnotations?.has(idx)) {
+      const ann = contradictionAnnotations.get(idx)!;
+      return {
+        msg,
+        preserved: false,
+        contradiction: ann,
+        ...(trace && {
+          traceReason: `contradicted:${ann.signal}`,
         }),
       };
     }
@@ -681,6 +721,8 @@ function computeStats(
   messagesPatternPreserved?: number,
   messagesLlmClassified?: number,
   messagesLlmPreserved?: number,
+  messagesContradicted?: number,
+  messagesImportancePreserved?: number,
 ): CompressResult['compression'] {
   const originalTotalChars = originalMessages.reduce((sum, m) => sum + contentLength(m), 0);
   const compressedTotalChars = resultMessages.reduce((sum, m) => sum + contentLength(m), 0);
@@ -709,6 +751,12 @@ function computeStats(
       : {}),
     ...(messagesLlmPreserved && messagesLlmPreserved > 0
       ? { messages_llm_preserved: messagesLlmPreserved }
+      : {}),
+    ...(messagesContradicted && messagesContradicted > 0
+      ? { messages_contradicted: messagesContradicted }
+      : {}),
+    ...(messagesImportancePreserved && messagesImportancePreserved > 0
+      ? { messages_importance_preserved: messagesImportancePreserved }
       : {}),
   };
 }
@@ -840,6 +888,20 @@ function* compressGen(
 
   const trace = options.trace ?? false;
 
+  // Importance scoring (ANCS-inspired)
+  const importanceScores = options.importanceScoring ? computeImportance(messages) : undefined;
+  const importanceThreshold = options.importanceThreshold ?? DEFAULT_IMPORTANCE_THRESHOLD;
+
+  // Contradiction detection (ANCS-inspired)
+  let contradictionAnnotations: Map<number, ContradictionAnnotation> | undefined;
+  if (options.contradictionDetection) {
+    contradictionAnnotations = analyzeContradictions(
+      messages,
+      options.contradictionTopicThreshold ?? 0.15,
+      preserveRoles,
+    );
+  }
+
   const classified = classifyAll(
     messages,
     preserveRoles,
@@ -852,6 +914,9 @@ function* compressGen(
     options.adapters,
     options.observationThreshold,
     options.observationThreshold != null ? counter : undefined,
+    importanceScores,
+    importanceScores ? importanceThreshold : undefined,
+    contradictionAnnotations,
   );
 
   const result: Message[] = [];
@@ -861,6 +926,8 @@ function* compressGen(
   let messagesPreserved = 0;
   let messagesDeduped = 0;
   let messagesFuzzyDeduped = 0;
+  let messagesContradicted = 0;
+  let messagesImportancePreserved = 0;
   let messagesPatternPreserved = 0;
   let messagesLlmPreserved = 0;
   let i = 0;
@@ -873,6 +940,7 @@ function* compressGen(
       messagesPreserved++;
       if (classified[i].patternPreserved) messagesPatternPreserved++;
       if (classified[i].llmPreserved) messagesLlmPreserved++;
+      if (classified[i].importancePreserved) messagesImportancePreserved++;
       if (trace) {
         const inChars = contentLength(msg);
         decisions.push({
@@ -913,6 +981,50 @@ function* compressGen(
         messagesFuzzyDeduped++;
       } else {
         messagesDeduped++;
+      }
+      i++;
+      continue;
+    }
+
+    // Contradiction: superseded message — compress with annotation
+    if (classified[i].contradiction) {
+      const annotation = classified[i].contradiction!;
+      const supersederId = messages[annotation.supersededByIndex].id;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      const contentBudget = computeBudget(content.length);
+      const summaryText: string = yield { text: content, budget: contentBudget };
+      let tag = `[cce:superseded by ${supersederId} (${annotation.signal}) — ${summaryText}]`;
+      // If full tag doesn't fit, use compact format
+      if (tag.length >= content.length) {
+        tag = `[cce:superseded by ${supersederId} — ${annotation.signal}]`;
+      }
+
+      if (tag.length >= content.length) {
+        result.push(msg);
+        messagesPreserved++;
+        if (trace) {
+          decisions.push({
+            messageId: msg.id,
+            messageIndex: i,
+            action: 'preserved',
+            reason: 'contradiction_reverted',
+            inputChars: content.length,
+            outputChars: content.length,
+          });
+        }
+      } else {
+        result.push(buildCompressedMessage(msg, [msg.id], tag, sourceVersion, verbatim, [msg]));
+        messagesContradicted++;
+        if (trace) {
+          decisions.push({
+            messageId: msg.id,
+            messageIndex: i,
+            action: 'contradicted',
+            reason: `contradicted:${annotation.signal}`,
+            inputChars: content.length,
+            outputChars: tag.length,
+          });
+        }
       }
       i++;
       continue;
@@ -1122,6 +1234,8 @@ function* compressGen(
     messagesPatternPreserved,
     llmResults?.size,
     messagesLlmPreserved,
+    messagesContradicted,
+    messagesImportancePreserved,
   );
 
   if (trace) {
@@ -1234,6 +1348,7 @@ function forceConvergePass(
   sourceVersion: number,
   counter: (msg: Message) => number,
   trace?: boolean,
+  importanceScores?: ImportanceMap,
 ): CompressResult {
   if (cr.fits) return cr;
 
@@ -1252,8 +1367,18 @@ function forceConvergePass(
     candidates.push({ idx: i, contentLen: content.length });
   }
 
-  // Sort by content length descending (biggest savings first)
-  candidates.sort((a, b) => b.contentLen - a.contentLen);
+  // Sort by importance ascending (low-importance first), then by content length descending
+  // This ensures low-value messages get truncated before high-value ones
+  if (importanceScores) {
+    candidates.sort((a, b) => {
+      const impA = importanceScores.get(a.idx) ?? 0;
+      const impB = importanceScores.get(b.idx) ?? 0;
+      if (Math.abs(impA - impB) > 0.05) return impA - impB; // lower importance first
+      return b.contentLen - a.contentLen; // then bigger savings first
+    });
+  } else {
+    candidates.sort((a, b) => b.contentLen - a.contentLen);
+  }
 
   // Clone messages and verbatim for mutation
   const messages = cr.messages.map((m) => ({
@@ -1371,6 +1496,7 @@ function compressSyncWithBudget(
 
   if (!result.fits && options.forceConverge) {
     const preserveRoles = new Set(options.preserve ?? ['system']);
+    const impScores = options.importanceScoring ? computeImportance(messages) : undefined;
     result = forceConvergePass(
       result,
       tokenBudget,
@@ -1378,6 +1504,7 @@ function compressSyncWithBudget(
       sourceVersion,
       counter,
       options.trace,
+      impScores,
     );
   }
 
@@ -1445,6 +1572,7 @@ async function compressAsyncWithBudget(
 
   if (!result.fits && options.forceConverge) {
     const preserveRoles = new Set(options.preserve ?? ['system']);
+    const impScores = options.importanceScoring ? computeImportance(messages) : undefined;
     result = forceConvergePass(
       result,
       tokenBudget,
@@ -1452,6 +1580,7 @@ async function compressAsyncWithBudget(
       sourceVersion,
       counter,
       options.trace,
+      impScores,
     );
   }
 
