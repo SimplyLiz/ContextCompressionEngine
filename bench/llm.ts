@@ -128,5 +128,28 @@ export async function detectProviders(): Promise<LlmProvider[]> {
     }
   }
 
+  // --- Google Gemini ---
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+
+      providers.push({
+        name: 'gemini',
+        model,
+        callLlm: async (prompt: string): Promise<string> => {
+          const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+          });
+          return response.text ?? '';
+        },
+      });
+    } catch (err) {
+      console.log(`  @google/genai SDK not installed, skipping (${(err as Error).message})`);
+    }
+  }
+
   return providers;
 }

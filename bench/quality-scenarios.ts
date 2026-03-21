@@ -1,6 +1,311 @@
 import type { Message } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
+// Probe definitions
+// ---------------------------------------------------------------------------
+
+export interface ProbeDefinition {
+  label: string;
+  check: (compressedMessages: Message[]) => boolean;
+}
+
+function anyMessageContains(messages: Message[], text: string): boolean {
+  return messages.some((m) => typeof m.content === 'string' && m.content.includes(text));
+}
+
+function anyMessageMatches(messages: Message[], re: RegExp): boolean {
+  return messages.some((m) => typeof m.content === 'string' && re.test(m.content));
+}
+
+function codeBlockContains(messages: Message[], text: string): boolean {
+  const CODE_FENCE_RE = /```[\w]*\n([\s\S]*?)```/g;
+  for (const m of messages) {
+    if (typeof m.content !== 'string') continue;
+    let match: RegExpExecArray | null;
+    const re = new RegExp(CODE_FENCE_RE.source, CODE_FENCE_RE.flags);
+    while ((match = re.exec(m.content)) !== null) {
+      if (match[1].includes(text)) return true;
+    }
+  }
+  return false;
+}
+
+const LANG_ALIASES: Record<string, string[]> = {
+  typescript: ['typescript', 'ts'],
+  python: ['python', 'py'],
+  sql: ['sql'],
+  json: ['json'],
+  yaml: ['yaml', 'yml'],
+};
+
+function countCodeBlocks(messages: Message[], lang?: string): number {
+  let pattern: RegExp;
+  if (lang) {
+    const aliases = LANG_ALIASES[lang] ?? [lang];
+    const langPattern = aliases.join('|');
+    pattern = new RegExp('```(?:' + langPattern + ')\\n[\\s\\S]*?```', 'g');
+  } else {
+    pattern = /```[\w]*\n[\s\S]*?```/g;
+  }
+  let count = 0;
+  for (const m of messages) {
+    if (typeof m.content !== 'string') continue;
+    const matches = m.content.match(pattern);
+    if (matches) count += matches.length;
+  }
+  return count;
+}
+
+function totalContentLength(messages: Message[]): number {
+  let total = 0;
+  for (const m of messages) {
+    if (typeof m.content === 'string') total += m.content.length;
+  }
+  return total;
+}
+
+export function getProbesForScenario(name: string): ProbeDefinition[] {
+  switch (name) {
+    case 'Coding assistant':
+      return [
+        { label: 'JWT_SECRET env var', check: (ms) => anyMessageContains(ms, 'JWT_SECRET') },
+        { label: 'jwt.verify in code', check: (ms) => codeBlockContains(ms, 'jwt.verify') },
+        { label: '15m access expiry', check: (ms) => anyMessageContains(ms, '15m') },
+        { label: '7d refresh expiry', check: (ms) => anyMessageContains(ms, '7d') },
+        { label: 'rateLimit in code', check: (ms) => codeBlockContains(ms, 'rateLimit') },
+        {
+          label: 'authMiddleware function',
+          check: (ms) => anyMessageContains(ms, 'authMiddleware'),
+        },
+        {
+          label: 'express-rate-limit import',
+          check: (ms) => anyMessageContains(ms, 'express-rate-limit'),
+        },
+        {
+          label: 'Redis/ioredis mention',
+          check: (ms) => anyMessageMatches(ms, /ioredis|[Rr]edis/),
+        },
+        {
+          label: 'min output ≥ 2000 chars',
+          check: (ms) => totalContentLength(ms) >= 2000,
+        },
+      ];
+
+    case 'Long Q&A':
+      return [
+        { label: 'event sourcing', check: (ms) => anyMessageMatches(ms, /event.?sourcing/i) },
+        { label: 'circuit breaker', check: (ms) => anyMessageMatches(ms, /circuit.?breaker/i) },
+        {
+          label: 'eventual consistency',
+          check: (ms) => anyMessageMatches(ms, /eventual.?consistency/i),
+        },
+        { label: 'saga pattern', check: (ms) => anyMessageMatches(ms, /saga/i) },
+        { label: 'choreography', check: (ms) => anyMessageContains(ms, 'choreography') },
+        { label: 'orchestration', check: (ms) => anyMessageContains(ms, 'orchestration') },
+        {
+          label: 'min output ≥ 800 chars',
+          check: (ms) => totalContentLength(ms) >= 800,
+        },
+      ];
+
+    case 'Tool-heavy':
+      return [
+        { label: 'JSON array preserved', check: (ms) => anyMessageMatches(ms, /\[.*"src\//) },
+        { label: 'SQL SELECT preserved', check: (ms) => anyMessageContains(ms, 'SELECT') },
+        { label: 'STRIPE_SECRET_KEY', check: (ms) => anyMessageContains(ms, 'STRIPE_SECRET_KEY') },
+        { label: 'GITHUB_TOKEN', check: (ms) => anyMessageContains(ms, 'GITHUB_TOKEN') },
+        {
+          label: 'code blocks present',
+          check: (ms) =>
+            countCodeBlocks(ms) > 0 ||
+            anyMessageContains(ms, 'jwt.verify') ||
+            anyMessageContains(ms, 'jwt.sign'),
+        },
+        { label: 'DATABASE_URL', check: (ms) => anyMessageContains(ms, 'DATABASE_URL') },
+      ];
+
+    case 'Deep conversation': {
+      const topicNames = [
+        'database schema',
+        'authentication',
+        'caching',
+        'monitoring',
+        'testing',
+        'deployment',
+        'error handling',
+        'API',
+        'logging',
+        'feature flags',
+        'migration',
+        'load balancing',
+        'service discovery',
+        'observability',
+        'incident response',
+      ];
+      const probes: ProbeDefinition[] = [
+        {
+          label: '≥15/25 topics survive',
+          check: (ms) => {
+            const allTopics = [
+              'database schema',
+              'API endpoint',
+              'authentication',
+              'error handling',
+              'caching',
+              'deployment',
+              'monitoring',
+              'testing',
+              'code review',
+              'documentation',
+              'performance',
+              'logging',
+              'feature flag',
+              'migration',
+              'API versioning',
+              'circuit breaker',
+              'message queue',
+              'secrets management',
+              'load balancing',
+              'container',
+              'service discovery',
+              'observability',
+              'incident response',
+              'capacity planning',
+              'access control',
+            ];
+            let found = 0;
+            for (const topic of allTopics) {
+              if (anyMessageMatches(ms, new RegExp(topic, 'i'))) found++;
+            }
+            return found >= 15;
+          },
+        },
+      ];
+      for (const topic of topicNames.slice(0, 7)) {
+        probes.push({
+          label: `topic: ${topic}`,
+          check: (ms) => anyMessageMatches(ms, new RegExp(topic, 'i')),
+        });
+      }
+      probes.push({
+        label: 'min output ≥ 3000 chars',
+        check: (ms) => totalContentLength(ms) >= 3000,
+      });
+      return probes;
+    }
+
+    case 'Technical explanation':
+      return [
+        { label: 'OrderPlaced event', check: (ms) => anyMessageContains(ms, 'OrderPlaced') },
+        {
+          label: 'temporal decoupling',
+          check: (ms) => anyMessageMatches(ms, /temporal.?decoupling/i),
+        },
+        { label: 'schema version', check: (ms) => anyMessageMatches(ms, /schema.?version/i) },
+        { label: 'partition ordering', check: (ms) => anyMessageContains(ms, 'partition') },
+        { label: 'at-least-once delivery', check: (ms) => anyMessageMatches(ms, /at.least.once/i) },
+        { label: 'dead letter queue', check: (ms) => anyMessageMatches(ms, /dead.?letter/i) },
+        { label: 'idempotent consumers', check: (ms) => anyMessageContains(ms, 'idempotent') },
+      ];
+
+    case 'Structured content':
+      return [
+        { label: 'API keys preserved', check: (ms) => anyMessageContains(ms, 'STRIPE_SECRET_KEY') },
+        { label: 'CREATE TABLE preserved', check: (ms) => anyMessageContains(ms, 'CREATE TABLE') },
+        { label: 'JSON code block', check: (ms) => anyMessageMatches(ms, /```json/) },
+        { label: 'AWS_ACCESS_KEY_ID', check: (ms) => anyMessageContains(ms, 'AWS_ACCESS_KEY_ID') },
+        { label: 'SENDGRID_API_KEY', check: (ms) => anyMessageContains(ms, 'SENDGRID_API_KEY') },
+      ];
+
+    case 'Agentic coding session':
+      return [
+        { label: 'AuthService in code', check: (ms) => anyMessageContains(ms, 'AuthService') },
+        {
+          label: 'verify or validateToken',
+          check: (ms) => anyMessageMatches(ms, /verify\(|validateToken\(/),
+        },
+        { label: 'grep results', check: (ms) => anyMessageMatches(ms, /src\/auth\.ts:\d+/) },
+        {
+          label: 'test counts',
+          check: (ms) => anyMessageMatches(ms, /\d+\s*(?:tests?|passed|failed)/),
+        },
+        { label: 'jwt.sign in code', check: (ms) => anyMessageContains(ms, 'jwt.sign') },
+      ];
+
+    case 'Single-char messages':
+      return [
+        { label: 'output count = input count', check: (ms) => ms.length >= 10 },
+        { label: '"y" present', check: (ms) => ms.some((m) => m.content === 'y') },
+        { label: '"n" present', check: (ms) => ms.some((m) => m.content === 'n') },
+      ];
+
+    case 'Giant single message':
+      return [
+        { label: 'TracingService in code', check: (ms) => codeBlockContains(ms, 'TracingService') },
+        { label: 'traceId identifier', check: (ms) => anyMessageContains(ms, 'traceId') },
+        { label: 'spanId identifier', check: (ms) => anyMessageContains(ms, 'spanId') },
+        { label: 'startSpan in code', check: (ms) => codeBlockContains(ms, 'startSpan') },
+        {
+          label: 'min output ≥ 10000 chars',
+          check: (ms) => totalContentLength(ms) >= 10000,
+        },
+      ];
+
+    case 'Code-only conversation':
+      return [
+        { label: 'TypeScript code blocks', check: (ms) => countCodeBlocks(ms, 'typescript') >= 2 },
+        { label: 'Python code blocks', check: (ms) => countCodeBlocks(ms, 'python') >= 2 },
+        { label: 'SQL code blocks', check: (ms) => countCodeBlocks(ms, 'sql') >= 2 },
+        {
+          label: 'all code preserved verbatim',
+          check: (ms) => codeBlockContains(ms, 'fibonacci') && codeBlockContains(ms, 'add('),
+        },
+      ];
+
+    case 'Entity-dense technical':
+      return [
+        { label: 'file paths present', check: (ms) => anyMessageMatches(ms, /src\/\w+/) },
+        { label: 'redis-prod-001', check: (ms) => anyMessageContains(ms, 'redis-prod-001') },
+        { label: 'v22.3.0 version', check: (ms) => anyMessageContains(ms, 'v22.3.0') },
+        { label: 'max_connections', check: (ms) => anyMessageContains(ms, 'max_connections') },
+        { label: 'PR #142', check: (ms) => anyMessageContains(ms, 'PR #142') },
+        { label: 'orderService.ts', check: (ms) => anyMessageContains(ms, 'orderService.ts') },
+        {
+          label: 'idx_orders_user_created',
+          check: (ms) => anyMessageContains(ms, 'idx_orders_user_created'),
+        },
+        { label: 'p99 latency', check: (ms) => anyMessageContains(ms, 'p99') },
+      ];
+
+    case 'Prose-only conversation':
+      return [
+        { label: 'hiring topic', check: (ms) => anyMessageMatches(ms, /hiring/i) },
+        { label: 'review topic', check: (ms) => anyMessageMatches(ms, /review/i) },
+        { label: 'onboarding topic', check: (ms) => anyMessageMatches(ms, /onboarding/i) },
+        {
+          label: 'min output ≥ 400 chars',
+          check: (ms) => totalContentLength(ms) >= 400,
+        },
+      ];
+
+    case 'Mixed languages':
+      return [
+        { label: 'Python code block', check: (ms) => countCodeBlocks(ms, 'python') >= 1 },
+        { label: 'SQL code block', check: (ms) => countCodeBlocks(ms, 'sql') >= 1 },
+        { label: 'JSON code block', check: (ms) => countCodeBlocks(ms, 'json') >= 1 },
+        { label: 'YAML code block', check: (ms) => countCodeBlocks(ms, 'yaml') >= 1 },
+        {
+          label: 'metrics-processor name',
+          check: (ms) => anyMessageContains(ms, 'metrics-processor'),
+        },
+      ];
+
+    default:
+      return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

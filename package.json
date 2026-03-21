@@ -21,6 +21,7 @@
     "bench:quality": "npx tsx bench/quality.ts",
     "bench:quality:save": "npx tsx bench/quality.ts --save",
     "bench:quality:check": "npx tsx bench/quality.ts --check",
+    "bench:quality:judge": "npx tsx bench/quality.ts --llm-judge",
     "bench:backfill": "npx tsx bench/backfill.ts",
     "test:e2e": "npm run build && npm pack && npm run test:e2e:lint && npm run test:e2e:smoke; EXIT=$?; npm run test:e2e:cleanup; exit $EXIT",
     "test:e2e:lint": "publint ./context-compression-engine-*.tgz --strict && attw ./context-compression-engine-*.tgz --ignore-rules cjs-resolves-to-esm",
@@ -68,6 +69,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
     "@eslint/js": "^10.0.1",
+    "@google/genai": "^1.46.0",
     "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.3",
     "eslint": "^10.0.2",

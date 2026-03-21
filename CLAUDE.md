@@ -14,6 +14,10 @@ npm run format           # Prettier write
 npm run format:check     # Prettier check
 npm run bench            # Run benchmark suite
 npm run bench:save       # Run, save baseline, regenerate docs/benchmark-results.md
+npm run bench:quality    # Run quality benchmark (probes, coherence, info density)
+npm run bench:quality:save   # Save quality baseline
+npm run bench:quality:check  # Compare against quality baseline
+npm run bench:quality:judge  # Run with LLM-as-judge (requires API key)
 ```
 
 Run a single test file:

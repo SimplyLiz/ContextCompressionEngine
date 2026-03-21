@@ -9,11 +9,18 @@ import {
   sweepTradeoff,
   summarizeTradeoff,
   compareQualityResults,
+  runLlmJudge,
   type QualityBaseline,
   type QualityResult,
   type TradeoffResult,
+  type LlmJudgeScore,
 } from './quality-analysis.js';
-import { buildEdgeCaseScenarios, type Scenario } from './quality-scenarios.js';
+import {
+  buildEdgeCaseScenarios,
+  getProbesForScenario,
+  type Scenario,
+} from './quality-scenarios.js';
+import { detectProviders } from './llm.js';
 
 // ---------------------------------------------------------------------------
 // Reuse scenario builders from run.ts (inline minimal versions to avoid
@@ -427,10 +434,11 @@ function loadQualityBaseline(): QualityBaseline | null {
 // Runner
 // ---------------------------------------------------------------------------
 
-function run(): void {
+async function run(): Promise<void> {
   const args = process.argv.slice(2);
   const flagSave = args.includes('--save');
   const flagCheck = args.includes('--check');
+  const flagLlmJudge = args.includes('--llm-judge');
 
   const version = JSON.parse(
     readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf-8'),
@@ -452,12 +460,13 @@ function run(): void {
     'Scenario'.padEnd(24),
     'Ratio'.padStart(6),
     'EntRet'.padStart(7),
-    'KwRet'.padStart(7),
     'CodeOK'.padStart(7),
-    'Facts'.padStart(6),
-    'FctRet'.padStart(7),
-    'NegErr'.padStart(7),
-    'QScore'.padStart(7),
+    'InfDen'.padStart(7),
+    'Probes'.padStart(7),
+    'Pass'.padStart(5),
+    'NegCp'.padStart(6),
+    'Coher'.padStart(6),
+    'CmpQ'.padStart(6),
   ].join('  ');
   const qSep = '-'.repeat(qHeader.length);
 
@@ -468,7 +477,8 @@ function run(): void {
   console.log(qSep);
 
   for (const scenario of allScenarios) {
-    const q = analyzeQuality(scenario.messages);
+    const probes = getProbesForScenario(scenario.name);
+    const q = analyzeQuality(scenario.messages, probes);
     qualityResults[scenario.name] = q;
 
     console.log(
@@ -476,17 +486,41 @@ function run(): void {
         scenario.name.padEnd(24),
         fix(q.ratio).padStart(6),
         pct(q.avgEntityRetention).padStart(7),
-        pct(q.avgKeywordRetention).padStart(7),
         pct(q.codeBlockIntegrity).padStart(7),
-        String(q.factCount).padStart(6),
-        pct(q.factRetention).padStart(7),
-        String(q.negationErrors).padStart(7),
-        fix(q.qualityScore).padStart(7),
+        fix(q.informationDensity).padStart(7),
+        `${q.probesPassed}/${q.probesTotal}`.padStart(7),
+        pct(q.probePassRate).padStart(5),
+        String(q.negativeCompressions).padStart(6),
+        String(q.coherenceIssues).padStart(6),
+        fix(q.compressedQualityScore).padStart(6),
       ].join('  '),
     );
   }
 
   console.log(qSep);
+
+  // --- Probe failure detail ---
+  const failedProbes: { scenario: string; label: string }[] = [];
+  for (const scenario of allScenarios) {
+    const q = qualityResults[scenario.name];
+    for (const pr of q.probeResults) {
+      if (!pr.passed) {
+        failedProbes.push({ scenario: scenario.name, label: pr.label });
+      }
+    }
+  }
+
+  if (failedProbes.length > 0) {
+    console.log();
+    console.log('Probe Failures');
+    console.log('-'.repeat(60));
+    for (const f of failedProbes) {
+      console.log(`  ${f.scenario}: ${f.label}`);
+    }
+    console.log('-'.repeat(60));
+  } else {
+    console.log('\nAll probes passed.');
+  }
 
   // --- Round-trip verification ---
   let rtFails = 0;
@@ -564,7 +598,6 @@ function run(): void {
       'Out'.padStart(6),
       'Ratio'.padStart(6),
       'EntRet'.padStart(7),
-      'KwRet'.padStart(7),
       'Code'.padStart(5),
     ].join('  ');
     const mSep = '-'.repeat(mHeader.length);
@@ -582,13 +615,90 @@ function run(): void {
           String(m.outputChars).padStart(6),
           fix(m.localRatio).padStart(6),
           pct(m.entityRetention).padStart(7),
-          pct(m.keywordRetention).padStart(7),
           (m.codeBlocksIntact ? 'ok' : 'LOSS').padStart(5),
         ].join('  '),
       );
     }
 
     console.log(mSep);
+  }
+
+  // --- LLM Judge (optional) ---
+  if (flagLlmJudge) {
+    const providers = await detectProviders();
+    if (providers.length === 0) {
+      console.log('\nNo LLM providers detected — skipping LLM judge.');
+      console.log(
+        '  Set one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, or OLLAMA_HOST',
+      );
+    } else {
+      // Only judge scenarios that actually compress
+      const judgeable = allScenarios.filter((s) => qualityResults[s.name]?.ratio > 1.01);
+
+      for (const provider of providers) {
+        console.log();
+        console.log(`LLM Judge — ${provider.name}/${provider.model}`);
+
+        const jHeader = [
+          'Scenario'.padEnd(24),
+          'Meaning'.padStart(8),
+          'Coher'.padStart(6),
+          'Overall'.padStart(8),
+          'Info Loss'.padStart(40),
+        ].join('  ');
+        const jSep = '-'.repeat(jHeader.length);
+
+        console.log(jSep);
+        console.log(jHeader);
+        console.log(jSep);
+
+        const scores: LlmJudgeScore[] = [];
+        for (const scenario of judgeable) {
+          const cr = compress(scenario.messages, { recencyWindow: 0 });
+          try {
+            const score = await runLlmJudge(
+              scenario.name,
+              scenario.messages,
+              cr.messages,
+              provider.callLlm,
+              provider.name,
+              provider.model,
+            );
+            scores.push(score);
+
+            const lossDisplay =
+              score.informationLoss.length > 40
+                ? score.informationLoss.slice(0, 37) + '...'
+                : score.informationLoss;
+
+            console.log(
+              [
+                scenario.name.padEnd(24),
+                `${score.meaningPreserved}/5`.padStart(8),
+                `${score.coherence}/5`.padStart(6),
+                `${score.overall}/5`.padStart(8),
+                lossDisplay.padStart(40),
+              ].join('  '),
+            );
+          } catch (err) {
+            console.log(
+              `  ${scenario.name.padEnd(24)}  ERROR: ${(err as Error).message.slice(0, 60)}`,
+            );
+          }
+        }
+
+        console.log(jSep);
+
+        if (scores.length > 0) {
+          const avgMeaning = scores.reduce((s, sc) => s + sc.meaningPreserved, 0) / scores.length;
+          const avgCoherence = scores.reduce((s, sc) => s + sc.coherence, 0) / scores.length;
+          const avgOverall = scores.reduce((s, sc) => s + sc.overall, 0) / scores.length;
+          console.log(
+            `  Average: meaning=${fix(avgMeaning)}/5  coherence=${fix(avgCoherence)}/5  overall=${fix(avgOverall)}/5`,
+          );
+        }
+      }
+    }
   }
 
   // --- Save / Check ---
@@ -631,4 +741,7 @@ function run(): void {
   console.log('Quality benchmarks complete.');
 }
 
-run();
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
