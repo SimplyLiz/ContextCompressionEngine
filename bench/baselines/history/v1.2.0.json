@@ -1,0 +1,378 @@
+{
+  "version": "1.2.0",
+  "generated": "2026-03-20T22:34:22.455Z",
+  "results": {
+    "basic": {
+      "Coding assistant": {
+        "ratio": 1.9385451505016722,
+        "tokenRatio": 1.9275362318840579,
+        "compressed": 5,
+        "preserved": 8
+      },
+      "Long Q&A": {
+        "ratio": 4.902912621359223,
+        "tokenRatio": 4.87689713322091,
+        "compressed": 4,
+        "preserved": 6
+      },
+      "Tool-heavy": {
+        "ratio": 1.4009797060881735,
+        "tokenRatio": 1.3908872901678657,
+        "compressed": 2,
+        "preserved": 16
+      },
+      "Short conversation": {
+        "ratio": 1,
+        "tokenRatio": 1,
+        "compressed": 0,
+        "preserved": 7
+      },
+      "Deep conversation": {
+        "ratio": 2.5041568769202964,
+        "tokenRatio": 2.4905897114178166,
+        "compressed": 50,
+        "preserved": 1
+      },
+      "Technical explanation": {
+        "ratio": 1,
+        "tokenRatio": 1,
+        "compressed": 0,
+        "preserved": 11
+      },
+      "Structured content": {
+        "ratio": 1.8559794256322333,
+        "tokenRatio": 1.8469539375928679,
+        "compressed": 2,
+        "preserved": 10
+      },
+      "Agentic coding session": {
+        "ratio": 1.4768201370081249,
+        "tokenRatio": 1.4740044247787611,
+        "compressed": 2,
+        "preserved": 31
+      }
+    },
+    "tokenBudget": {
+      "Deep conversation|dedup=false": {
+        "tokenCount": 3188,
+        "fits": false,
+        "recencyWindow": 0,
+        "compressed": 50,
+        "preserved": 1,
+        "deduped": 0
+      },
+      "Deep conversation|dedup=true": {
+        "tokenCount": 3188,
+        "fits": false,
+        "recencyWindow": 0,
+        "compressed": 50,
+        "preserved": 1,
+        "deduped": 0
+      },
+      "Agentic coding session|dedup=false": {
+        "tokenCount": 2223,
+        "fits": false,
+        "recencyWindow": 0,
+        "compressed": 4,
+        "preserved": 33,
+        "deduped": 0
+      },
+      "Agentic coding session|dedup=true": {
+        "tokenCount": 1900,
+        "fits": true,
+        "recencyWindow": 9,
+        "compressed": 1,
+        "preserved": 32,
+        "deduped": 4
+      }
+    },
+    "dedup": {
+      "Coding assistant": {
+        "rw0Base": 1.9385451505016722,
+        "rw0Dup": 1.9385451505016722,
+        "rw4Base": 1.6061655697956356,
+        "rw4Dup": 1.6061655697956356,
+        "deduped": 0
+      },
+      "Long Q&A": {
+        "rw0Base": 4,
+        "rw0Dup": 4.902912621359223,
+        "rw4Base": 1.76296037702915,
+        "rw4Dup": 1.918693009118541,
+        "deduped": 1
+      },
+      "Tool-heavy": {
+        "rw0Base": 1.4009797060881735,
+        "rw0Dup": 1.4009797060881735,
+        "rw4Base": 1.4009797060881735,
+        "rw4Dup": 1.4009797060881735,
+        "deduped": 0
+      },
+      "Short conversation": {
+        "rw0Base": 1,
+        "rw0Dup": 1,
+        "rw4Base": 1,
+        "rw4Dup": 1,
+        "deduped": 0
+      },
+      "Deep conversation": {
+        "rw0Base": 2.5041568769202964,
+        "rw0Dup": 2.5041568769202964,
+        "rw4Base": 2.2394536932277354,
+        "rw4Dup": 2.2394536932277354,
+        "deduped": 0
+      },
+      "Technical explanation": {
+        "rw0Base": 1,
+        "rw0Dup": 1,
+        "rw4Base": 1,
+        "rw4Dup": 1,
+        "deduped": 0
+      },
+      "Structured content": {
+        "rw0Base": 1.8559794256322333,
+        "rw0Dup": 1.8559794256322333,
+        "rw4Base": 1.3339494762784967,
+        "rw4Dup": 1.3339494762784967,
+        "deduped": 0
+      },
+      "Agentic coding session": {
+        "rw0Base": 1.2001553599171413,
+        "rw0Dup": 1.4768201370081249,
+        "rw4Base": 1.2001553599171413,
+        "rw4Dup": 1.4768201370081249,
+        "deduped": 4
+      }
+    },
+    "fuzzyDedup": {
+      "Coding assistant": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 1.9385451505016722
+      },
+      "Long Q&A": {
+        "exact": 1,
+        "fuzzy": 0,
+        "ratio": 4.902912621359223
+      },
+      "Tool-heavy": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 1.4009797060881735
+      },
+      "Short conversation": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 1
+      },
+      "Deep conversation": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 2.5041568769202964
+      },
+      "Technical explanation": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 1
+      },
+      "Structured content": {
+        "exact": 0,
+        "fuzzy": 0,
+        "ratio": 1.8559794256322333
+      },
+      "Agentic coding session": {
+        "exact": 4,
+        "fuzzy": 2,
+        "ratio": 2.3504056795131847
+      }
+    },
+    "bundleSize": {
+      "adapters.js": {
+        "bytes": 4196,
+        "gzipBytes": 1363
+      },
+      "classifier.js": {
+        "bytes": 4611,
+        "gzipBytes": 1593
+      },
+      "classify.js": {
+        "bytes": 10994,
+        "gzipBytes": 4452
+      },
+      "cluster.js": {
+        "bytes": 7587,
+        "gzipBytes": 2471
+      },
+      "compress.js": {
+        "bytes": 86117,
+        "gzipBytes": 16727
+      },
+      "contradiction.js": {
+        "bytes": 7700,
+        "gzipBytes": 2717
+      },
+      "coreference.js": {
+        "bytes": 4321,
+        "gzipBytes": 1500
+      },
+      "dedup.js": {
+        "bytes": 10260,
+        "gzipBytes": 2864
+      },
+      "discourse.js": {
+        "bytes": 6792,
+        "gzipBytes": 2495
+      },
+      "entities.js": {
+        "bytes": 8403,
+        "gzipBytes": 2665
+      },
+      "entropy.js": {
+        "bytes": 1979,
+        "gzipBytes": 832
+      },
+      "expand.js": {
+        "bytes": 2795,
+        "gzipBytes": 934
+      },
+      "feedback.js": {
+        "bytes": 11923,
+        "gzipBytes": 2941
+      },
+      "flow.js": {
+        "bytes": 7967,
+        "gzipBytes": 2086
+      },
+      "importance.js": {
+        "bytes": 4759,
+        "gzipBytes": 1850
+      },
+      "index.js": {
+        "bytes": 1809,
+        "gzipBytes": 761
+      },
+      "ml-classifier.js": {
+        "bytes": 3096,
+        "gzipBytes": 1208
+      },
+      "summarizer.js": {
+        "bytes": 2542,
+        "gzipBytes": 993
+      },
+      "types.js": {
+        "bytes": 11,
+        "gzipBytes": 31
+      },
+      "total": {
+        "bytes": 187862,
+        "gzipBytes": 50483
+      }
+    },
+    "quality": {
+      "Coding assistant": {
+        "entityRetention": 1,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 1
+      },
+      "Long Q&A": {
+        "entityRetention": 1,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 1
+      },
+      "Tool-heavy": {
+        "entityRetention": 0.931,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 0.972
+      },
+      "Deep conversation": {
+        "entityRetention": 1,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 1
+      },
+      "Structured content": {
+        "entityRetention": 1,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 1
+      },
+      "Agentic coding session": {
+        "entityRetention": 0.848,
+        "structuralIntegrity": 1,
+        "referenceCoherence": 1,
+        "qualityScore": 0.939
+      }
+    },
+    "retention": {
+      "Coding assistant": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Long Q&A": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Tool-heavy": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Short conversation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Deep conversation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Technical explanation": {
+        "keywordRetention": 1,
+        "entityRetention": 1,
+        "structuralRetention": 1
+      },
+      "Structured content": {
+        "keywordRetention": 1,
+        "entityRetention": 0.92,
+        "structuralRetention": 1
+      },
+      "Agentic coding session": {
+        "keywordRetention": 0.9166666666666666,
+        "entityRetention": 0.918918918918919,
+        "structuralRetention": 1
+      }
+    },
+    "ancs": {
+      "Deep conversation": {
+        "baselineRatio": 2.3650251770931128,
+        "importanceRatio": 2.3650251770931128,
+        "contradictionRatio": 2.3650251770931128,
+        "combinedRatio": 2.3650251770931128,
+        "importancePreserved": 0,
+        "contradicted": 0
+      },
+      "Agentic coding session": {
+        "baselineRatio": 1.4749403341288783,
+        "importanceRatio": 1.2383115148276784,
+        "contradictionRatio": 1.4749403341288783,
+        "combinedRatio": 1.2383115148276784,
+        "importancePreserved": 4,
+        "contradicted": 0
+      },
+      "Iterative design": {
+        "baselineRatio": 1.6188055908513341,
+        "importanceRatio": 1.2567200986436498,
+        "contradictionRatio": 1.61572606214331,
+        "combinedRatio": 1.2567200986436498,
+        "importancePreserved": 6,
+        "contradicted": 2
+      }
+    }
+  }
+}

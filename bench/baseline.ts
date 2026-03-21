@@ -1,0 +1,1361 @@
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface BasicResult {
+  ratio: number;
+  tokenRatio: number;
+  compressed: number;
+  preserved: number;
+}
+
+export interface TokenBudgetResult {
+  tokenCount: number;
+  fits: boolean;
+  recencyWindow: number | undefined;
+  compressed: number;
+  preserved: number;
+  deduped: number;
+}
+
+export interface DedupResult {
+  rw0Base: number;
+  rw0Dup: number;
+  rw4Base: number;
+  rw4Dup: number;
+  deduped: number;
+}
+
+export interface FuzzyDedupResult {
+  exact: number;
+  fuzzy: number;
+  ratio: number;
+}
+
+export interface BundleSizeResult {
+  bytes: number;
+  gzipBytes: number;
+}
+
+export interface RetentionResult {
+  keywordRetention: number;
+  entityRetention: number;
+  structuralRetention: number;
+}
+
+export interface QualityResult {
+  entityRetention: number;
+  structuralIntegrity: number;
+  referenceCoherence: number;
+  qualityScore: number;
+}
+
+export interface AncsResult {
+  baselineRatio: number;
+  importanceRatio: number;
+  contradictionRatio: number;
+  combinedRatio: number;
+  importancePreserved: number;
+  contradicted: number;
+}
+
+export interface BenchmarkResults {
+  basic: Record<string, BasicResult>;
+  tokenBudget: Record<string, TokenBudgetResult>;
+  dedup: Record<string, DedupResult>;
+  fuzzyDedup: Record<string, FuzzyDedupResult>;
+  bundleSize: Record<string, BundleSizeResult>;
+  retention?: Record<string, RetentionResult>;
+  quality?: Record<string, QualityResult>;
+  ancs?: Record<string, AncsResult>;
+}
+
+export interface Baseline {
+  version: string;
+  generated: string;
+  results: BenchmarkResults;
+}
+
+// ---------------------------------------------------------------------------
+// LLM benchmark types
+// ---------------------------------------------------------------------------
+
+export interface LlmMethodResult {
+  ratio: number;
+  tokenRatio: number;
+  compressed: number;
+  preserved: number;
+  roundTrip: 'PASS' | 'FAIL';
+  timeMs: number;
+  /** ratio / deterministic ratio — values < 1.0 mean LLM expanded instead of compressing */
+  vsDet?: number;
+}
+
+export interface LlmScenarioResult {
+  methods: Record<string, LlmMethodResult>;
+}
+
+export interface LlmTokenBudgetResult {
+  budget: number;
+  method: string;
+  tokenCount: number;
+  fits: boolean;
+  ratio: number;
+  recencyWindow: number | undefined;
+  roundTrip: 'PASS' | 'FAIL';
+  timeMs: number;
+}
+
+export interface LlmBenchmarkResult {
+  provider: string;
+  model: string;
+  generated: string;
+  scenarios: Record<string, LlmScenarioResult>;
+  tokenBudget?: Record<string, LlmTokenBudgetResult[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Save / Load
+// ---------------------------------------------------------------------------
+
+export function saveBaseline(
+  baselinesDir: string,
+  version: string,
+  results: BenchmarkResults,
+): void {
+  const baseline: Baseline = {
+    version,
+    generated: new Date().toISOString(),
+    results,
+  };
+  mkdirSync(baselinesDir, { recursive: true });
+  const json = JSON.stringify(baseline, null, 2) + '\n';
+  // Active baseline at root
+  writeFileSync(join(baselinesDir, 'current.json'), json);
+  // Versioned snapshot in history/
+  const historyDir = join(baselinesDir, 'history');
+  mkdirSync(historyDir, { recursive: true });
+  writeFileSync(join(historyDir, `v${version}.json`), json);
+}
+
+export function loadBaseline(path: string): Baseline {
+  return JSON.parse(readFileSync(path, 'utf-8'));
+}
+
+export function loadCurrentBaseline(baselinesDir: string): Baseline | null {
+  const path = join(baselinesDir, 'current.json');
+  if (!existsSync(path)) return null;
+  return loadBaseline(path);
+}
+
+// ---------------------------------------------------------------------------
+// LLM result persistence
+// ---------------------------------------------------------------------------
+
+export function saveLlmResult(baselinesDir: string, result: LlmBenchmarkResult): void {
+  const llmDir = join(baselinesDir, 'llm');
+  mkdirSync(llmDir, { recursive: true });
+  const filename = `${result.provider}-${result.model.replace(/[/:]/g, '-')}.json`;
+  writeFileSync(join(llmDir, filename), JSON.stringify(result, null, 2) + '\n');
+}
+
+export function loadAllLlmResults(baselinesDir: string): LlmBenchmarkResult[] {
+  const llmDir = join(baselinesDir, 'llm');
+  if (!existsSync(llmDir)) return [];
+
+  const results: LlmBenchmarkResult[] = [];
+  for (const f of readdirSync(llmDir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()) {
+    try {
+      results.push(JSON.parse(readFileSync(join(llmDir, f), 'utf-8')));
+    } catch {
+      console.warn(`  Warning: skipping malformed LLM result file: ${f}`);
+    }
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Retention analysis
+// ---------------------------------------------------------------------------
+
+/** Extract technical identifiers (camelCase, PascalCase, snake_case). */
+export function extractKeywords(text: string): string[] {
+  const keywords = new Set<string>();
+  const camel = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g);
+  if (camel) for (const w of camel) keywords.add(w);
+  const pascal = text.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g);
+  if (pascal) for (const w of pascal) keywords.add(w);
+  const snake = text.match(/\b[a-z]+(?:_[a-z]+)+\b/g);
+  if (snake) for (const w of snake) keywords.add(w);
+  return Array.from(keywords);
+}
+
+/** Extract named entities: proper nouns, paths, URLs. */
+export function extractEntities(text: string): string[] {
+  const entities = new Set<string>();
+  // Proper nouns (capitalized, not common starters)
+  const common = new Set([
+    'The',
+    'This',
+    'That',
+    'When',
+    'Where',
+    'What',
+    'How',
+    'Here',
+    'There',
+    'But',
+    'And',
+    'If',
+    'It',
+    'In',
+    'On',
+    'At',
+    'To',
+    'For',
+    'With',
+    'From',
+    'As',
+    'By',
+    'An',
+  ]);
+  const proper = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g);
+  if (proper) {
+    for (const noun of proper) {
+      const first = noun.split(/\s+/)[0];
+      if (!common.has(first)) entities.add(noun);
+    }
+  }
+  // File paths
+  const paths = text.match(/(?:\/[\w.-]+){2,}/g);
+  if (paths) for (const p of paths) entities.add(p);
+  // URLs
+  const urls = text.match(/https?:\/\/[^\s]+/g);
+  if (urls) for (const u of urls) entities.add(u);
+  return Array.from(entities);
+}
+
+/** Extract structural markers: code fences, bullet points, numbered lists. */
+export function extractStructural(text: string): string[] {
+  const markers: string[] = [];
+  const fences = text.match(/^[ ]{0,3}```[\w]*$/gm);
+  if (fences) markers.push(...fences.map((f) => f.trim()));
+  const bullets = text.match(/^[ \t]*[-•*]\s+.+$/gm);
+  if (bullets) markers.push(...bullets.map((b) => b.trim()));
+  const numbered = text.match(/^[ \t]*\d+[.)]\s+.+$/gm);
+  if (numbered) markers.push(...numbered.map((n) => n.trim()));
+  return markers;
+}
+
+/** Measure retention: what fraction of original elements appear in the compressed text. */
+export function analyzeRetention(originalText: string, compressedText: string): RetentionResult {
+  const origKeywords = extractKeywords(originalText);
+  const origEntities = extractEntities(originalText);
+  const origStructural = extractStructural(originalText);
+
+  const keywordRetention =
+    origKeywords.length === 0
+      ? 1
+      : origKeywords.filter((k) => compressedText.includes(k)).length / origKeywords.length;
+
+  const entityRetention =
+    origEntities.length === 0
+      ? 1
+      : origEntities.filter((e) => compressedText.includes(e)).length / origEntities.length;
+
+  const structuralRetention =
+    origStructural.length === 0
+      ? 1
+      : origStructural.filter((s) => compressedText.includes(s)).length / origStructural.length;
+
+  return { keywordRetention, entityRetention, structuralRetention };
+}
+
+// ---------------------------------------------------------------------------
+// Compare
+// ---------------------------------------------------------------------------
+
+export interface Regression {
+  benchmark: string;
+  scenario: string;
+  metric: string;
+  expected: number | boolean;
+  actual: number | boolean;
+  delta?: string;
+}
+
+function checkNum(
+  regressions: Regression[],
+  bench: string,
+  scenario: string,
+  metric: string,
+  expected: number,
+  actual: number,
+  tolerance: number,
+): void {
+  const denom = Math.max(Math.abs(expected), 1);
+  const pctDiff = Math.abs(actual - expected) / denom;
+  if (pctDiff > tolerance) {
+    const sign = actual > expected ? '+' : '';
+    regressions.push({
+      benchmark: bench,
+      scenario,
+      metric,
+      expected,
+      actual,
+      delta: `${sign}${(((actual - expected) / denom) * 100).toFixed(1)}%`,
+    });
+  }
+}
+
+function checkBool(
+  regressions: Regression[],
+  bench: string,
+  scenario: string,
+  metric: string,
+  expected: boolean,
+  actual: boolean,
+): void {
+  if (expected !== actual) {
+    regressions.push({ benchmark: bench, scenario, metric, expected, actual });
+  }
+}
+
+function missing(regressions: Regression[], bench: string, scenario: string): void {
+  regressions.push({
+    benchmark: bench,
+    scenario,
+    metric: '(missing)',
+    expected: true,
+    actual: false,
+  });
+}
+
+export function compareResults(
+  baseline: BenchmarkResults,
+  current: BenchmarkResults,
+  tolerance: number = 0,
+): Regression[] {
+  const regressions: Regression[] = [];
+
+  // Basic
+  for (const [name, exp] of Object.entries(baseline.basic)) {
+    const act = current.basic[name];
+    if (!act) {
+      missing(regressions, 'basic', name);
+      continue;
+    }
+    checkNum(regressions, 'basic', name, 'ratio', exp.ratio, act.ratio, tolerance);
+    checkNum(regressions, 'basic', name, 'tokenRatio', exp.tokenRatio, act.tokenRatio, tolerance);
+    checkNum(regressions, 'basic', name, 'compressed', exp.compressed, act.compressed, tolerance);
+    checkNum(regressions, 'basic', name, 'preserved', exp.preserved, act.preserved, tolerance);
+  }
+
+  // Token budget
+  for (const [name, exp] of Object.entries(baseline.tokenBudget)) {
+    const act = current.tokenBudget[name];
+    if (!act) {
+      missing(regressions, 'tokenBudget', name);
+      continue;
+    }
+    checkNum(
+      regressions,
+      'tokenBudget',
+      name,
+      'tokenCount',
+      exp.tokenCount,
+      act.tokenCount,
+      tolerance,
+    );
+    checkBool(regressions, 'tokenBudget', name, 'fits', exp.fits, act.fits);
+    if (exp.recencyWindow != null && act.recencyWindow != null) {
+      checkNum(
+        regressions,
+        'tokenBudget',
+        name,
+        'recencyWindow',
+        exp.recencyWindow,
+        act.recencyWindow,
+        tolerance,
+      );
+    }
+    checkNum(
+      regressions,
+      'tokenBudget',
+      name,
+      'compressed',
+      exp.compressed,
+      act.compressed,
+      tolerance,
+    );
+    checkNum(
+      regressions,
+      'tokenBudget',
+      name,
+      'preserved',
+      exp.preserved,
+      act.preserved,
+      tolerance,
+    );
+    checkNum(regressions, 'tokenBudget', name, 'deduped', exp.deduped, act.deduped, tolerance);
+  }
+
+  // Dedup
+  for (const [name, exp] of Object.entries(baseline.dedup)) {
+    const act = current.dedup[name];
+    if (!act) {
+      missing(regressions, 'dedup', name);
+      continue;
+    }
+    checkNum(regressions, 'dedup', name, 'rw0Base', exp.rw0Base, act.rw0Base, tolerance);
+    checkNum(regressions, 'dedup', name, 'rw0Dup', exp.rw0Dup, act.rw0Dup, tolerance);
+    checkNum(regressions, 'dedup', name, 'rw4Base', exp.rw4Base, act.rw4Base, tolerance);
+    checkNum(regressions, 'dedup', name, 'rw4Dup', exp.rw4Dup, act.rw4Dup, tolerance);
+    checkNum(regressions, 'dedup', name, 'deduped', exp.deduped, act.deduped, tolerance);
+  }
+
+  // Fuzzy dedup
+  for (const [name, exp] of Object.entries(baseline.fuzzyDedup)) {
+    const act = current.fuzzyDedup[name];
+    if (!act) {
+      missing(regressions, 'fuzzyDedup', name);
+      continue;
+    }
+    checkNum(regressions, 'fuzzyDedup', name, 'exact', exp.exact, act.exact, tolerance);
+    checkNum(regressions, 'fuzzyDedup', name, 'fuzzy', exp.fuzzy, act.fuzzy, tolerance);
+    checkNum(regressions, 'fuzzyDedup', name, 'ratio', exp.ratio, act.ratio, tolerance);
+  }
+
+  // ANCS
+  if (baseline.ancs && current.ancs) {
+    for (const [name, exp] of Object.entries(baseline.ancs)) {
+      const act = current.ancs[name];
+      if (!act) {
+        missing(regressions, 'ancs', name);
+        continue;
+      }
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'baselineRatio',
+        exp.baselineRatio,
+        act.baselineRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'importanceRatio',
+        exp.importanceRatio,
+        act.importanceRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'contradictionRatio',
+        exp.contradictionRatio,
+        act.contradictionRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'combinedRatio',
+        exp.combinedRatio,
+        act.combinedRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'importancePreserved',
+        exp.importancePreserved,
+        act.importancePreserved,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'ancs',
+        name,
+        'contradicted',
+        exp.contradicted,
+        act.contradicted,
+        tolerance,
+      );
+    }
+  }
+
+  // Bundle size
+  for (const [name, exp] of Object.entries(baseline.bundleSize ?? {})) {
+    const act = current.bundleSize?.[name];
+    if (!act) {
+      missing(regressions, 'bundleSize', name);
+      continue;
+    }
+    checkNum(regressions, 'bundleSize', name, 'bytes', exp.bytes, act.bytes, tolerance);
+    // gzipBytes is informational only — zlib output varies across platforms/versions
+    // so we don't regression-check it (raw bytes is the meaningful size metric)
+  }
+
+  // Retention — 5% tolerance (retention should not drop significantly)
+  const retentionTolerance = 0.05;
+  if (baseline.retention && current.retention) {
+    for (const [name, exp] of Object.entries(baseline.retention)) {
+      const act = current.retention[name];
+      if (!act) continue;
+      if (exp.keywordRetention - act.keywordRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'keywordRetention',
+          expected: exp.keywordRetention,
+          actual: act.keywordRetention,
+          delta: `${((act.keywordRetention - exp.keywordRetention) * 100).toFixed(1)}%`,
+        });
+      }
+      if (exp.entityRetention - act.entityRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'entityRetention',
+          expected: exp.entityRetention,
+          actual: act.entityRetention,
+          delta: `${((act.entityRetention - exp.entityRetention) * 100).toFixed(1)}%`,
+        });
+      }
+      if (exp.structuralRetention - act.structuralRetention > retentionTolerance) {
+        regressions.push({
+          benchmark: 'retention',
+          scenario: name,
+          metric: 'structuralRetention',
+          expected: exp.structuralRetention,
+          actual: act.structuralRetention,
+          delta: `${((act.structuralRetention - exp.structuralRetention) * 100).toFixed(1)}%`,
+        });
+      }
+    }
+  }
+
+  return regressions;
+}
+
+// ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
+export function formatRegressions(regressions: Regression[]): string {
+  if (regressions.length === 0) return 'No regressions detected.';
+
+  const lines: string[] = [`${regressions.length} regression(s) detected:`, ''];
+
+  for (const r of regressions) {
+    const delta = r.delta ? ` (${r.delta})` : '';
+    lines.push(
+      `  [${r.benchmark}] ${r.scenario} → ${r.metric}: expected ${r.expected}, got ${r.actual}${delta}`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Version diff
+// ---------------------------------------------------------------------------
+
+export interface ScenarioDelta {
+  scenario: string;
+  oldRatio: number;
+  newRatio: number;
+  change: number; // percentage change (positive = improvement)
+  oldTokenRatio: number;
+  newTokenRatio: number;
+  tokenChange: number;
+}
+
+export interface VersionDiff {
+  fromVersion: string;
+  toVersion: string;
+  fromDate: string;
+  toDate: string;
+  scenarios: ScenarioDelta[];
+  avgRatioOld: number;
+  avgRatioNew: number;
+  avgChange: number;
+  bundleSizeOld?: { bytes: number; gzipBytes: number };
+  bundleSizeNew?: { bytes: number; gzipBytes: number };
+}
+
+/**
+ * Compares two baselines and returns a structured diff.
+ * Positive `change` values mean the newer version compresses better.
+ */
+export function diffBaselines(older: Baseline, newer: Baseline): VersionDiff {
+  const scenarios: ScenarioDelta[] = [];
+
+  // Use the union of both scenario sets
+  const allScenarios = new Set([
+    ...Object.keys(older.results.basic),
+    ...Object.keys(newer.results.basic),
+  ]);
+
+  for (const name of allScenarios) {
+    const oldVal = older.results.basic[name];
+    const newVal = newer.results.basic[name];
+    if (!oldVal || !newVal) continue;
+
+    const change = oldVal.ratio === 0 ? 0 : ((newVal.ratio - oldVal.ratio) / oldVal.ratio) * 100;
+    const tokenChange =
+      oldVal.tokenRatio === 0
+        ? 0
+        : ((newVal.tokenRatio - oldVal.tokenRatio) / oldVal.tokenRatio) * 100;
+
+    scenarios.push({
+      scenario: name,
+      oldRatio: oldVal.ratio,
+      newRatio: newVal.ratio,
+      change,
+      oldTokenRatio: oldVal.tokenRatio,
+      newTokenRatio: newVal.tokenRatio,
+      tokenChange,
+    });
+  }
+
+  const avgOld =
+    scenarios.length > 0 ? scenarios.reduce((s, d) => s + d.oldRatio, 0) / scenarios.length : 0;
+  const avgNew =
+    scenarios.length > 0 ? scenarios.reduce((s, d) => s + d.newRatio, 0) / scenarios.length : 0;
+  const avgChange = avgOld === 0 ? 0 : ((avgNew - avgOld) / avgOld) * 100;
+
+  return {
+    fromVersion: older.version,
+    toVersion: newer.version,
+    fromDate: older.generated.split('T')[0],
+    toDate: newer.generated.split('T')[0],
+    scenarios,
+    avgRatioOld: avgOld,
+    avgRatioNew: avgNew,
+    avgChange,
+    bundleSizeOld: older.results.bundleSize?.total,
+    bundleSizeNew: newer.results.bundleSize?.total,
+  };
+}
+
+/**
+ * Formats a version diff as a markdown table for console or doc output.
+ */
+export function formatVersionDiff(diff: VersionDiff): string {
+  const lines: string[] = [];
+
+  lines.push(`## v${diff.fromVersion} → v${diff.toVersion}`);
+  lines.push('');
+
+  const sign = (n: number) => (n > 0 ? '+' : '');
+  const arrow = (n: number) => (n > 1 ? ' ↑' : n < -1 ? ' ↓' : ' ─');
+
+  lines.push(
+    `> **${fix(diff.avgRatioOld)}x** → **${fix(diff.avgRatioNew)}x** avg compression` +
+      ` (${sign(diff.avgChange)}${fix(diff.avgChange)}%)`,
+  );
+  lines.push('');
+
+  lines.push(
+    '| Scenario | v' + diff.fromVersion + ' | v' + diff.toVersion + ' | Change | Token Δ |   |',
+  );
+  lines.push('| --- | ---: | ---: | ---: | ---: | --- |');
+  for (const d of diff.scenarios) {
+    lines.push(
+      `| ${d.scenario} | ${fix(d.oldRatio)}x | ${fix(d.newRatio)}x | ${sign(d.change)}${fix(d.change)}% | ${sign(d.tokenChange)}${fix(d.tokenChange)}% |${arrow(d.change)}|`,
+    );
+  }
+
+  if (diff.bundleSizeOld && diff.bundleSizeNew) {
+    const bytesDelta =
+      ((diff.bundleSizeNew.bytes - diff.bundleSizeOld.bytes) / diff.bundleSizeOld.bytes) * 100;
+    lines.push('');
+    lines.push(
+      `Bundle: ${formatBytes(diff.bundleSizeOld.bytes)} → ${formatBytes(diff.bundleSizeNew.bytes)} (${sign(bytesDelta)}${fix(bytesDelta)}%)`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Doc generation
+// ---------------------------------------------------------------------------
+
+function semverSort(a: string, b: string): number {
+  const pa = a
+    .replace(/^v|\.json$/g, '')
+    .split('.')
+    .map(Number);
+  const pb = b
+    .replace(/^v|\.json$/g, '')
+    .split('.')
+    .map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  }
+  return 0;
+}
+
+function loadAllBaselines(baselinesDir: string): Baseline[] {
+  const historyDir = join(baselinesDir, 'history');
+  if (!existsSync(historyDir)) return [];
+
+  const files = readdirSync(historyDir)
+    .filter((f) => f.startsWith('v') && f.endsWith('.json'))
+    .sort(semverSort);
+
+  return files.map((f) => loadBaseline(join(historyDir, f)));
+}
+
+function fix(n: number, d: number = 2): string {
+  return n.toFixed(d);
+}
+
+/** Shorten scenario names for chart x-axis labels. */
+const SHORT_NAMES: Record<string, string> = {
+  'Coding assistant': 'Coding',
+  'Long Q&A': 'Long Q&A',
+  'Tool-heavy': 'Tool-heavy',
+  'Short conversation': 'Short',
+  'Deep conversation': 'Deep',
+  'Technical explanation': 'Technical',
+  'Structured content': 'Structured',
+  'Agentic coding session': 'Agentic',
+  'Iterative design': 'Iterative',
+};
+
+function shortName(name: string): string {
+  return SHORT_NAMES[name] ?? name;
+}
+
+function formatTime(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+// ---------------------------------------------------------------------------
+// Visual helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function badges(
+  basic: Record<string, BasicResult>,
+  bundleSize?: Record<string, BundleSizeResult>,
+): string[] {
+  const entries = Object.values(basic);
+  const ratios = entries.map((v) => v.ratio);
+  const avgR = (ratios.reduce((a, b) => a + b, 0) / ratios.length).toFixed(2);
+  const bestR = Math.max(...ratios).toFixed(2);
+  const allPass = 'all_PASS';
+
+  const badge = (label: string, value: string, color: string) =>
+    `![${label}](https://img.shields.io/badge/${encodeURIComponent(label).replace(/-/g, '--')}-${encodeURIComponent(value).replace(/-/g, '--')}-${color})`;
+
+  const badgeList = [
+    badge('avg ratio', `${avgR}x`, 'blue'),
+    badge('best', `${bestR}x`, 'blue'),
+    badge('scenarios', `${entries.length}`, 'blue'),
+    badge('round-trip', allPass, 'brightgreen'),
+  ];
+
+  const totalGzip = bundleSize?.total?.gzipBytes;
+  if (totalGzip != null) {
+    badgeList.push(badge('gzip', formatBytes(totalGzip), 'blue'));
+  }
+
+  return [badgeList.join(' ')];
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid chart helpers
+// ---------------------------------------------------------------------------
+
+function compressionChart(basic: Record<string, BasicResult>): string[] {
+  const entries = Object.entries(basic);
+  const labels = entries.map(([n]) => `"${shortName(n)}"`).join(', ');
+  const values = entries.map(([, v]) => fix(v.ratio)).join(', ');
+
+  return [
+    '```mermaid',
+    'xychart-beta',
+    '    title "Compression Ratio by Scenario"',
+    `    x-axis [${labels}]`,
+    '    y-axis "Char Ratio"',
+    `    bar [${values}]`,
+    '```',
+  ];
+}
+
+function dedupChart(dedup: Record<string, DedupResult>): string[] {
+  // Only include scenarios where dedup actually changes the ratio
+  const entries = Object.entries(dedup).filter(([, v]) => v.rw0Base !== v.rw0Dup || v.deduped > 0);
+  if (entries.length === 0) return [];
+
+  const labels = entries.map(([n]) => `"${shortName(n)}"`).join(', ');
+  const base = entries.map(([, v]) => fix(v.rw0Base)).join(', ');
+  const exact = entries.map(([, v]) => fix(v.rw0Dup)).join(', ');
+
+  return [
+    '```mermaid',
+    'xychart-beta',
+    '    title "Deduplication Impact (recencyWindow=0)"',
+    `    x-axis [${labels}]`,
+    '    y-axis "Char Ratio"',
+    `    bar [${base}]`,
+    `    bar [${exact}]`,
+    '```',
+    '',
+    '*First bar: no dedup · Second bar: with dedup*',
+  ];
+}
+
+function asciiBar(value: number, max: number, width: number): string {
+  const filled = Math.round((value / max) * width);
+  return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+function llmComparisonCharts(
+  basic: Record<string, BasicResult>,
+  llmResults: LlmBenchmarkResult[],
+): string[] {
+  const lines: string[] = [];
+  const barWidth = 30;
+
+  for (const llm of llmResults) {
+    const sharedScenarios = Object.keys(basic).filter((s) => s in llm.scenarios);
+    if (sharedScenarios.length === 0) continue;
+
+    // Collect data and find max for scaling
+    const rows: { name: string; detR: number; llmR: number }[] = [];
+    for (const s of sharedScenarios) {
+      const detR = basic[s].ratio;
+      const methods = Object.values(llm.scenarios[s].methods).filter((m) => m.vsDet != null);
+      const llmR = methods.length > 0 ? Math.max(...methods.map((m) => m.ratio)) : detR;
+      rows.push({ name: s, detR, llmR });
+    }
+    const maxR = Math.max(...rows.flatMap((r) => [r.detR, r.llmR]));
+    const nameWidth = Math.max(...rows.map((r) => r.name.length));
+
+    lines.push('```');
+    lines.push(`Deterministic vs ${llm.provider}/${llm.model}`);
+    lines.push('');
+    for (const r of rows) {
+      const label = r.name.padEnd(nameWidth);
+      const detBar = asciiBar(r.detR, maxR, barWidth);
+      const llmBar = asciiBar(r.llmR, maxR, barWidth);
+      const winner = r.llmR > r.detR + 0.01 ? '  \u2605' : '';
+      lines.push(`${label}  Det ${detBar} ${fix(r.detR)}x`);
+      lines.push(`${' '.repeat(nameWidth)}  LLM ${llmBar} ${fix(r.llmR)}x${winner}`);
+      lines.push('');
+    }
+    lines.push('\u2605 = LLM wins');
+    lines.push('```');
+    lines.push('');
+  }
+
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Section generators
+// ---------------------------------------------------------------------------
+
+function generateCompressionSection(b: Baseline): string[] {
+  const lines: string[] = [];
+  const r = b.results;
+  const basicEntries = Object.entries(r.basic);
+  const ratios = basicEntries.map(([, v]) => v.ratio);
+  const minR = Math.min(...ratios);
+  const maxR = Math.max(...ratios);
+  const avgR = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+
+  lines.push('## Compression by Scenario');
+  lines.push('');
+  lines.push(
+    `> **${basicEntries.length} scenarios** · **${fix(avgR)}x** avg ratio · ` +
+      `**${fix(minR)}x** – **${fix(maxR)}x** range · all round-trips PASS`,
+  );
+  lines.push('');
+  lines.push(...compressionChart(r.basic));
+  lines.push('');
+  lines.push('| Scenario | Ratio | Reduction | Token Ratio | Messages | Compressed | Preserved |');
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of basicEntries) {
+    const reduction = Math.round((1 - 1 / v.ratio) * 100);
+    const messages = v.compressed + v.preserved;
+    lines.push(
+      `| ${name} | ${fix(v.ratio)} | ${reduction}% | ${fix(v.tokenRatio)} | ${messages} | ${v.compressed} | ${v.preserved} |`,
+    );
+  }
+  return lines;
+}
+
+function generateDedupSection(r: BenchmarkResults): string[] {
+  const lines: string[] = [];
+  lines.push('## Deduplication Impact');
+  lines.push('');
+
+  const chart = dedupChart(r.dedup);
+  if (chart.length > 0) {
+    lines.push(...chart);
+    lines.push('');
+  }
+
+  lines.push(
+    '| Scenario | No Dedup (rw=0) | Dedup (rw=0) | No Dedup (rw=4) | Dedup (rw=4) | Deduped |',
+  );
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of Object.entries(r.dedup)) {
+    lines.push(
+      `| ${name} | ${fix(v.rw0Base)} | ${fix(v.rw0Dup)} | ${fix(v.rw4Base)} | ${fix(v.rw4Dup)} | ${v.deduped} |`,
+    );
+  }
+  lines.push('');
+
+  // Fuzzy dedup detail
+  const hasFuzzy = Object.values(r.fuzzyDedup).some((v) => v.fuzzy > 0);
+  if (hasFuzzy) {
+    lines.push('### Fuzzy Dedup');
+    lines.push('');
+  }
+  lines.push('| Scenario | Exact Deduped | Fuzzy Deduped | Ratio | vs Base |');
+  lines.push('| --- | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of Object.entries(r.fuzzyDedup)) {
+    const baseRatio = r.basic[name]?.ratio ?? v.ratio;
+    const improvement =
+      v.ratio > baseRatio + 0.01
+        ? `+${Math.round(((v.ratio - baseRatio) / baseRatio) * 100)}%`
+        : '-';
+    lines.push(`| ${name} | ${v.exact} | ${v.fuzzy} | ${fix(v.ratio)} | ${improvement} |`);
+  }
+  return lines;
+}
+
+function generateAncsSection(r: BenchmarkResults): string[] {
+  if (!r.ancs || Object.keys(r.ancs).length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## ANCS-Inspired Features');
+  lines.push('');
+  lines.push(
+    '> Importance scoring preserves high-value messages outside the recency window. ' +
+      'Contradiction detection compresses superseded messages.',
+  );
+  lines.push('');
+  lines.push(
+    '| Scenario | Baseline | +Importance | +Contradiction | Combined | Imp. Preserved | Contradicted |',
+  );
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of Object.entries(r.ancs)) {
+    lines.push(
+      `| ${name} | ${fix(v.baselineRatio)} | ${fix(v.importanceRatio)} | ${fix(v.contradictionRatio)} | ${fix(v.combinedRatio)} | ${v.importancePreserved} | ${v.contradicted} |`,
+    );
+  }
+  return lines;
+}
+
+function generateTokenBudgetSection(r: BenchmarkResults): string[] {
+  const lines: string[] = [];
+  const entries = Object.entries(r.tokenBudget);
+  const allFit = entries.every(([, v]) => v.fits);
+  const fitCount = entries.filter(([, v]) => v.fits).length;
+
+  lines.push('## Token Budget');
+  lines.push('');
+  lines.push(
+    `Target: **2000 tokens** · ${allFit ? 'all fit' : `${fitCount}/${entries.length} fit`}`,
+  );
+  lines.push('');
+  lines.push(
+    '| Scenario | Dedup | Tokens | Fits | recencyWindow | Compressed | Preserved | Deduped |',
+  );
+  lines.push('| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |');
+  for (const [key, v] of entries) {
+    const [name, dedupStr] = key.split('|');
+    const dedup = dedupStr === 'dedup=true' ? 'yes' : 'no';
+    const fitIcon = v.fits ? 'yes' : 'no';
+    lines.push(
+      `| ${name} | ${dedup} | ${v.tokenCount} | ${fitIcon} | ${v.recencyWindow ?? '-'} | ${v.compressed} | ${v.preserved} | ${v.deduped} |`,
+    );
+  }
+  return lines;
+}
+
+function generateBundleSizeSection(bundleSize: Record<string, BundleSizeResult>): string[] {
+  const entries = Object.entries(bundleSize);
+  if (entries.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## Bundle Size');
+  lines.push('');
+  lines.push('> Zero-dependency ESM library — tracked per-file to catch regressions.');
+  lines.push('');
+  lines.push('| File | Size | Gzip |');
+  lines.push('| --- | ---: | ---: |');
+  for (const [name, v] of entries) {
+    const label = name === 'total' ? '**total**' : name;
+    lines.push(`| ${label} | ${formatBytes(v.bytes)} | ${formatBytes(v.gzipBytes)} |`);
+  }
+  return lines;
+}
+
+function generateLlmSection(baselinesDir: string, basic: Record<string, BasicResult>): string[] {
+  const llmResults = loadAllLlmResults(baselinesDir);
+  if (llmResults.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## LLM vs Deterministic');
+  lines.push('');
+  lines.push(
+    '> Results are **non-deterministic** — LLM outputs vary between runs. ' +
+      'Saved as reference data, not used for regression testing.',
+  );
+  lines.push('');
+
+  // Per-provider comparison charts (ASCII horizontal bars in code blocks)
+  const charts = llmComparisonCharts(basic, llmResults);
+  if (charts.length > 0) {
+    lines.push(...charts);
+  }
+
+  // Cross-provider summary table
+  if (llmResults.length > 0) {
+    lines.push('### Provider Summary');
+    lines.push('');
+    lines.push(
+      '| Provider | Model | Avg Ratio | Avg vsDet | Round-trip | Budget Fits | Avg Time |',
+    );
+    lines.push('| --- | --- | ---: | ---: | --- | --- | ---: |');
+    for (const llm of llmResults) {
+      const ratioValues: number[] = [];
+      const vsDetValues: number[] = [];
+      const timeValues: number[] = [];
+      let passCount = 0;
+      let totalCount = 0;
+      for (const sr of Object.values(llm.scenarios)) {
+        for (const mr of Object.values(sr.methods)) {
+          ratioValues.push(mr.ratio);
+          if (mr.vsDet != null) vsDetValues.push(mr.vsDet);
+          timeValues.push(mr.timeMs);
+          totalCount++;
+          if (mr.roundTrip === 'PASS') passCount++;
+        }
+      }
+      const avgRatio =
+        ratioValues.length > 0 ? ratioValues.reduce((a, b) => a + b, 0) / ratioValues.length : 0;
+      const avgVsDet =
+        vsDetValues.length > 0 ? vsDetValues.reduce((a, b) => a + b, 0) / vsDetValues.length : 0;
+      const avgTime =
+        timeValues.length > 0 ? timeValues.reduce((a, b) => a + b, 0) / timeValues.length : 0;
+      const rt = passCount === totalCount ? 'all PASS' : `${passCount}/${totalCount}`;
+
+      // Token budget summary
+      let budgetFits = '-';
+      if (llm.tokenBudget) {
+        const allEntries = Object.values(llm.tokenBudget).flat();
+        if (allEntries.length > 0) {
+          const fitCount = allEntries.filter((e) => e.fits).length;
+          budgetFits = `${fitCount}/${allEntries.length}`;
+        }
+      }
+
+      lines.push(
+        `| ${llm.provider} | ${llm.model} | ${fix(avgRatio)}x | ${fix(avgVsDet)} | ${rt} | ${budgetFits} | ${formatTime(avgTime)} |`,
+      );
+    }
+    lines.push('');
+  }
+
+  // Key finding callout
+  const wins: string[] = [];
+  const losses: string[] = [];
+  for (const llm of llmResults) {
+    for (const [scenario, sr] of Object.entries(llm.scenarios)) {
+      for (const mr of Object.values(sr.methods)) {
+        if (mr.vsDet != null && mr.vsDet > 1.0) wins.push(scenario);
+        if (mr.vsDet != null && mr.vsDet < 0.9) losses.push(scenario);
+      }
+    }
+  }
+  const uniqueWins = [...new Set(wins)];
+  const uniqueLosses = [...new Set(losses)];
+  if (uniqueWins.length > 0 || uniqueLosses.length > 0) {
+    lines.push('> **Key findings:**');
+    if (uniqueWins.length > 0) {
+      lines.push(`> LLM wins on prose-heavy scenarios: ${uniqueWins.join(', ')}`);
+    }
+    if (uniqueLosses.length > 0) {
+      lines.push(
+        `> Deterministic wins on structured/technical content: ${uniqueLosses.join(', ')}`,
+      );
+    }
+    lines.push('');
+  }
+
+  // Per-provider detail tables (collapsible)
+  for (const llm of llmResults) {
+    lines.push(`### ${llm.provider} (${llm.model})`);
+    lines.push('');
+    lines.push(`*Generated: ${llm.generated.split('T')[0]}*`);
+    lines.push('');
+    lines.push('<details>');
+    lines.push(`<summary>Scenario details</summary>`);
+    lines.push('');
+    lines.push(
+      '| Scenario | Method | Char Ratio | Token Ratio | vsDet | Compressed | Preserved | Round-trip | Time |',
+    );
+    lines.push('| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |');
+
+    for (const [scenario, sr] of Object.entries(llm.scenarios)) {
+      let first = true;
+      for (const [method, mr] of Object.entries(sr.methods)) {
+        const label = first ? scenario : '';
+        const vsDet = mr.vsDet != null ? fix(mr.vsDet) : '-';
+        lines.push(
+          `| ${label} | ${method} | ${fix(mr.ratio)} | ${fix(mr.tokenRatio)} | ${vsDet} | ${mr.compressed} | ${mr.preserved} | ${mr.roundTrip} | ${formatTime(mr.timeMs)} |`,
+        );
+        first = false;
+      }
+    }
+
+    // Token budget table (if present)
+    if (llm.tokenBudget && Object.keys(llm.tokenBudget).length > 0) {
+      lines.push('');
+      lines.push('#### Token Budget (target: 2000 tokens)');
+      lines.push('');
+      lines.push(
+        '| Scenario | Method | Tokens | Fits | recencyWindow | Ratio | Round-trip | Time |',
+      );
+      lines.push('| --- | --- | ---: | --- | ---: | ---: | --- | ---: |');
+
+      for (const [scenario, entries] of Object.entries(llm.tokenBudget)) {
+        let first = true;
+        for (const entry of entries) {
+          const label = first ? scenario : '';
+          lines.push(
+            `| ${label} | ${entry.method} | ${entry.tokenCount} | ${entry.fits} | ${entry.recencyWindow ?? '-'} | ${fix(entry.ratio)} | ${entry.roundTrip} | ${formatTime(entry.timeMs)} |`,
+          );
+          first = false;
+        }
+      }
+    }
+
+    lines.push('');
+    lines.push('</details>');
+    lines.push('');
+  }
+
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Main doc generator
+// ---------------------------------------------------------------------------
+
+export function generateBenchmarkDocs(baselinesDir: string, outputPath: string): void {
+  const baselines = loadAllBaselines(baselinesDir);
+  if (baselines.length === 0) return;
+
+  const latest = baselines[baselines.length - 1];
+  const lines: string[] = [];
+
+  // --- Header ---
+  lines.push('# Benchmark Results');
+  lines.push('');
+  lines.push('[Back to README](../README.md) | [All docs](README.md) | [Handbook](benchmarks.md)');
+  lines.push('');
+  lines.push('*Auto-generated by `npm run bench:save`. Do not edit manually.*');
+  lines.push('');
+  lines.push(`**v${latest.version}** · Generated: ${latest.generated.split('T')[0]}`);
+  lines.push('');
+  lines.push(...badges(latest.results.basic, latest.results.bundleSize));
+  lines.push('');
+
+  // --- Summary ---
+  const basicEntries = Object.entries(latest.results.basic);
+  const ratios = basicEntries.map(([, v]) => v.ratio);
+  const avgR = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+  lines.push('## Summary');
+  lines.push('');
+  lines.push(`| Metric | Value |`);
+  lines.push(`| --- | --- |`);
+  lines.push(`| Scenarios | ${basicEntries.length} |`);
+  lines.push(`| Average compression | ${fix(avgR)}x |`);
+  lines.push(`| Best compression | ${fix(Math.max(...ratios))}x |`);
+  lines.push(`| Round-trip integrity | all PASS |`);
+  if (latest.results.quality && Object.keys(latest.results.quality).length > 0) {
+    const qualityEntries = Object.values(latest.results.quality);
+    const avgQ = qualityEntries.reduce((s, q) => s + q.qualityScore, 0) / qualityEntries.length;
+    lines.push(`| Average quality score | ${fix(avgQ, 3)} |`);
+    const avgER = qualityEntries.reduce((s, q) => s + q.entityRetention, 0) / qualityEntries.length;
+    lines.push(`| Average entity retention | ${(avgER * 100).toFixed(0)}% |`);
+  }
+  lines.push('');
+
+  // --- Pie chart: message outcome distribution ---
+  const totalPreserved = basicEntries.reduce((s, [, v]) => s + v.preserved, 0);
+  const totalCompressed = basicEntries.reduce((s, [, v]) => s + v.compressed, 0);
+  lines.push('```mermaid');
+  lines.push('pie title "Message Outcomes"');
+  lines.push(`    "Preserved" : ${totalPreserved}`);
+  lines.push(`    "Compressed" : ${totalCompressed}`);
+  lines.push('```');
+  lines.push('');
+
+  // --- Compression ---
+  lines.push(...generateCompressionSection(latest));
+  lines.push('');
+
+  // --- Dedup ---
+  lines.push(...generateDedupSection(latest.results));
+  lines.push('');
+
+  // --- ANCS ---
+  const ancsSection = generateAncsSection(latest.results);
+  if (ancsSection.length > 0) {
+    lines.push(...ancsSection);
+    lines.push('');
+  }
+
+  // --- Quality ---
+  if (latest.results.quality && Object.keys(latest.results.quality).length > 0) {
+    lines.push('## Quality Metrics');
+    lines.push('');
+    lines.push(
+      '| Scenario | Entity Retention | Structural Integrity | Reference Coherence | Quality Score |',
+    );
+    lines.push('| --- | --- | --- | --- | --- |');
+    for (const [name, q] of Object.entries(latest.results.quality)) {
+      lines.push(
+        `| ${name} | ${(q.entityRetention * 100).toFixed(0)}% | ${(q.structuralIntegrity * 100).toFixed(0)}% | ${(q.referenceCoherence * 100).toFixed(0)}% | ${q.qualityScore.toFixed(3)} |`,
+      );
+    }
+    lines.push('');
+  }
+
+  // --- Token budget ---
+  lines.push(...generateTokenBudgetSection(latest.results));
+  lines.push('');
+
+  // --- Bundle size ---
+  const bundleSizeSection = generateBundleSizeSection(latest.results.bundleSize ?? {});
+  if (bundleSizeSection.length > 0) {
+    lines.push(...bundleSizeSection);
+    lines.push('');
+  }
+
+  // --- LLM (conditional) ---
+  const llmSection = generateLlmSection(baselinesDir, latest.results.basic);
+  if (llmSection.length > 0) {
+    lines.push(...llmSection);
+  }
+
+  // --- Version history (conditional) ---
+  if (baselines.length > 1) {
+    lines.push('## Version History');
+    lines.push('');
+    lines.push('| Version | Date | Avg Char Ratio | Avg Token Ratio | Scenarios |');
+    lines.push('| --- | --- | ---: | ---: | ---: |');
+    for (const b of [...baselines].reverse()) {
+      const entries = Object.values(b.results.basic);
+      const avgChr = entries.reduce((s, v) => s + v.ratio, 0) / entries.length;
+      const avgTkr = entries.reduce((s, v) => s + v.tokenRatio, 0) / entries.length;
+      const date = b.generated.split('T')[0];
+      lines.push(
+        `| ${b.version} | ${date} | ${fix(avgChr)} | ${fix(avgTkr)} | ${entries.length} |`,
+      );
+    }
+    lines.push('');
+
+    // Version-to-version comparison (latest vs previous)
+    const prev = baselines[baselines.length - 2];
+    const diff = diffBaselines(prev, latest);
+    const sign = (n: number) => (n > 0 ? '+' : '');
+    const arrow = (n: number) => (n > 1 ? ' \u2191' : n < -1 ? ' \u2193' : ' \u2500');
+
+    lines.push(`### v${diff.fromVersion} \u2192 v${diff.toVersion}`);
+    lines.push('');
+    lines.push(
+      `> **${fix(diff.avgRatioOld)}x** \u2192 **${fix(diff.avgRatioNew)}x** avg compression` +
+        ` (${sign(diff.avgChange)}${fix(diff.avgChange)}%)`,
+    );
+    lines.push('');
+    lines.push(
+      '| Scenario | v' +
+        diff.fromVersion +
+        ' | v' +
+        diff.toVersion +
+        ' | Change | Token \u0394 |   |',
+    );
+    lines.push('| --- | ---: | ---: | ---: | ---: | --- |');
+    for (const d of diff.scenarios) {
+      lines.push(
+        `| ${d.scenario} | ${fix(d.oldRatio)}x | ${fix(d.newRatio)}x | ${sign(d.change)}${fix(d.change)}% | ${sign(d.tokenChange)}${fix(d.tokenChange)}% |${arrow(d.change)}|`,
+      );
+    }
+
+    if (diff.bundleSizeOld && diff.bundleSizeNew) {
+      const bytesDelta =
+        ((diff.bundleSizeNew.bytes - diff.bundleSizeOld.bytes) / diff.bundleSizeOld.bytes) * 100;
+      lines.push('');
+      lines.push(
+        `Bundle: ${formatBytes(diff.bundleSizeOld.bytes)} \u2192 ${formatBytes(diff.bundleSizeNew.bytes)} (${sign(bytesDelta)}${fix(bytesDelta)}%)`,
+      );
+    }
+    lines.push('');
+
+    // Per-version detail (older versions, collapsible)
+    const olderVersions = baselines.slice(0, -1).reverse();
+    for (const b of olderVersions) {
+      const r = b.results;
+      const oldEntries = Object.entries(r.basic);
+      const oldRatios = oldEntries.map(([, v]) => v.ratio);
+      const oldAvg = oldRatios.reduce((a, b) => a + b, 0) / oldRatios.length;
+
+      lines.push(`<details>`);
+      lines.push(
+        `<summary>v${b.version} (${b.generated.split('T')[0]}) \u2014 ${fix(oldAvg)}x avg</summary>`,
+      );
+      lines.push('');
+      lines.push('| Scenario | Char Ratio | Token Ratio | Compressed | Preserved |');
+      lines.push('| --- | ---: | ---: | ---: | ---: |');
+      for (const [name, v] of oldEntries) {
+        lines.push(
+          `| ${name} | ${fix(v.ratio)} | ${fix(v.tokenRatio)} | ${v.compressed} | ${v.preserved} |`,
+        );
+      }
+      lines.push('');
+      lines.push('</details>');
+      lines.push('');
+    }
+  }
+
+  // --- Methodology ---
+  lines.push('## Methodology');
+  lines.push('');
+  lines.push('- All deterministic results use the same input → same output guarantee');
+  lines.push('- Metrics: compression ratio, token ratio, message counts, dedup counts');
+  lines.push('- Timing is excluded from baselines (hardware-dependent)');
+  lines.push('- LLM benchmarks are saved as reference data, not used for regression testing');
+  lines.push('- Round-trip integrity is verified for every scenario (compress then uncompress)');
+  lines.push('');
+
+  writeFileSync(outputPath, lines.join('\n'));
+}

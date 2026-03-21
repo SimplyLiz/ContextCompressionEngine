@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyMessage } from '../src/classify.js';
+import { classifyMessage, detectReasoningChain } from '../src/classify.js';
 
 describe('classifyMessage', () => {
   describe('T0 — verbatim required', () => {
@@ -540,6 +540,228 @@ describe('classifyMessage', () => {
         'Check https://example.com, contact admin@example.com, version v3.2.1',
       );
       expect(r2.confidence).toBeGreaterThan(r1.confidence);
+    });
+  });
+
+  describe('reasoning chain detection', () => {
+    it('detects explicit "Reasoning:" label', () => {
+      const r = classifyMessage(
+        'Reasoning: The cache invalidation happens before the write completes, causing stale reads.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects "Analysis:" label', () => {
+      const r = classifyMessage(
+        'Analysis: The latency spike correlates with GC pauses in the 99th percentile.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects "Chain of Thought:" label', () => {
+      const r = classifyMessage(
+        'Chain of Thought: We know the input is sorted. Binary search applies. The mid-point comparison narrows the range by half each iteration.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects formal inference phrase "it follows that"', () => {
+      const r = classifyMessage(
+        'Since the function is monotonically increasing, it follows that the minimum is at the left boundary.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects formal inference phrase "we can conclude"', () => {
+      const r = classifyMessage(
+        'The tests pass on both platforms, so we can conclude the fix is portable.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects ∴ symbol', () => {
+      const r = classifyMessage('A ⊆ B and B ⊆ C ∴ A ⊆ C');
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct weak anchors (therefore, hence, as a result)', () => {
+      const r = classifyMessage(
+        'The timeout was too short. Therefore the request failed. ' +
+          'Hence the retry logic kicked in. As a result the queue backed up.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct weak anchors (thus, consequently, given that)', () => {
+      const r = classifyMessage(
+        'Given that the pool is exhausted, new connections fail. ' +
+          'Thus the health check returns 503. Consequently the load balancer removes the node.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects numbered steps with a weak anchor', () => {
+      const r = classifyMessage(
+        'Step 1: Parse the input tokens.\n' +
+          'Step 2: Build the AST from the token stream.\n' +
+          'Step 3: Run semantic analysis on the AST.\n' +
+          'Therefore the compiler rejects malformed programs early.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects sequence markers combined with weak anchors', () => {
+      const r = classifyMessage(
+        'Let me analyze this. The error occurs because the buffer overflows. ' +
+          'Therefore the write is truncated. Hence downstream parsers fail.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects "step-by-step:" label (mixed case)', () => {
+      const r = classifyMessage(
+        'step-by-step: First we parse the input. Then we validate. Finally we persist.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+
+    it('detects 3+ distinct sequence markers alone (Firstly, Secondly, In conclusion)', () => {
+      const r = classifyMessage(
+        'Firstly, the connection is established with TLS. ' +
+          'Secondly, the handshake negotiates cipher suites. ' +
+          'In conclusion, the channel is secured before any payload is sent.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('reasoning_chain');
+    });
+  });
+
+  describe('reasoning chain — false-positive resistance', () => {
+    it('shopping list with numbered items does not trigger reasoning_chain', () => {
+      const r = classifyMessage('1. Milk\n2. Eggs\n3. Bread\n4. Butter\n5. Cheese');
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('instructional steps without connectives do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'Step 1: Open the settings page.\n' +
+          'Step 2: Click on the profile tab.\n' +
+          'Step 3: Update your email address.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('single "therefore" in prose does not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'The deployment was delayed and therefore the release notes were updated to reflect the new timeline.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('"analysis" as a regular noun does not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'The team completed their analysis of the quarterly metrics and shared the dashboard.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('meeting notes with numbered items do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        '1. Review last sprint\n2. Discuss blockers\n3. Plan next sprint\n4. Assign action items',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('recipe steps do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'Step 1: Preheat the oven to 350 degrees.\n' +
+          'Step 2: Mix flour and sugar in a bowl.\n' +
+          'Step 3: Add eggs and stir until smooth.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+
+    it('casual "so" and "then" do not trigger reasoning_chain', () => {
+      const r = classifyMessage(
+        'So I went to the store and then I picked up some groceries. Then I drove home and made dinner.',
+      );
+      expect(r.reasons).not.toContain('reasoning_chain');
+    });
+  });
+
+  describe('detectReasoningChain (direct unit tests)', () => {
+    it('returns true for strong anchor label', () => {
+      expect(detectReasoningChain('Proof: By induction on n.')).toBe(true);
+    });
+
+    it('returns true for formal inference', () => {
+      expect(detectReasoningChain('Since x > 0, we can deduce that f(x) is positive.')).toBe(true);
+    });
+
+    it('returns true for ∴ symbol', () => {
+      expect(detectReasoningChain('P → Q, P ∴ Q')).toBe(true);
+    });
+
+    it('returns true for 3+ distinct weak anchors', () => {
+      expect(detectReasoningChain('Therefore A. Hence B. Consequently C.')).toBe(true);
+    });
+
+    it('returns true for 3+ distinct sequence markers', () => {
+      expect(
+        detectReasoningChain('Firstly we check. Secondly we validate. In summary it works.'),
+      ).toBe(true);
+    });
+
+    it('returns true for mixed weak anchors and sequence markers totaling 3+', () => {
+      expect(
+        detectReasoningChain(
+          'Firstly the input is parsed. Therefore the AST is built. Hence the output is correct.',
+        ),
+      ).toBe(true);
+    });
+
+    it('returns false for 0 anchors', () => {
+      expect(detectReasoningChain('The sky is blue and the grass is green.')).toBe(false);
+    });
+
+    it('returns false for 1 weak anchor only', () => {
+      expect(detectReasoningChain('Therefore the meeting is postponed.')).toBe(false);
+    });
+
+    it('returns false for 2 weak anchors (below threshold)', () => {
+      expect(detectReasoningChain('Therefore A. Hence B.')).toBe(false);
+    });
+
+    it('returns false for numbered steps without any connective', () => {
+      expect(detectReasoningChain('Step 1: Unbox.\nStep 2: Plug in.\nStep 3: Power on.')).toBe(
+        false,
+      );
+    });
+
+    it('returns true for numbered steps with 1 weak anchor', () => {
+      expect(
+        detectReasoningChain(
+          'Step 1: Read input.\nStep 2: Parse tokens.\nStep 3: Build AST.\nTherefore the program compiles.',
+        ),
+      ).toBe(true);
+    });
+
+    it('is stateless across repeated calls (g-flag safety)', () => {
+      const text = 'Therefore A. Hence B. Consequently C.';
+      expect(detectReasoningChain(text)).toBe(true);
+      expect(detectReasoningChain(text)).toBe(true);
+      expect(detectReasoningChain(text)).toBe(true);
     });
   });
 

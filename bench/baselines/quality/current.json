@@ -1,0 +1,1677 @@
+{
+  "version": "1.3.0",
+  "gitRef": "0e7aab2fe3c65661d7735303b15a7010e280a649",
+  "generated": "2026-03-21T14:11:05.599Z",
+  "results": {
+    "scenarios": {
+      "Coding assistant": {
+        "ratio": 1.9385451505016722,
+        "avgEntityRetention": 0.9380952380952381,
+        "minEntityRetention": 0.8333333333333334,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1.9408267576707483,
+        "compressedQualityScore": 1,
+        "probesPassed": 9,
+        "probesTotal": 9,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "JWT_SECRET env var",
+            "passed": true
+          },
+          {
+            "label": "jwt.verify in code",
+            "passed": true
+          },
+          {
+            "label": "15m access expiry",
+            "passed": true
+          },
+          {
+            "label": "7d refresh expiry",
+            "passed": true
+          },
+          {
+            "label": "rateLimit in code",
+            "passed": true
+          },
+          {
+            "label": "authMiddleware function",
+            "passed": true
+          },
+          {
+            "label": "express-rate-limit import",
+            "passed": true
+          },
+          {
+            "label": "Redis/ioredis mention",
+            "passed": true
+          },
+          {
+            "label": "min output ≥ 2000 chars",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 1,
+        "messages": [
+          {
+            "messageId": "3",
+            "action": "code_split",
+            "inputChars": 912,
+            "outputChars": 564,
+            "localRatio": 1.6170212765957446,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "5",
+            "action": "code_split",
+            "inputChars": 1057,
+            "outputChars": 530,
+            "localRatio": 1.9943396226415093,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "7",
+            "action": "code_split",
+            "inputChars": 824,
+            "outputChars": 297,
+            "localRatio": 2.774410774410774,
+            "entityRetention": 0.8333333333333334,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "9",
+            "action": "code_split",
+            "inputChars": 828,
+            "outputChars": 480,
+            "localRatio": 1.725,
+            "entityRetention": 0.8571428571428571,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "13",
+            "action": "compressed",
+            "inputChars": 713,
+            "outputChars": 218,
+            "localRatio": 3.270642201834862,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Long Q&A": {
+        "ratio": 4.902912621359223,
+        "avgEntityRetention": 0.8,
+        "minEntityRetention": 0,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 4.258064516129032,
+        "compressedQualityScore": 1,
+        "probesPassed": 7,
+        "probesTotal": 7,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "event sourcing",
+            "passed": true
+          },
+          {
+            "label": "circuit breaker",
+            "passed": true
+          },
+          {
+            "label": "eventual consistency",
+            "passed": true
+          },
+          {
+            "label": "saga pattern",
+            "passed": true
+          },
+          {
+            "label": "choreography",
+            "passed": true
+          },
+          {
+            "label": "orchestration",
+            "passed": true
+          },
+          {
+            "label": "min output ≥ 800 chars",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 5,
+        "messages": [
+          {
+            "messageId": "16",
+            "action": "deduped",
+            "inputChars": 1800,
+            "outputChars": 28,
+            "localRatio": 64.28571428571429,
+            "entityRetention": 0,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "18",
+            "action": "compressed",
+            "inputChars": 2250,
+            "outputChars": 493,
+            "localRatio": 4.563894523326572,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "20",
+            "action": "compressed",
+            "inputChars": 1800,
+            "outputChars": 493,
+            "localRatio": 3.6511156186612577,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "22",
+            "action": "compressed",
+            "inputChars": 2700,
+            "outputChars": 493,
+            "localRatio": 5.476673427991886,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "24",
+            "action": "compressed",
+            "inputChars": 1350,
+            "outputChars": 353,
+            "localRatio": 3.8243626062322944,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Tool-heavy": {
+        "ratio": 1.4009797060881735,
+        "avgEntityRetention": 0.8,
+        "minEntityRetention": 0.6,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1.6052416052416052,
+        "compressedQualityScore": 0.8666666666666667,
+        "probesPassed": 6,
+        "probesTotal": 6,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "JSON array preserved",
+            "passed": true
+          },
+          {
+            "label": "SQL SELECT preserved",
+            "passed": true
+          },
+          {
+            "label": "STRIPE_SECRET_KEY",
+            "passed": true
+          },
+          {
+            "label": "GITHUB_TOKEN",
+            "passed": true
+          },
+          {
+            "label": "code blocks present",
+            "passed": true
+          },
+          {
+            "label": "DATABASE_URL",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 2,
+        "messages": [
+          {
+            "messageId": "30",
+            "action": "compressed",
+            "inputChars": 744,
+            "outputChars": 235,
+            "localRatio": 3.1659574468085108,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "36",
+            "action": "compressed",
+            "inputChars": 236,
+            "outputChars": 172,
+            "localRatio": 1.372093023255814,
+            "entityRetention": 0.6,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Deep conversation": {
+        "ratio": 2.5041568769202964,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1,
+        "compressedQualityScore": 1,
+        "probesPassed": 3,
+        "probesTotal": 9,
+        "probePassRate": 0.3333333333333333,
+        "probeResults": [
+          {
+            "label": "≥15/25 topics survive",
+            "passed": false
+          },
+          {
+            "label": "topic: database schema",
+            "passed": true
+          },
+          {
+            "label": "topic: authentication",
+            "passed": false
+          },
+          {
+            "label": "topic: caching",
+            "passed": false
+          },
+          {
+            "label": "topic: monitoring",
+            "passed": false
+          },
+          {
+            "label": "topic: testing",
+            "passed": false
+          },
+          {
+            "label": "topic: deployment",
+            "passed": false
+          },
+          {
+            "label": "topic: error handling",
+            "passed": true
+          },
+          {
+            "label": "min output ≥ 3000 chars",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 6,
+        "messages": [
+          {
+            "messageId": "44",
+            "action": "compressed",
+            "inputChars": 306,
+            "outputChars": 168,
+            "localRatio": 1.8214285714285714,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "45",
+            "action": "compressed",
+            "inputChars": 809,
+            "outputChars": 246,
+            "localRatio": 3.2886178861788617,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "46",
+            "action": "compressed",
+            "inputChars": 306,
+            "outputChars": 168,
+            "localRatio": 1.8214285714285714,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "47",
+            "action": "compressed",
+            "inputChars": 809,
+            "outputChars": 246,
+            "localRatio": 3.2886178861788617,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "48",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "49",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "51",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "52",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "53",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "54",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "55",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "56",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "57",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "58",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "59",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "60",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "61",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "62",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "63",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "64",
+            "action": "compressed",
+            "inputChars": 305,
+            "outputChars": 167,
+            "localRatio": 1.8263473053892216,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "65",
+            "action": "compressed",
+            "inputChars": 808,
+            "outputChars": 246,
+            "localRatio": 3.2845528455284554,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "66",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "67",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "68",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "69",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "70",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "71",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "72",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "73",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "74",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "75",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "76",
+            "action": "compressed",
+            "inputChars": 299,
+            "outputChars": 202,
+            "localRatio": 1.4801980198019802,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "77",
+            "action": "compressed",
+            "inputChars": 802,
+            "outputChars": 246,
+            "localRatio": 3.2601626016260163,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "78",
+            "action": "compressed",
+            "inputChars": 302,
+            "outputChars": 202,
+            "localRatio": 1.495049504950495,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "79",
+            "action": "compressed",
+            "inputChars": 805,
+            "outputChars": 246,
+            "localRatio": 3.272357723577236,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "80",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "81",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "82",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "83",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "84",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "85",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "86",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "87",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "88",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "89",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "90",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "91",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "92",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "93",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Technical explanation": {
+        "ratio": 1.2398561890087314,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1.7915254237288134,
+        "compressedQualityScore": 1,
+        "probesPassed": 6,
+        "probesTotal": 7,
+        "probePassRate": 0.8571428571428571,
+        "probeResults": [
+          {
+            "label": "OrderPlaced event",
+            "passed": true
+          },
+          {
+            "label": "temporal decoupling",
+            "passed": true
+          },
+          {
+            "label": "schema version",
+            "passed": false
+          },
+          {
+            "label": "partition ordering",
+            "passed": true
+          },
+          {
+            "label": "at-least-once delivery",
+            "passed": true
+          },
+          {
+            "label": "dead letter queue",
+            "passed": true
+          },
+          {
+            "label": "idempotent consumers",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 3,
+        "messages": [
+          {
+            "messageId": "98",
+            "action": "compressed",
+            "inputChars": 483,
+            "outputChars": 203,
+            "localRatio": 2.3793103448275863,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "100",
+            "action": "compressed",
+            "inputChars": 347,
+            "outputChars": 209,
+            "localRatio": 1.6602870813397128,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "102",
+            "action": "compressed",
+            "inputChars": 227,
+            "outputChars": 178,
+            "localRatio": 1.2752808988764044,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Structured content": {
+        "ratio": 1.2595769010863351,
+        "avgEntityRetention": 0.675,
+        "minEntityRetention": 0.6,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1.3318681318681318,
+        "compressedQualityScore": 0.8666666666666667,
+        "probesPassed": 5,
+        "probesTotal": 5,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "API keys preserved",
+            "passed": true
+          },
+          {
+            "label": "CREATE TABLE preserved",
+            "passed": true
+          },
+          {
+            "label": "JSON code block",
+            "passed": true
+          },
+          {
+            "label": "AWS_ACCESS_KEY_ID",
+            "passed": true
+          },
+          {
+            "label": "SENDGRID_API_KEY",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 1,
+        "messages": [
+          {
+            "messageId": "109",
+            "action": "compressed",
+            "inputChars": 494,
+            "outputChars": 230,
+            "localRatio": 2.1478260869565218,
+            "entityRetention": 0.75,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "111",
+            "action": "compressed",
+            "inputChars": 415,
+            "outputChars": 225,
+            "localRatio": 1.8444444444444446,
+            "entityRetention": 0.6,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Agentic coding session": {
+        "ratio": 1.004950495049505,
+        "avgEntityRetention": 0.2857142857142857,
+        "minEntityRetention": 0.2857142857142857,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 0.30398671096345514,
+        "compressedQualityScore": 0.7142857142857144,
+        "probesPassed": 4,
+        "probesTotal": 5,
+        "probePassRate": 0.8,
+        "probeResults": [
+          {
+            "label": "AuthService in code",
+            "passed": true
+          },
+          {
+            "label": "verify or validateToken",
+            "passed": true
+          },
+          {
+            "label": "grep results",
+            "passed": false
+          },
+          {
+            "label": "test counts",
+            "passed": true
+          },
+          {
+            "label": "jwt.sign in code",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 1,
+        "messages": [
+          {
+            "messageId": "122",
+            "action": "compressed",
+            "inputChars": 183,
+            "outputChars": 172,
+            "localRatio": 1.063953488372093,
+            "entityRetention": 0.2857142857142857,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Single-char messages": {
+        "ratio": 1,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1,
+        "compressedQualityScore": 1,
+        "probesPassed": 3,
+        "probesTotal": 3,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "output count = input count",
+            "passed": true
+          },
+          {
+            "label": "\"y\" present",
+            "passed": true
+          },
+          {
+            "label": "\"n\" present",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 0,
+        "messages": []
+      },
+      "Giant single message": {
+        "ratio": 2.828036762263315,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 2.8382140073488475,
+        "compressedQualityScore": 1,
+        "probesPassed": 5,
+        "probesTotal": 5,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "TracingService in code",
+            "passed": true
+          },
+          {
+            "label": "traceId identifier",
+            "passed": true
+          },
+          {
+            "label": "spanId identifier",
+            "passed": true
+          },
+          {
+            "label": "startSpan in code",
+            "passed": true
+          },
+          {
+            "label": "min output ≥ 10000 chars",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 1,
+        "messages": [
+          {
+            "messageId": "50012",
+            "action": "code_split",
+            "inputChars": 50980,
+            "outputChars": 17962,
+            "localRatio": 2.8382140073488475,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Code-only conversation": {
+        "ratio": 1,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1,
+        "compressedQualityScore": 1,
+        "probesPassed": 4,
+        "probesTotal": 4,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "TypeScript code blocks",
+            "passed": true
+          },
+          {
+            "label": "Python code blocks",
+            "passed": true
+          },
+          {
+            "label": "SQL code blocks",
+            "passed": true
+          },
+          {
+            "label": "all code preserved verbatim",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 0,
+        "messages": []
+      },
+      "Entity-dense technical": {
+        "ratio": 1.5571321882001494,
+        "avgEntityRetention": 0.5292397660818713,
+        "minEntityRetention": 0.42105263157894735,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 0.9882198952879582,
+        "compressedQualityScore": 0.7945945945945947,
+        "probesPassed": 5,
+        "probesTotal": 8,
+        "probePassRate": 0.625,
+        "probeResults": [
+          {
+            "label": "file paths present",
+            "passed": true
+          },
+          {
+            "label": "redis-prod-001",
+            "passed": false
+          },
+          {
+            "label": "v22.3.0 version",
+            "passed": false
+          },
+          {
+            "label": "max_connections",
+            "passed": true
+          },
+          {
+            "label": "PR #142",
+            "passed": false
+          },
+          {
+            "label": "orderService.ts",
+            "passed": true
+          },
+          {
+            "label": "idx_orders_user_created",
+            "passed": true
+          },
+          {
+            "label": "p99 latency",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 2,
+        "messages": [
+          {
+            "messageId": "50022",
+            "action": "compressed",
+            "inputChars": 466,
+            "outputChars": 253,
+            "localRatio": 1.841897233201581,
+            "entityRetention": 0.5,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50023",
+            "action": "compressed",
+            "inputChars": 641,
+            "outputChars": 242,
+            "localRatio": 2.6487603305785123,
+            "entityRetention": 0.42105263157894735,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50024",
+            "action": "compressed",
+            "inputChars": 403,
+            "outputChars": 269,
+            "localRatio": 1.4981412639405205,
+            "entityRetention": 0.6666666666666666,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Prose-only conversation": {
+        "ratio": 3.367965367965368,
+        "avgEntityRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 4.348979591836734,
+        "compressedQualityScore": 1,
+        "probesPassed": 2,
+        "probesTotal": 4,
+        "probePassRate": 0.5,
+        "probeResults": [
+          {
+            "label": "hiring topic",
+            "passed": false
+          },
+          {
+            "label": "review topic",
+            "passed": true
+          },
+          {
+            "label": "onboarding topic",
+            "passed": false
+          },
+          {
+            "label": "min output ≥ 400 chars",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 2,
+        "messages": [
+          {
+            "messageId": "50028",
+            "action": "compressed",
+            "inputChars": 684,
+            "outputChars": 113,
+            "localRatio": 6.053097345132743,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50030",
+            "action": "compressed",
+            "inputChars": 736,
+            "outputChars": 257,
+            "localRatio": 2.8638132295719845,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50032",
+            "action": "compressed",
+            "inputChars": 711,
+            "outputChars": 120,
+            "localRatio": 5.925,
+            "entityRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Mixed languages": {
+        "ratio": 1.0689134808853118,
+        "avgEntityRetention": 0.6666666666666666,
+        "minEntityRetention": 0.6666666666666666,
+        "codeBlockIntegrity": 1,
+        "informationDensity": 1.050420168067227,
+        "compressedQualityScore": 0.8666666666666667,
+        "probesPassed": 5,
+        "probesTotal": 5,
+        "probePassRate": 1,
+        "probeResults": [
+          {
+            "label": "Python code block",
+            "passed": true
+          },
+          {
+            "label": "SQL code block",
+            "passed": true
+          },
+          {
+            "label": "JSON code block",
+            "passed": true
+          },
+          {
+            "label": "YAML code block",
+            "passed": true
+          },
+          {
+            "label": "metrics-processor name",
+            "passed": true
+          }
+        ],
+        "negativeCompressions": 0,
+        "coherenceIssues": 0,
+        "messages": [
+          {
+            "messageId": "50039",
+            "action": "compressed",
+            "inputChars": 375,
+            "outputChars": 238,
+            "localRatio": 1.5756302521008403,
+            "entityRetention": 0.6666666666666666,
+            "codeBlocksIntact": true
+          }
+        ]
+      }
+    },
+    "tradeoff": {
+      "Coding assistant": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.9385451505016722,
+            "entityRetention": 1,
+            "informationDensity": 1.9408267576707483,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "informationDensity": 1.7970909368557686,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "informationDensity": 1.7970909368557686,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "informationDensity": 1.7970909368557686,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "informationDensity": 1.7970909368557686,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1.4333848531684699,
+            "entityRetention": 1,
+            "informationDensity": 1.9122933141624732,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 1.4333848531684699,
+            "entityRetention": 1,
+            "informationDensity": 1.9122933141624732,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 7,
+            "ratio": 1.232589048378522,
+            "entityRetention": 1,
+            "informationDensity": 1.79981718464351,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 1.232589048378522,
+            "entityRetention": 1,
+            "informationDensity": 1.79981718464351,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 9,
+            "ratio": 1.0811377943576592,
+            "entityRetention": 1,
+            "informationDensity": 1.6170212765957448,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.0811377943576592,
+            "entityRetention": 1,
+            "informationDensity": 1.6170212765957448,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 11,
+            "ratio": 1,
+            "entityRetention": 1,
+            "informationDensity": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": 1,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.9385451505016722
+      },
+      "Deep conversation": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 2.5041568769202964,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 2.3650251770931128,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 2.2394536932277354,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 2.1265443941370576,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 2.025657894736842,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.9328311362209667,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 12,
+            "ratio": 1.8426092160383005,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 14,
+            "ratio": 1.7661567877629063,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 16,
+            "ratio": 1.6949660529696007,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 18,
+            "ratio": 1.629867074461828,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 20,
+            "ratio": 1.569405901342244,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 22,
+            "ratio": 1.5136006117544243,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 24,
+            "ratio": 1.4616277229811698,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 26,
+            "ratio": 1.413249694002448,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 28,
+            "ratio": 1.3675665005181858,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 30,
+            "ratio": 1.3219004913418881,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 32,
+            "ratio": 1.2790676205861988,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 34,
+            "ratio": 1.2411986025262027,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 36,
+            "ratio": 1.2058222009486097,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 38,
+            "ratio": 1.1724064985615164,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 40,
+            "ratio": 1.1405111742190395,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 42,
+            "ratio": 1.110839413132366,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 44,
+            "ratio": 1.0804351216469121,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 46,
+            "ratio": 1.053289748755179,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 48,
+            "ratio": 1.0259533506108849,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 50,
+            "ratio": 1,
+            "entityRetention": 1,
+            "informationDensity": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": 1,
+        "qualityAt3x": 1,
+        "maxRatioAbove80pctQuality": 2.5041568769202964
+      },
+      "Technical explanation": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.2398561890087314,
+            "entityRetention": 0.8571428571428571,
+            "informationDensity": 1.7915254237288134,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.2094188376753507,
+            "entityRetention": 0.8,
+            "informationDensity": 2.0145631067961163,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.2094188376753507,
+            "entityRetention": 0.8,
+            "informationDensity": 2.0145631067961163,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.1312089971883785,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 2.379310344827586,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.1312089971883785,
+            "entityRetention": 0.6666666666666666,
+            "informationDensity": 2.379310344827586,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1,
+            "entityRetention": 1,
+            "informationDensity": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": null,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.2398561890087314
+      },
+      "Agentic coding session": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 7,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 9,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 11,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 12,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 13,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 14,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 15,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "informationDensity": 0.30398671096345514,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 16,
+            "ratio": 1,
+            "entityRetention": 1,
+            "informationDensity": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": null,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.004950495049505
+      }
+    }
+  }
+}

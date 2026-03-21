@@ -36,12 +36,14 @@ The classifier (`classifyAll`) applies rules in this order:
 3. Has `tool_calls` -> preserved
 4. Content < 120 chars -> preserved
 5. Already compressed (`[summary:`, `[summary#`, or `[truncated` prefix) -> preserved
-6. Marked as duplicate by dedup analysis -> dedup path
-7. Contains code fences with >= 80 chars of prose -> code-split path
-8. Has code fences with < 80 chars prose -> preserved
-9. Classified as hard T0 (code, JSON, SQL, API keys, etc.) -> preserved
-10. Valid JSON -> preserved
-11. Everything else -> compress
+6. High importance score (when `importanceScoring: true`, score >= `importanceThreshold`) -> preserved
+7. Marked as duplicate by dedup analysis -> dedup path
+8. Superseded by a later correction (when `contradictionDetection: true`) -> contradiction path
+9. Contains code fences with >= 80 chars of prose -> code-split path
+10. Has code fences with < 80 chars prose -> preserved
+11. Classified as hard T0 (code, JSON, SQL, API keys, etc.) -> preserved
+12. Valid JSON -> preserved
+13. Everything else -> compress
 
 See [Preservation rules](preservation-rules.md) for classification tiers and the hard vs. soft T0 distinction.
 
@@ -100,7 +102,7 @@ The `summarize` function uses sentence scoring:
 5. Re-sort selected sentences by original position to preserve reading order
 6. Join with `...` separator
 
-Budget: 200 chars if input < 600 chars, 400 chars otherwise.
+Budget scales adaptively: max(200, min(round(length × 0.3), 600)). Short content gets 200 chars, long content up to 600.
 
 ### Entity extraction
 
@@ -111,14 +113,14 @@ After summarizing, `extractEntities` pulls out key identifiers from the original
 - Vowelless abbreviations
 - Numbers with units/context
 
-Up to 10 entities are appended as `| entities: foo, bar, baz`.
+Entities scale with content length (3–15) and are appended as `| entities: foo, bar, baz`.
 
 ### Code-split processing
 
 Messages containing code fences with significant prose (>= 80 chars) get split:
 
 1. `splitCodeAndProse` extracts code fences and surrounding prose separately
-2. Prose is summarized (budget: 200 if < 600 chars, else 400)
+2. Prose is summarized (budget scales adaptively with prose length)
 3. Code fences are preserved verbatim
 4. Result: `[summary: ...]\n\n```code here````
 
@@ -167,6 +169,20 @@ With `embedSummaryId: true`:
 ```
 [cce:dup of {keepTargetId} — {contentLength} chars]
 [cce:near-dup of {keepTargetId} — {contentLength} chars, ~{similarity}% match]
+```
+
+### Contradiction format
+
+When `contradictionDetection: true`, messages superseded by a later correction:
+
+```
+[cce:superseded by {correctionMessageId} ({signal}) — {summaryText}]
+```
+
+If the full format doesn't fit, falls back to compact:
+
+```
+[cce:superseded by {correctionMessageId} — {signal}]
 ```
 
 ### Force-converge format

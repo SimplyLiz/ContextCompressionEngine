@@ -1,5 +1,18 @@
 export type ClassifyResult = {
   decision: 'T0' | 'T2' | 'T3';
+  /**
+   * Classification confidence (0–1). Higher values indicate stronger signal.
+   *
+   * For T0: starts at 0.70, increases by 0.05 per additional structural reason
+   * (capped at 0.95). Multiple overlapping signals → higher confidence.
+   * For T2/T3: fixed at 0.65 (pure prose heuristic, no structural anchors).
+   *
+   * The deterministic pipeline does not route on confidence — it uses the
+   * hard/soft T0 distinction instead. Consumers can use confidence for custom
+   * routing (e.g. only compress below a threshold), monitoring dashboards,
+   * or LLM classifier fallback decisions (cf. Amazon Science "Label with
+   * Confidence" for confidence-weighted routing patterns).
+   */
   confidence: number;
   reasons: string[];
 };
@@ -132,6 +145,49 @@ const API_KEY_PATTERNS: RegExp[] = [
 const GENERIC_TOKEN_RE =
   /\b[a-zA-Z](?=[a-zA-Z0-9]{0,13}[g-zG-Z])[a-zA-Z0-9]{1,14}[-_](?=[a-zA-Z0-9_-]*[0-9])(?=[a-zA-Z0-9_-]*[a-zA-Z])[a-zA-Z0-9_-]{20,}\b/;
 
+// Reasoning chain detection — two-tier anchor system (mirrors SQL detection).
+// Strong anchors: explicit reasoning labels or formal inference → 1 match is enough.
+// Weak anchors: logical connectives / causal phrases → need 3+ distinct to trigger.
+const REASONING_STRONG_RE =
+  /^[ \t]*(?:Reasoning|Analysis|Conclusion|Proof|Derivation|Chain of Thought|Step[- ]by[- ]step)\s*:/im;
+const REASONING_INFERENCE_RE =
+  /\b(?:it follows that|we can (?:conclude|deduce|infer)|this (?:implies|proves) that|QED)\b|∴/i;
+// Note: `g` flag is safe here — these regexes are only used via String.match(),
+// which ignores lastIndex. Do NOT use .test()/.exec() on them without resetting.
+const REASONING_WEAK_ANCHORS_RE =
+  /\b(?:therefore|hence|thus|consequently|accordingly|this means that|as a result|because of this|which (?:implies|means|shows)|given that|assuming that|since we know)\b/gi;
+const NUMBERED_STEP_RE = /(?:^|\n)\s*(?:Step\s+\d+[:.)]|\d+[.)]\s)/gi;
+const SEQUENCE_MARKERS_RE =
+  /\b(?:Let me (?:think|reason|analyze)|Let's (?:consider|break this down)|First(?:ly)?|Second(?:ly)?|Third(?:ly)?|In conclusion|To summarize|In summary)\b/gi;
+
+export function detectReasoningChain(text: string): boolean {
+  // 1+ strong anchor → unambiguous reasoning chain
+  if (REASONING_STRONG_RE.test(text)) return true;
+  if (REASONING_INFERENCE_RE.test(text)) return true;
+
+  // Count distinct weak anchors
+  const weakMatches = text.match(REASONING_WEAK_ANCHORS_RE);
+  const distinctWeak = weakMatches
+    ? new Set(weakMatches.map((m) => m.toLowerCase().replace(/\s+/g, ' '))).size
+    : 0;
+
+  // Count distinct sequence markers (each counts as 1 weak anchor)
+  const seqMatches = text.match(SEQUENCE_MARKERS_RE);
+  const seqCount = seqMatches
+    ? new Set(seqMatches.map((m) => m.toLowerCase().replace(/\s+/g, ' '))).size
+    : 0;
+
+  // 3+ numbered steps AND 1+ weak anchor → reasoning chain
+  const stepMatches = text.match(NUMBERED_STEP_RE);
+  const stepCount = stepMatches ? stepMatches.length : 0;
+  if (stepCount >= 3 && distinctWeak + seqCount >= 1) return true;
+
+  // 3+ distinct weak anchors (including sequence contribution) → reasoning chain
+  if (distinctWeak + seqCount >= 3) return true;
+
+  return false;
+}
+
 const FORCE_T0_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /https?:\/\/[^\s]+/, label: 'url' },
   { re: /[\w.+-]+@[\w-]+\.[a-z]{2,}/i, label: 'email' },
@@ -179,6 +235,9 @@ function detectContentTypes(text: string): {
   }
   if (apiKeyFound) reasons.push('api_key');
 
+  // Reasoning chain detection
+  if (detectReasoningChain(text)) reasons.push('reasoning_chain');
+
   // Other content-type patterns
   for (const { re, label } of FORCE_T0_PATTERNS) {
     if (re.test(text)) reasons.push(label);
@@ -189,6 +248,14 @@ function detectContentTypes(text: string): {
 
 // -- Tier heuristic for clean prose --
 
+/**
+ * Assign T2 (short prose, < 20 words) or T3 (long prose, >= 20 words).
+ *
+ * Both tiers are compressed identically in the current deterministic pipeline.
+ * The distinction exists so a future LLM classifier can apply different
+ * strategies per tier — e.g. lighter summarization for T2 or aggressive
+ * compression for verbose T3 content.
+ */
 function inferProseTier(text: string): 'T2' | 'T3' {
   const words = text.split(/\s+/).length;
   if (words < 20) return 'T2';
@@ -196,6 +263,24 @@ function inferProseTier(text: string): 'T2' | 'T3' {
 }
 
 // -- Main classifier entry point --
+
+// Hard T0 reasons: genuinely structural content that can't be summarized.
+// Soft T0 reasons (file_path, url, version_number, etc.): incidental
+// references in prose — entities capture them, prose is still compressible.
+export const HARD_T0_REASONS = new Set([
+  'code_fence',
+  'indented_code',
+  'json_structure',
+  'yaml_structure',
+  'high_special_char_ratio',
+  'high_line_length_variance',
+  'api_key',
+  'latex_math',
+  'unicode_math',
+  'sql_content',
+  'verse_pattern',
+  'reasoning_chain',
+]);
 
 export function classifyMessage(content: string): ClassifyResult {
   const structural = detectStructuralPatterns(content);

@@ -8,19 +8,21 @@ What gets preserved, what gets compressed, and why.
 
 Messages are evaluated in this order. The **first matching rule** determines the outcome:
 
-| Priority | Rule                                                        | Outcome         |
-| -------- | ----------------------------------------------------------- | --------------- |
-| 1        | Role in `preserve` list                                     | Preserved       |
-| 2        | Within `recencyWindow`                                      | Preserved       |
-| 3        | Has `tool_calls` array                                      | Preserved       |
-| 4        | Content < 120 chars                                         | Preserved       |
-| 5        | Already compressed (`[summary:`, `[summary#`, `[truncated`) | Preserved       |
-| 6        | Duplicate (exact or fuzzy)                                  | Dedup path      |
-| 7        | Code fences + prose >= 80 chars                             | Code-split path |
-| 8        | Code fences + prose < 80 chars                              | Preserved       |
-| 9        | Hard T0 classification                                      | Preserved       |
-| 10       | Valid JSON                                                  | Preserved       |
-| 11       | Everything else                                             | Compressed      |
+| Priority | Rule                                                        | Outcome                   |
+| -------- | ----------------------------------------------------------- | ------------------------- |
+| 1        | Role in `preserve` list                                     | Preserved                 |
+| 2        | Within `recencyWindow`                                      | Preserved                 |
+| 3        | Has `tool_calls` array                                      | Preserved                 |
+| 4        | Content < 120 chars                                         | Preserved                 |
+| 5        | Already compressed (`[summary:`, `[summary#`, `[truncated`) | Preserved                 |
+| 6        | Duplicate (exact or fuzzy)                                  | Dedup path                |
+| 7        | Code fences + prose >= 80 chars                             | Code-split path           |
+| 8        | Code fences + prose < 80 chars                              | Preserved                 |
+| 9        | Hard T0 classification (skipped in `full` mode)             | Preserved                 |
+| 10       | Custom `preservePatterns` match                             | Preserved                 |
+| 11       | LLM classifier (when `classifier` is provided)              | Preserved or fall through |
+| 12       | Valid JSON                                                  | Preserved                 |
+| 13       | Everything else                                             | Compressed                |
 
 Soft T0 classifications (file paths, URLs, version numbers, etc.) do **not** prevent compression — entities capture the important references, and the prose is still compressible.
 
@@ -47,6 +49,7 @@ Content with structural patterns that would be destroyed by summarization.
 | `unicode_math`              | Mathematical symbols                                                                                           |
 | `sql_content`               | SQL keyword density (strong anchors like `GROUP BY`, `PRIMARY KEY` or 3+ distinct keywords with a weak anchor) |
 | `verse_pattern`             | Poetry/verse pattern (consecutive capitalized lines without terminal punctuation)                              |
+| `reasoning_chain`           | Reasoning chains: explicit labels (`Reasoning:`, `Proof:`), formal inference, or 3+ logical connectives        |
 
 **Soft T0 reasons** (do not prevent compression):
 
@@ -68,11 +71,11 @@ Soft T0 content is still compressible because the entity extraction step capture
 
 ### T2 — Short prose
 
-Prose under 20 words. Currently treated the same as T3 in the compression pipeline.
+Prose under 20 words. Treated identically to T3 in the current deterministic pipeline — the distinction is preserved for future LLM classifier integration, which can apply lighter compression to short prose.
 
 ### T3 — Long prose
 
-Prose of 20+ words. The primary target for summarization.
+Prose of 20+ words. The primary target for summarization. Treated identically to T2 in the current pipeline; the LLM classifier will use the T2/T3 distinction for tier-specific strategies.
 
 ## API key detection
 
@@ -103,7 +106,7 @@ SQL detection uses a tiered anchor system to avoid false positives on English pr
 Messages with code fences and significant prose (>= 80 chars) are split:
 
 1. Code fences are extracted verbatim
-2. Surrounding prose is summarized (budget: 200 chars if < 600 chars, 400 otherwise)
+2. Surrounding prose is summarized (budget scales adaptively: 200–600 chars based on prose length)
 3. Result: summary + preserved code fences
 
 If the total prose is < 80 chars, the entire message is preserved (not enough prose to justify splitting).
@@ -141,6 +144,85 @@ Protect more or fewer recent messages:
 ```ts
 compress(messages, { recencyWindow: 10 }); // protect last 10
 compress(messages, { recencyWindow: 0 }); // no recency protection
+```
+
+### `preservePatterns` option
+
+Force preservation of messages matching domain-specific regex patterns. Each pattern is a hard T0 — the message is preserved verbatim, no summarization. Patterns are checked after the built-in heuristic classifier but before JSON detection.
+
+```ts
+compress(messages, {
+  preservePatterns: [
+    { re: /§\s*\d+/, label: 'section_ref' },
+    { re: /\d+\s*mg\b/i, label: 'dosage' },
+  ],
+});
+```
+
+**Domain examples:**
+
+**Legal** — preserve clause references, case citations, regulatory references:
+
+```ts
+preservePatterns: [
+  { re: /§\s*\d+/, label: 'section_ref' },
+  { re: /\b\d+\s+U\.S\.C\.\s*§/, label: 'usc_cite' },
+  { re: /\bArticle\s+[IVX]+\b/, label: 'article_ref' },
+  { re: /\bGDPR\s+Art\.\s*\d+/, label: 'gdpr_ref' },
+];
+```
+
+**Medical** — preserve dosages, diagnostic codes, lab values:
+
+```ts
+preservePatterns: [
+  { re: /\d+\s*mg\b/i, label: 'dosage' },
+  { re: /\bICD-10:\s*[A-Z]\d+/i, label: 'icd_code' },
+  { re: /\bCPT\s+\d{5}/, label: 'cpt_code' },
+  { re: /\bBP\s+\d+\/\d+/, label: 'vital_sign' },
+];
+```
+
+**Academic** — preserve DOIs, citation markers, theorem references:
+
+```ts
+preservePatterns: [
+  { re: /\bdoi:\s*10\.\d{4,}/, label: 'doi' },
+  { re: /\[(\d+(?:,\s*\d+)*)\]/, label: 'citation_marker' },
+  { re: /\bTheorem\s+\d+/i, label: 'theorem_ref' },
+];
+```
+
+The stat `compression.messages_pattern_preserved` reports how many messages were preserved by custom patterns.
+
+### `classifier` option
+
+LLM-powered classification for domain-specific content. When provided, `compress()` returns a `Promise`. The classifier runs once before the pipeline (pre-classification) so that `tokenBudget` binary search doesn't re-classify messages on each iteration.
+
+The `classifierMode` option controls how the LLM classifier interacts with heuristics:
+
+| Mode       | Behavior                                                               | When to use                                   |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| `'hybrid'` | Heuristics first; LLM only for messages that aren't hard T0 (default)  | Best cost/accuracy tradeoff. Most use cases.  |
+| `'full'`   | Heuristic classification skipped; LLM classifies all eligible messages | Domain content where heuristics add no value. |
+
+In both modes, standard preservation rules (role, recency window, tool_calls, short content, already-compressed) still apply — the classifier only sees messages that pass those checks.
+
+```ts
+import { createClassifier, compress } from 'context-compression-engine';
+
+const classifier = createClassifier(callLlm, {
+  systemPrompt: 'You are classifying content from medical records.',
+  alwaysPreserve: ['diagnoses', 'medication dosages', 'lab values'],
+});
+
+const result = await compress(messages, {
+  classifier,
+  classifierMode: 'hybrid',
+});
+
+console.log(result.compression.messages_llm_classified); // messages sent to LLM
+console.log(result.compression.messages_llm_preserved); // messages LLM decided to preserve
 ```
 
 ---

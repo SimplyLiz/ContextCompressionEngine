@@ -5,9 +5,11 @@ venv/
 
 # build
 dist/
+coverage/
 build/
 *.egg-info/
 *.tsbuildinfo
+*.tgz
 
 # cache
 __pycache__/
@@ -32,6 +34,9 @@ __pycache__/
 .idea/
 .vscode/
 *.swp
+
+# demo
+demo/bundle.js
 
 # indexing / analysis artifacts
 .ckb/

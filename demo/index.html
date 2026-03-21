@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Context Compression Engine — Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #0b0b0f;
+        --bg-dot: #16161d;
+        --surface: #111118;
+        --surface-raised: #18181f;
+        --border: #2a2a35;
+        --border-focus: #3d3d4a;
+        --text: #dbd8d0;
+        --text-dim: #7a7880;
+        --text-faint: #4a4850;
+        --accent: #3b82f6;
+        --accent-glow: rgba(59, 130, 246, 0.15);
+        --accent-soft: #2563eb;
+        --green: #34d399;
+        --green-dim: rgba(52, 211, 153, 0.12);
+        --red: #ef6a58;
+        --red-dim: rgba(239, 106, 88, 0.1);
+        --amber: #f0a43a;
+        --amber-dim: rgba(240, 164, 58, 0.1);
+        --mono: 'Azeret Mono', 'SF Mono', monospace;
+        --display: 'Syne', 'Arial Black', sans-serif;
+        --radius: 10px;
+        --radius-sm: 6px;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        font-family: var(--mono);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        overflow: hidden;
+        background-image: radial-gradient(var(--bg-dot) 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      /* ─── Header ─── */
+
+      header {
+        padding: 18px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        position: relative;
+        z-index: 10;
+        flex-shrink: 0;
+      }
+
+      header::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--accent) 20%,
+          var(--accent) 80%,
+          transparent
+        );
+        opacity: 0.3;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .logo-mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--display);
+        font-weight: 800;
+        font-size: 16px;
+        color: #fff;
+        letter-spacing: -1px;
+        flex-shrink: 0;
+      }
+
+      .logo h1 {
+        font-family: var(--display);
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+        color: var(--text);
+      }
+
+      .logo h1 span {
+        color: var(--text-dim);
+        font-weight: 400;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .badge {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: var(--accent-glow);
+        color: var(--accent);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+      }
+
+      .github-link {
+        color: var(--text-dim);
+        text-decoration: none;
+        font-size: 12px;
+        transition: color 0.2s;
+      }
+
+      .github-link:hover {
+        color: var(--text);
+      }
+
+      /* ─── Settings Drawer ─── */
+
+      .settings {
+        padding: 14px 28px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        background: var(--surface);
+        flex-shrink: 0;
+      }
+
+      .ctrl-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: var(--radius);
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        transition: border-color 0.2s;
+      }
+
+      .ctrl-group:hover {
+        border-color: var(--border-focus);
+      }
+
+      .ctrl-group label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-dim);
+        white-space: nowrap;
+        cursor: default;
+        letter-spacing: 0.3px;
+      }
+
+      /* Custom toggle switch */
+      .toggle {
+        position: relative;
+        width: 34px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+
+      .toggle .track {
+        position: absolute;
+        inset: 0;
+        background: var(--border);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .toggle .track::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        background: var(--text-dim);
+        border-radius: 50%;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .toggle input:checked + .track {
+        background: var(--accent);
+      }
+
+      .toggle input:checked + .track::after {
+        transform: translateX(16px);
+        background: #fff;
+      }
+
+      /* Custom range slider */
+      input[type='range'] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 80px;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        outline: none;
+        cursor: pointer;
+      }
+
+      input[type='range']::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--surface);
+        cursor: pointer;
+        transition: transform 0.15s;
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+
+      input[type='range']::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+      }
+
+      input[type='range']::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--surface);
+        cursor: pointer;
+      }
+
+      .range-val {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        min-width: 22px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Number & text inputs */
+      input[type='number'],
+      input[type='text'] {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        padding: 4px 8px;
+        font-size: 12px;
+        font-family: var(--mono);
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      input[type='number']:focus,
+      input[type='text']:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+
+      input[type='number'] {
+        width: 72px;
+      }
+
+      input[type='text'] {
+        width: 120px;
+      }
+
+      input:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      /* ─── Main Panels ─── */
+
+      .panels {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        gap: 1px;
+        background: var(--border);
+      }
+
+      .panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--bg);
+        position: relative;
+      }
+
+      .panel-chrome {
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+
+      .panel-title {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.8px;
+        color: var(--text-dim);
+      }
+
+      .panel-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .panel-controls select {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        padding: 3px 8px;
+        font-family: var(--mono);
+        font-size: 10px;
+        outline: none;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .panel-controls select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+
+      .panel-hint {
+        font-size: 10px;
+        color: var(--text-faint);
+        font-style: italic;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .panel textarea {
+        flex: 1;
+        width: 100%;
+        background: transparent;
+        color: var(--text);
+        border: none;
+        padding: 20px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        resize: none;
+        outline: none;
+        overflow: auto;
+        tab-size: 2;
+      }
+
+      .panel textarea::placeholder {
+        color: var(--text-faint);
+      }
+
+      .output-wrap {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .output-area {
+        flex: 1;
+        padding: 20px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--text);
+      }
+
+      .output-area.has-result {
+        animation: fadeSlideIn 0.3s ease-out;
+      }
+
+      @keyframes fadeSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Compress button */
+      .compress-btn {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 5px 18px;
+        border-radius: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .compress-btn::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.12));
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .compress-btn:hover {
+        background: var(--accent-soft);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+      }
+
+      .compress-btn:hover::before {
+        opacity: 1;
+      }
+
+      .compress-btn:active {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
+      /* ─── Stats Bar ─── */
+
+      .stats-bar {
+        padding: 0 20px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        background: var(--surface);
+        flex-shrink: 0;
+        overflow: hidden;
+        max-height: 0;
+        transition:
+          max-height 0.35s ease,
+          padding 0.35s ease;
+      }
+
+      .stats-bar.visible {
+        max-height: 60px;
+        padding: 10px 20px;
+      }
+
+      .stat-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        animation: chipIn 0.3s ease-out both;
+      }
+
+      @keyframes chipIn {
+        from {
+          opacity: 0;
+          transform: scale(0.85);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .stat-chip .chip-label {
+        color: var(--text-dim);
+      }
+
+      .stat-chip .chip-value {
+        font-weight: 600;
+      }
+
+      .stat-chip.good {
+        background: var(--green-dim);
+        border: 1px solid rgba(52, 211, 153, 0.15);
+      }
+
+      .stat-chip.good .chip-value {
+        color: var(--green);
+      }
+
+      .stat-chip.warn {
+        background: var(--amber-dim);
+        border: 1px solid rgba(240, 164, 58, 0.15);
+      }
+
+      .stat-chip.warn .chip-value {
+        color: var(--amber);
+      }
+
+      .stat-chip.bad {
+        background: var(--red-dim);
+        border: 1px solid rgba(239, 106, 88, 0.15);
+      }
+
+      .stat-chip.bad .chip-value {
+        color: var(--red);
+      }
+
+      .stat-chip.neutral {
+        background: rgba(122, 120, 128, 0.08);
+        border: 1px solid rgba(122, 120, 128, 0.12);
+      }
+
+      .stat-chip.neutral .chip-value {
+        color: var(--text);
+      }
+
+      /* ─── Placeholder & Error ─── */
+
+      .placeholder-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        gap: 12px;
+        padding: 40px;
+      }
+
+      .placeholder-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: var(--surface-raised);
+        border: 1px dashed var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-faint);
+        font-size: 20px;
+      }
+
+      .placeholder-text {
+        color: var(--text-faint);
+        font-size: 12px;
+        text-align: center;
+        line-height: 1.6;
+      }
+
+      .error-msg {
+        color: var(--red);
+        padding: 20px;
+        font-size: 12px;
+        white-space: pre-wrap;
+        line-height: 1.6;
+        border-left: 2px solid var(--red);
+        margin: 20px;
+        background: var(--red-dim);
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        animation: fadeSlideIn 0.2s ease-out;
+      }
+
+      /* ─── Diff View ─── */
+
+      .diff-view {
+        padding: 12px 20px;
+        animation: fadeSlideIn 0.3s ease-out;
+      }
+
+      .msg-block {
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        border-radius: var(--radius-sm);
+        border-left: 3px solid var(--border);
+        background: var(--surface);
+      }
+
+      .msg-block.msg-preserved {
+        border-left-color: var(--accent);
+        opacity: 0.55;
+      }
+
+      .msg-block.msg-compressed {
+        border-left-color: var(--amber);
+      }
+
+      .msg-block.msg-removed {
+        border-left-color: var(--red);
+        opacity: 0.7;
+      }
+
+      .msg-role {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-dim);
+        margin-bottom: 6px;
+      }
+
+      .msg-tag {
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        padding: 1px 6px;
+        border-radius: 3px;
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+
+      .msg-tag.tag-preserved {
+        color: var(--accent);
+        background: var(--accent-glow);
+      }
+
+      .msg-tag.tag-compressed {
+        color: var(--amber);
+        background: var(--amber-dim);
+      }
+
+      .msg-tag.tag-removed {
+        color: var(--red);
+        background: var(--red-dim);
+      }
+
+      .msg-content {
+        font-size: 12.5px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .diff-line {
+        display: block;
+      }
+
+      .diff-del {
+        background: rgba(239, 106, 88, 0.1);
+        color: var(--red);
+        text-decoration: line-through;
+        text-decoration-color: rgba(239, 106, 88, 0.4);
+      }
+
+      .diff-ins {
+        background: rgba(52, 211, 153, 0.1);
+        color: var(--green);
+      }
+
+      .diff-eq {
+        color: var(--text);
+      }
+
+      /* ─── Help Panel ─── */
+
+      .help-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--surface-raised);
+        color: var(--text-dim);
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .help-btn:hover,
+      .help-btn.active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-glow);
+      }
+
+      .help-panel {
+        max-height: 0;
+        overflow: hidden;
+        transition:
+          max-height 0.35s ease,
+          padding 0.35s ease,
+          border-color 0.35s ease;
+        background: var(--surface);
+        border-bottom: 1px solid transparent;
+        padding: 0 28px;
+      }
+
+      .help-panel.open {
+        max-height: 500px;
+        padding: 16px 28px;
+        border-bottom-color: var(--border);
+      }
+
+      .help-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px 24px;
+      }
+
+      .help-item {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .help-item dt {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        min-width: 90px;
+        flex-shrink: 0;
+      }
+
+      .help-item dd {
+        font-size: 11px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+
+      .help-item dd code {
+        color: var(--accent);
+        font-size: 10px;
+      }
+
+      .help-section-title {
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-faint);
+        margin-bottom: 8px;
+        grid-column: 1 / -1;
+      }
+
+      .help-section-title:not(:first-child) {
+        margin-top: 8px;
+      }
+
+      /* ─── Scrollbar ─── */
+
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--border-focus);
+      }
+
+      /* ─── Responsive ─── */
+
+      @media (max-width: 768px) {
+        .panels {
+          flex-direction: column;
+        }
+
+        .panel textarea,
+        .output-area {
+          min-height: 180px;
+        }
+
+        .settings {
+          padding: 10px 16px;
+          gap: 4px;
+        }
+
+        .ctrl-group {
+          padding: 5px 10px;
+          gap: 6px;
+        }
+
+        header {
+          padding: 14px 16px;
+        }
+
+        .logo h1 {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="logo">
+          <div class="logo-mark">C</div>
+          <h1>Context Compression Engine <span>/ demo</span></h1>
+        </div>
+        <div class="header-right">
+          <span class="badge">deterministic</span>
+          <a
+            href="https://github.com/SimplyLiz/ContextCompressionEngine"
+            target="_blank"
+            class="github-link"
+            >github &nearr;</a
+          >
+        </div>
+      </header>
+
+      <div class="settings">
+        <div class="ctrl-group">
+          <label for="recencyWindow">recency</label>
+          <input type="range" id="recencyWindow" min="0" max="20" value="4" />
+          <span class="range-val" id="recencyWindowVal">4</span>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="budgetEnabled" />
+            <span class="track"></span>
+          </label>
+          <label for="tokenBudget">budget</label>
+          <input type="number" id="tokenBudget" min="100" step="100" value="2000" disabled />
+        </div>
+
+        <div class="ctrl-group">
+          <label for="preserve">preserve</label>
+          <input type="text" id="preserve" value="system" placeholder="roles" />
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="dedup" checked />
+            <span class="track"></span>
+          </label>
+          <label>dedup</label>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="fuzzyDedup" />
+            <span class="track"></span>
+          </label>
+          <label>fuzzy</label>
+        </div>
+
+        <div class="ctrl-group" id="fuzzyThresholdGroup" style="display: none">
+          <label for="fuzzyThreshold">threshold</label>
+          <input type="range" id="fuzzyThreshold" min="0" max="1" step="0.05" value="0.85" />
+          <span class="range-val" id="fuzzyThresholdVal">0.85</span>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="forceConverge" />
+            <span class="track"></span>
+          </label>
+          <label>converge</label>
+        </div>
+
+        <button class="help-btn" id="helpBtn" title="Explain settings">?</button>
+      </div>
+
+      <div class="help-panel" id="helpPanel">
+        <dl class="help-grid">
+          <div class="help-section-title">Compression</div>
+
+          <div class="help-item">
+            <dt>recency</dt>
+            <dd>
+              Number of most recent messages to keep untouched. Only older messages are candidates
+              for compression. <code>recencyWindow</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>budget</dt>
+            <dd>
+              Target token count. When enabled, binary-searches the recency window to fit the output
+              within this limit. <code>tokenBudget</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>preserve</dt>
+            <dd>
+              Roles that are never compressed, comma-separated. Typically <code>system</code>. These
+              messages pass through verbatim regardless of position.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>converge</dt>
+            <dd>
+              Hard-truncate non-recent messages when the binary search bottoms out and the budget is
+              still exceeded. Last resort. <code>forceConverge</code>
+            </dd>
+          </div>
+
+          <div class="help-section-title">Deduplication</div>
+
+          <div class="help-item">
+            <dt>dedup</dt>
+            <dd>
+              Replace exact duplicate messages with a compact reference to the first occurrence.
+              Compares full content via hash + equality check.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>fuzzy</dt>
+            <dd>
+              Detect near-duplicate messages using line-level Jaccard similarity. Catches messages
+              that are mostly the same but not identical. <code>fuzzyDedup</code>
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>threshold</dt>
+            <dd>
+              Similarity cutoff for fuzzy dedup, 0&ndash;1. Higher = stricter matching. Default
+              <code>0.85</code> means 85% of lines must overlap to count as a near-duplicate.
+            </dd>
+          </div>
+
+          <div class="help-section-title">Output</div>
+
+          <div class="help-item">
+            <dt style="color: var(--accent)">preserved</dt>
+            <dd>
+              Message was kept verbatim &mdash; either in the recency window, a preserved role, or
+              classified as code/structured data (T0).
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt style="color: var(--amber)">compressed</dt>
+            <dd>
+              Prose was summarized by the deterministic scorer.
+              <span style="color: var(--red)">Red strikethrough</span> = removed text,
+              <span style="color: var(--green)">green</span> = replacement summary.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt style="color: var(--red)">removed</dt>
+            <dd>
+              Message was dropped entirely, typically by dedup replacing a duplicate with a
+              back-reference.
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="panels">
+        <div class="panel">
+          <div class="panel-chrome">
+            <span class="panel-title">Input</span>
+            <span class="panel-controls">
+              <select id="exampleSelect" title="Load example conversation">
+                <option value="coding">Coding assistant</option>
+                <option value="prose">Technical prose</option>
+                <option value="structured">Structured + credentials</option>
+                <option value="short">Short chat</option>
+                <option value="deep">Deep conversation</option>
+              </select>
+              <span class="panel-hint">role: message &mdash; blank lines separate</span>
+            </span>
+          </div>
+          <textarea
+            id="input"
+            spellcheck="false"
+            placeholder="system: You are helpful.&#10;&#10;user: Hello!&#10;&#10;assistant: Hi there!"
+          ></textarea>
+        </div>
+
+        <div class="panel">
+          <div class="panel-chrome">
+            <span class="panel-title">Output</span>
+            <button class="compress-btn" id="compressBtn">Compress</button>
+          </div>
+          <div class="output-wrap">
+            <div id="output" style="position: absolute; inset: 0; overflow: auto">
+              <div class="placeholder-state">
+                <div class="placeholder-icon">&darr;</div>
+                <div class="placeholder-text">
+                  Write a conversation on the left,<br />then hit Compress
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stats-bar" id="stats"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="bundle.js"></script>
+    <script>
+      const EXAMPLES = {
+        coding: `system: You are a senior TypeScript developer.
+
+user: How do I set up Express middleware for JWT auth?
+
+A: The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window.
+
+\`\`\`typescript
+import jwt from 'jsonwebtoken';
+
+export function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+\`\`\`
+
+user: Can you add refresh token rotation?
+
+A: The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window.
+
+\`\`\`typescript
+async function rotateRefreshToken(oldToken: string) {
+  const payload = jwt.verify(oldToken, REFRESH_SECRET);
+  await revokeToken(oldToken);
+  return {
+    access: jwt.sign({ sub: payload.sub }, ACCESS_SECRET, { expiresIn: '15m' }),
+    refresh: jwt.sign({ sub: payload.sub }, REFRESH_SECRET, { expiresIn: '7d' }),
+  };
+}
+\`\`\`
+
+user: What about rate limiting?
+
+A: Rate limiting prevents abuse by capping the number of requests a client can make in a time window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window.
+
+\`\`\`typescript
+import rateLimit from 'express-rate-limit';
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+});
+app.use('/api/', limiter);
+\`\`\`
+
+user: How do I test this?
+
+A: Testing middleware requires mocking the request and response objects. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window.
+
+\`\`\`typescript
+import { describe, it, expect, vi } from 'vitest';
+import { authMiddleware } from './auth';
+
+describe('authMiddleware', () => {
+  it('rejects missing token', () => {
+    const req = { headers: {} } as any;
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as any;
+    authMiddleware(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+});
+\`\`\`
+
+user: Thanks, this is very helpful.
+
+A: Happy to help. Let me know if you need anything else.
+
+user: One more thing — should I store refresh tokens in Redis?
+
+A: Redis is an excellent choice for refresh token storage because of its built-in TTL support and atomic operations. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. The authentication middleware validates incoming JWT tokens against the session store, checks expiration timestamps, and refreshes tokens when they are within the renewal window. You can use the ioredis library for a robust connection pool.`,
+
+        prose: `system: You are a principal engineer explaining system design to a new team lead.
+
+user: Can you walk me through how our event-driven architecture works and why we chose it over a traditional request-response model?
+
+A: The event-driven architecture we adopted grew out of a series of scaling problems we encountered roughly two years ago when the monolith started buckling under peak traffic. The core idea is that services communicate through immutable events published to a central log rather than making synchronous calls to each other. When the order service completes a checkout, it publishes an OrderPlaced event. The inventory service, the notification service, and the analytics pipeline each consume that event independently and at their own pace. None of them need to know about the others, and none of them can block the order service from finishing its work.
+
+The biggest advantage is temporal decoupling. Under the old model, a single slow downstream dependency could ripple latency across the entire checkout flow. A payment verification that normally took fifty milliseconds would occasionally spike to several seconds, and because every call was synchronous, the user sat waiting while six services completed in sequence. With events, the order service does its own work, publishes, and returns. Downstream processing happens asynchronously, so the user experience stays fast even when one consumer is struggling.
+
+The trade-off is eventual consistency. In a synchronous model, you get immediate confirmation that every step completed. In an event-driven model, you have to design for the possibility that the inventory adjustment or the email notification has not happened yet when the user sees their confirmation page. We handle this through careful UX design and through idempotent consumers that can safely replay events if something goes wrong.
+
+user: What about the event schema evolution problem? How do we handle changes to event formats without breaking all the consumers?
+
+A: Schema evolution is one of the hardest problems in event-driven systems and we spent considerable time getting our approach right. We settled on a strategy that combines explicit versioning with backward-compatible evolution rules. Every event type carries a schema version number in its header. Consumers specify which versions they understand, and the platform routes accordingly.
+
+For non-breaking changes like adding a new optional field, we increment the minor version. Consumers that do not understand the new field simply ignore it. This follows the robustness principle of being conservative in what you send and liberal in what you accept. The vast majority of our schema changes fall into this category, and they require zero coordination between teams.
+
+For breaking changes like removing a field or changing a field type, we increment the major version and run both the old and new versions in parallel during a migration window. The producing service publishes to both versions, and consuming teams migrate on their own schedule within the agreed window. Once all consumers have migrated, we sunset the old version.
+
+We also maintain a central schema registry that validates events at publish time. If a service tries to publish an event that does not conform to its registered schema, the publish fails fast with a clear error. This catches drift between the code and the schema before it reaches consumers.
+
+user: How do we handle ordering guarantees? I noticed some of our consumers seem to process events out of order.
+
+A: Ordering is subtle in distributed event systems and the right answer depends on what level of ordering your consumer actually needs. Our event platform guarantees ordering within a partition, but not across partitions. Events for the same aggregate, like all events for a specific order, go to the same partition based on the aggregate identifier, so they arrive in the order they were published. Events for different aggregates may arrive in any order because they live on different partitions processed by different consumer instances.
+
+Most consumers only care about ordering within an aggregate and they get it for free from the partitioning scheme. The inventory service needs to see OrderPlaced before OrderCancelled for the same order, and it does because both events share the same order identifier as their partition key.
+
+For the rare cases where a consumer needs cross-aggregate ordering, we use a sequence number stamped by the producer at publish time. The consumer tracks the last processed sequence number and detects gaps. When it encounters a gap, it buffers the event and waits briefly for the missing one to arrive. If the missing event does not appear within the timeout window, the consumer raises an alert and proceeds with compensating logic.
+
+The consumers you noticed processing out of order are likely reading from a topic that mixes events from multiple aggregates. Check whether the partition key is set correctly on the producer side. A common mistake is using a random or missing partition key, which causes round-robin assignment and destroys any ordering guarantee.
+
+user: What about failure handling? If a consumer crashes mid-processing, do we lose events?
+
+A: No, the platform guarantees at-least-once delivery. When a consumer reads an event, it does not acknowledge the read until processing completes successfully. If the consumer crashes before acknowledging, the event remains available for redelivery. The next time the consumer starts up, or when another instance in the consumer group takes over the partition, it picks up from the last acknowledged position.
+
+The flip side of at-least-once delivery is that consumers must be idempotent. They will occasionally see the same event twice, particularly after a crash or during a rebalance. We enforce idempotency through a combination of techniques. Some use a deduplication table that records processed event identifiers and skips any event it has seen before. Others design their state mutations to be naturally idempotent, for example using upserts instead of inserts or applying absolute amounts instead of deltas.
+
+Dead letter queues catch events that fail processing repeatedly. After a configurable number of retries with exponential backoff, the platform moves the event to a dead letter topic and advances the consumer cursor so it does not block subsequent events. The operations team monitors the dead letter queue and investigates failures.`,
+
+        structured: `system: You are a DevOps consultant helping set up a production environment.
+
+user: Set up our production environment with all the credentials.
+
+A: Here are the environment variables you need to configure:
+
+STRIPE_SECRET_KEY=sk_live_Rz4x8Kp2Qm7Yn3Wv9Bt6Jh0L
+GITHUB_TOKEN=ghp_Mn3Kx8Rz4Qp7Yv2Wt9Bj6Lh0Ds5Fa1Gc8Eu4Iw
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+SENDGRID_API_KEY=SG.xY7kZmN2pQ9rS4tU6vW8aB.cD3eF5gH7jK9mN1pQ3rS5tU7vW9xY1zA3bC5dE7f
+
+user: What about the database schema?
+
+A: Here is the initial schema for the audit log:
+
+CREATE TABLE audit_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  resource_type VARCHAR(50),
+  resource_id INTEGER,
+  details TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+user: How should we handle authentication?
+
+A: Setting up authentication for a production environment requires careful planning across several layers of the system. The first step is establishing a strong identity provider that supports modern protocols. You will want to implement token-based authentication with short-lived access tokens and longer-lived refresh tokens stored securely on the client side. The server should validate tokens on every request through middleware that sits early in the request pipeline.
+
+Password hashing should use a modern algorithm with appropriate cost factors that balance security against response time. Each user account should have a unique salt generated at registration time. The system should enforce minimum password complexity requirements without being overly restrictive, as research shows that overly strict rules often lead to weaker passwords in practice.
+
+Session management needs to handle concurrent logins gracefully. You should decide whether to allow multiple active sessions per user or enforce single-session access. Each session should track the originating device and location to help users audit their account activity. Inactive sessions should expire automatically after a configurable timeout period.
+
+Rate limiting on authentication endpoints is essential to prevent brute force attacks. Implement progressive delays after failed attempts, starting with short pauses and increasing exponentially. After a threshold of failures, temporarily lock the account and notify the user through an out-of-band channel.
+
+user: What about monitoring?
+
+A: Monitoring a production environment effectively means collecting metrics at every layer of the stack and correlating them to build a complete picture of system health. Start with infrastructure metrics like memory utilization, disk throughput, and network latency across all nodes in the cluster. These baseline metrics help you understand normal operating patterns so you can detect anomalies quickly.
+
+Application-level metrics should track request rates, error rates, and response time distributions. Percentile-based measurements give a much more accurate picture than simple averages, which can mask problems affecting a subset of users. Track these metrics per endpoint to identify which parts of the system are under strain.
+
+Log aggregation brings all service output into a single searchable store that lets you trace requests across service boundaries. Each log entry should carry a correlation identifier that follows the request from ingress through to the final response.
+
+Alerting rules should be tuned to minimize noise while catching real incidents. Start with broad thresholds and tighten them as you learn what normal looks like. Every alert should have a clear runbook.
+
+user: Show me a dashboard configuration.
+
+A: Here is a starter dashboard configuration:
+
+\`\`\`json
+{
+  "dashboard": "production-overview",
+  "refresh_interval": 30,
+  "panels": [
+    { "title": "Request Rate", "type": "graph", "metric": "http_requests_total" },
+    { "title": "Error Rate", "type": "graph", "metric": "http_errors_total" },
+    { "title": "P99 Latency", "type": "gauge", "metric": "http_duration_p99" }
+  ]
+}
+\`\`\`
+
+user: Thanks, this is exactly what I needed.`,
+
+        short: `system: You are a helpful math tutor.
+
+user: What is 2 + 2?
+
+A: 4
+
+user: And 3 + 3?
+
+A: 6
+
+user: What about 144 / 12?
+
+A: 12`,
+
+        deep: `system: You are a software architecture consultant.
+
+user: Let's discuss the database schema design. We need to handle user profiles, posts, and comments with proper relationships and indexing.
+
+A: For the database schema, I recommend starting with a normalized design that separates concerns clearly. The users table should store core identity fields while profile data lives in a separate table joined by user_id. Posts should reference users through a foreign key with an index on created_at for timeline queries. Comments need a composite index on post_id and created_at for efficient thread loading. Consider adding a materialized view for post counts per user to avoid expensive COUNT queries on the main tables.
+
+user: Now let's talk about the API design. We need RESTful endpoints for all CRUD operations plus some custom queries.
+
+A: The API should follow REST conventions with consistent naming and proper HTTP method usage. Use plural nouns for resource endpoints. Implement cursor-based pagination for list endpoints since page-number pagination degrades on large tables. Version the API through URL prefixes starting with v1. Rate limit by API key with different tiers for free and paid plans. Return consistent error response shapes with machine-readable codes alongside human-readable messages.
+
+user: What about the caching strategy? We need to handle both read-heavy and write-heavy workloads.
+
+A: The caching strategy should be multi-layered. Use a CDN for static assets and public API responses with appropriate cache-control headers. Redis should handle session data and frequently accessed entity lookups with TTL-based expiration. For the write-heavy workloads, implement write-behind caching where updates go to cache immediately and flush to the database in batches. Cache invalidation should use a pub-sub model where writes publish invalidation events and all cache nodes subscribe to clear stale entries.
+
+user: Let's discuss the caching strategy. We need to handle both read-heavy and write-heavy workloads.
+
+user: How should we handle deployment and CI/CD pipelines?
+
+A: The deployment pipeline should use a trunk-based development model with short-lived feature branches. Every push triggers the CI pipeline which runs linting, unit tests, integration tests, and builds the container image. Staging deployment happens automatically on merge to main. Production deployment uses blue-green switching with automated canary analysis that watches error rates and latency percentiles for fifteen minutes before promoting. Rollback is a single command that switches the load balancer back to the previous version. Infrastructure changes go through the same pipeline using Terraform with plan output reviewed in the pull request.
+
+user: What about monitoring and observability?
+
+A: Observability requires three pillars working together: metrics, logs, and traces. Metrics should use Prometheus with Grafana dashboards showing the four golden signals for every service. Structured logging with JSON output and correlation IDs enables efficient searching across services. Distributed tracing with OpenTelemetry captures the full request lifecycle across service boundaries. Set up alerting on SLO burn rates rather than raw thresholds to reduce noise. On-call rotations should have clear escalation paths and runbooks for every alert.`,
+      };
+
+      // Parse "role: content" chat format into Message[]
+      function parseChat(text) {
+        const blocks = text.split(/\n{2,}/);
+        const messages = [];
+        let index = 0;
+        let currentRole = null;
+        let currentLines = [];
+
+        function flush() {
+          if (currentRole !== null && currentLines.length > 0) {
+            messages.push({
+              id: 'msg-' + String(index + 1).padStart(3, '0'),
+              index: index,
+              role: currentRole,
+              content: currentLines.join('\n\n'),
+            });
+            index++;
+          }
+          currentRole = null;
+          currentLines = [];
+        }
+
+        for (const block of blocks) {
+          const trimmed = block.trim();
+          if (!trimmed) continue;
+
+          const match = trimmed.match(/^(system|s|user|u|assistant|a|tool|function):\s*/i);
+          if (match) {
+            flush();
+            const shortMap = { s: 'system', u: 'user', a: 'assistant' };
+            currentRole = shortMap[match[1].toLowerCase()] || match[1].toLowerCase();
+            const rest = trimmed.slice(match[0].length);
+            if (rest) currentLines.push(rest);
+          } else if (currentRole !== null) {
+            currentLines.push(trimmed);
+          } else {
+            flush();
+            currentRole = 'user';
+            currentLines.push(trimmed);
+          }
+        }
+        flush();
+        return messages;
+      }
+
+      function messagesToChat(messages) {
+        return messages.map((m) => (m.role || 'unknown') + ': ' + (m.content || '')).join('\n\n');
+      }
+
+      // --- UI wiring ---
+      const $input = document.getElementById('input');
+      const $output = document.getElementById('output');
+      const $stats = document.getElementById('stats');
+      const $compressBtn = document.getElementById('compressBtn');
+      const $recencyWindow = document.getElementById('recencyWindow');
+      const $recencyWindowVal = document.getElementById('recencyWindowVal');
+      const $budgetEnabled = document.getElementById('budgetEnabled');
+      const $tokenBudget = document.getElementById('tokenBudget');
+      const $preserve = document.getElementById('preserve');
+      const $dedup = document.getElementById('dedup');
+      const $fuzzyDedup = document.getElementById('fuzzyDedup');
+      const $fuzzyThreshold = document.getElementById('fuzzyThreshold');
+      const $fuzzyThresholdVal = document.getElementById('fuzzyThresholdVal');
+      const $fuzzyThresholdGroup = document.getElementById('fuzzyThresholdGroup');
+      const $forceConverge = document.getElementById('forceConverge');
+
+      const $exampleSelect = document.getElementById('exampleSelect');
+      const $helpBtn = document.getElementById('helpBtn');
+      const $helpPanel = document.getElementById('helpPanel');
+
+      $helpBtn.addEventListener('click', () => {
+        $helpPanel.classList.toggle('open');
+        $helpBtn.classList.toggle('active');
+      });
+
+      function loadExample(key) {
+        $input.value = EXAMPLES[key] || '';
+      }
+
+      $exampleSelect.addEventListener('change', () => {
+        loadExample($exampleSelect.value);
+      });
+
+      loadExample('coding');
+
+      $recencyWindow.addEventListener('input', () => {
+        $recencyWindowVal.textContent = $recencyWindow.value;
+      });
+
+      $fuzzyThreshold.addEventListener('input', () => {
+        $fuzzyThresholdVal.textContent = $fuzzyThreshold.value;
+      });
+
+      $budgetEnabled.addEventListener('change', () => {
+        $tokenBudget.disabled = !$budgetEnabled.checked;
+      });
+
+      $fuzzyDedup.addEventListener('change', () => {
+        $fuzzyThresholdGroup.style.display = $fuzzyDedup.checked ? 'flex' : 'none';
+      });
+
+      // ── Line-level diff (LCS) ──
+
+      function lineDiff(oldText, newText) {
+        const oldLines = oldText.split('\n');
+        const newLines = newText.split('\n');
+        const m = oldLines.length;
+        const n = newLines.length;
+
+        // Build LCS table
+        const dp = [];
+        for (let i = 0; i <= m; i++) {
+          dp[i] = new Uint16Array(n + 1);
+        }
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            if (oldLines[i - 1] === newLines[j - 1]) {
+              dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+              dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+          }
+        }
+
+        // Backtrack
+        const result = [];
+        let i = m;
+        let j = n;
+        while (i > 0 && j > 0) {
+          if (oldLines[i - 1] === newLines[j - 1]) {
+            result.unshift({ type: 'eq', val: oldLines[i - 1] });
+            i--;
+            j--;
+          } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+            result.unshift({ type: 'del', val: oldLines[i - 1] });
+            i--;
+          } else {
+            result.unshift({ type: 'ins', val: newLines[j - 1] });
+            j--;
+          }
+        }
+        while (i > 0) {
+          result.unshift({ type: 'del', val: oldLines[i - 1] });
+          i--;
+        }
+        while (j > 0) {
+          result.unshift({ type: 'ins', val: newLines[j - 1] });
+          j--;
+        }
+        return result;
+      }
+
+      function renderDiffHtml(oldContent, newContent) {
+        const diff = lineDiff(oldContent, newContent);
+        let html = '';
+        for (const d of diff) {
+          const escaped = escapeHtml(d.val) || '&nbsp;';
+          html += '<span class="diff-line diff-' + d.type + '">' + escaped + '\n</span>';
+        }
+        return html;
+      }
+
+      // ── Compress handler ──
+
+      $compressBtn.addEventListener('click', () => {
+        const text = $input.value.trim();
+        if (!text) {
+          showError('Input is empty.');
+          return;
+        }
+
+        const inputMessages = parseChat(text);
+        if (inputMessages.length === 0) {
+          showError(
+            'No messages found.\nUse the format: role: message content\nSeparate messages with blank lines.',
+          );
+          return;
+        }
+
+        const opts = {
+          recencyWindow: parseInt($recencyWindow.value, 10),
+          preserve: $preserve.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+          dedup: $dedup.checked,
+          fuzzyDedup: $fuzzyDedup.checked,
+          forceConverge: $forceConverge.checked,
+        };
+
+        if ($fuzzyDedup.checked) {
+          opts.fuzzyThreshold = parseFloat($fuzzyThreshold.value);
+        }
+
+        if ($budgetEnabled.checked) {
+          opts.tokenBudget = parseInt($tokenBudget.value, 10);
+        }
+
+        try {
+          const result = CCE.compress(inputMessages, opts);
+          renderResult(result, inputMessages);
+        } catch (e) {
+          showError('Compression error: ' + e.message);
+        }
+      });
+
+      function showError(msg) {
+        $output.innerHTML = '<div class="error-msg">' + escapeHtml(msg) + '</div>';
+        $stats.classList.remove('visible');
+      }
+
+      function renderResult(result, inputMessages) {
+        // Build lookup of input messages by id
+        const inputById = {};
+        inputMessages.forEach((m) => {
+          inputById[m.id] = m;
+        });
+
+        // Track which input ids appear in output (as source of compressed or directly)
+        const accountedIds = new Set();
+
+        let html = '';
+
+        for (const msg of result.messages) {
+          const role = escapeHtml(msg.role || 'unknown');
+          const origMeta = msg.metadata && msg.metadata._cce_original;
+
+          if (origMeta && origMeta.ids) {
+            // Compressed message — diff against original(s)
+            origMeta.ids.forEach((id) => accountedIds.add(id));
+            const origContent = origMeta.ids
+              .map((id) => (inputById[id] ? inputById[id].content : ''))
+              .join('\n\n');
+            const newContent = msg.content || '';
+
+            html +=
+              '<div class="msg-block msg-compressed">' +
+              '<div class="msg-role">' +
+              role +
+              '<span class="msg-tag tag-compressed">compressed</span></div>' +
+              '<div class="msg-content">' +
+              renderDiffHtml(origContent, newContent) +
+              '</div></div>';
+          } else {
+            // Preserved message
+            const matchedInput = inputMessages.find((m) => m.id === msg.id);
+            if (matchedInput) accountedIds.add(matchedInput.id);
+
+            html +=
+              '<div class="msg-block msg-preserved">' +
+              '<div class="msg-role">' +
+              role +
+              '<span class="msg-tag tag-preserved">preserved</span></div>' +
+              '<div class="msg-content">' +
+              escapeHtml(msg.content || '') +
+              '</div></div>';
+          }
+        }
+
+        // Show removed messages (deduped or dropped entirely)
+        for (const m of inputMessages) {
+          if (!accountedIds.has(m.id)) {
+            html +=
+              '<div class="msg-block msg-removed">' +
+              '<div class="msg-role">' +
+              escapeHtml(m.role || 'unknown') +
+              '<span class="msg-tag tag-removed">removed</span></div>' +
+              '<div class="msg-content"><span class="diff-del">' +
+              escapeHtml(m.content || '') +
+              '</span></div></div>';
+          }
+        }
+
+        $output.innerHTML = '<div class="diff-view">' + html + '</div>';
+
+        // Stats chips
+        const c = result.compression;
+        const ratio = c.ratio.toFixed(2);
+        const tokenRatio = c.token_ratio.toFixed(2);
+
+        let chips = '';
+        let i = 0;
+        chips += chip('ratio', ratio + 'x', ratioClass(ratio), i++);
+        chips += chip('tokens', tokenRatio + 'x', ratioClass(tokenRatio), i++);
+        chips += chip('compressed', c.messages_compressed, 'neutral', i++);
+        chips += chip('preserved', c.messages_preserved, 'neutral', i++);
+        if (c.messages_deduped != null)
+          chips += chip('deduped', c.messages_deduped, 'neutral', i++);
+        if (c.messages_fuzzy_deduped != null)
+          chips += chip('fuzzy', c.messages_fuzzy_deduped, 'neutral', i++);
+        if (result.fits != null)
+          chips += chip(
+            'fits budget',
+            result.fits ? 'yes' : 'no',
+            result.fits ? 'good' : 'bad',
+            i++,
+          );
+        if (result.tokenCount != null)
+          chips += chip('token count', result.tokenCount, 'neutral', i++);
+        if (result.recencyWindow != null)
+          chips += chip('auto window', result.recencyWindow, 'neutral', i++);
+
+        $stats.innerHTML = chips;
+        $stats.classList.add('visible');
+      }
+
+      function ratioClass(v) {
+        return v >= 1.5 ? 'good' : v >= 1.1 ? 'warn' : 'bad';
+      }
+
+      function chip(label, value, cls, idx) {
+        return (
+          '<span class="stat-chip ' +
+          cls +
+          '" style="animation-delay:' +
+          idx * 0.04 +
+          's">' +
+          '<span class="chip-label">' +
+          label +
+          '</span>' +
+          '<span class="chip-value">' +
+          value +
+          '</span></span>'
+        );
+      }
+
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+    </script>
+  </body>
+</html>

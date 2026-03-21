@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    target-branch: main
+    target-branch: develop
     open-pull-requests-limit: 10
     groups:
       production-deps:
@@ -24,5 +24,5 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    target-branch: main
+    target-branch: develop
     open-pull-requests-limit: 10
