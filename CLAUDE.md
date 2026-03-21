@@ -14,6 +14,11 @@ npm run format           # Prettier write
 npm run format:check     # Prettier check
 npm run bench            # Run benchmark suite
 npm run bench:save       # Run, save baseline, regenerate docs/benchmark-results.md
+npm run bench:quality    # Run quality benchmark (probes, coherence, info density)
+npm run bench:quality:save   # Save quality baseline
+npm run bench:quality:check  # Compare against quality baseline
+npm run bench:quality:judge     # Run with LLM-as-judge (requires API key)
+npm run bench:quality:features  # Compare opt-in features vs baseline
 ```
 
 Run a single test file:
@@ -65,7 +70,7 @@ main ← develop ← feature branches
 - **TypeScript:** ES2020 target, NodeNext module resolution, strict mode, ESM-only
 - **Unused params** must be prefixed with `_` (ESLint enforced)
 - **Prettier:** 100 char width, 2-space indent, single quotes, trailing commas, semicolons
-- **Tests:** Vitest 4, test files in `tests/`, coverage via `@vitest/coverage-v8` (Node 20+ only)
-- **Node version:** ≥18 (.nvmrc: 22)
+- **Tests:** Vitest 4, test files in `tests/`, coverage via `@vitest/coverage-v8`
+- **Node version:** ≥20 (.nvmrc: 22)
 - **Always run `npm run format` before committing** — CI enforces `format:check`
 - **No author/co-author attribution** in commits, code, or docs

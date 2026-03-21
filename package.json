@@ -1,10 +1,10 @@
 {
   "name": "context-compression-engine",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Lossless context compression engine for LLMs",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc",
@@ -18,6 +18,11 @@
     "bench:save": "npx tsx bench/run.ts --save",
     "bench:check": "npx tsx bench/run.ts --check",
     "bench:compare": "npx tsx bench/compare.ts",
+    "bench:quality": "npx tsx bench/quality.ts",
+    "bench:quality:save": "npx tsx bench/quality.ts --save",
+    "bench:quality:check": "npx tsx bench/quality.ts --check",
+    "bench:quality:judge": "npx tsx bench/quality.ts --llm-judge",
+    "bench:quality:features": "npx tsx bench/quality.ts --features",
     "test:e2e": "npm run build && npm pack && npm run test:e2e:lint && npm run test:e2e:smoke; EXIT=$?; npm run test:e2e:cleanup; exit $EXIT",
     "test:e2e:lint": "publint ./context-compression-engine-*.tgz --strict && attw ./context-compression-engine-*.tgz --ignore-rules cjs-resolves-to-esm",
     "test:e2e:smoke": "cd e2e && npm install ../context-compression-engine-*.tgz && npm test",
@@ -64,6 +69,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
     "@eslint/js": "^10.0.1",
+    "@google/genai": "^1.46.0",
     "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.3",
     "eslint": "^10.0.2",
