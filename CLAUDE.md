@@ -70,7 +70,7 @@ main ← develop ← feature branches
 - **TypeScript:** ES2020 target, NodeNext module resolution, strict mode, ESM-only
 - **Unused params** must be prefixed with `_` (ESLint enforced)
 - **Prettier:** 100 char width, 2-space indent, single quotes, trailing commas, semicolons
-- **Tests:** Vitest 4, test files in `tests/`, coverage via `@vitest/coverage-v8` (Node 20+ only)
-- **Node version:** ≥18 (.nvmrc: 22)
+- **Tests:** Vitest 4, test files in `tests/`, coverage via `@vitest/coverage-v8`
+- **Node version:** ≥20 (.nvmrc: 22)
 - **Always run `npm run format` before committing** — CI enforces `format:check`
 - **No author/co-author attribution** in commits, code, or docs
