@@ -1,4 +1,4 @@
-import type { CompressResult, Message } from '../src/types.js';
+import type { CompressOptions, CompressResult, Message } from '../src/types.js';
 import { compress } from '../src/compress.js';
 import { extractEntities, extractStructural } from './baseline.js';
 import { extractEntities as extractTechEntities, computeQualityScore } from '../src/entities.js';
@@ -496,8 +496,12 @@ export function summarizeTradeoff(points: TradeoffPoint[]): TradeoffResult {
 /**
  * Run complete quality analysis on a scenario.
  */
-export function analyzeQuality(messages: Message[], probes: ProbeDefinition[] = []): QualityResult {
-  const cr = compress(messages, { recencyWindow: 0, trace: true });
+export function analyzeQuality(
+  messages: Message[],
+  probes: ProbeDefinition[] = [],
+  compressOptions?: Partial<CompressOptions>,
+): QualityResult {
+  const cr = compress(messages, { recencyWindow: 0, trace: true, ...compressOptions });
 
   const retention = analyzeCompressedRetention(messages, cr);
   const perMessage = analyzePerMessageQuality(messages, cr);

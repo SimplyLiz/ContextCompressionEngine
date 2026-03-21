@@ -17,7 +17,8 @@ npm run bench:save       # Run, save baseline, regenerate docs/benchmark-results
 npm run bench:quality    # Run quality benchmark (probes, coherence, info density)
 npm run bench:quality:save   # Save quality baseline
 npm run bench:quality:check  # Compare against quality baseline
-npm run bench:quality:judge  # Run with LLM-as-judge (requires API key)
+npm run bench:quality:judge     # Run with LLM-as-judge (requires API key)
+npm run bench:quality:features  # Compare opt-in features vs baseline
 ```
 
 Run a single test file:

@@ -439,6 +439,7 @@ async function run(): Promise<void> {
   const flagSave = args.includes('--save');
   const flagCheck = args.includes('--check');
   const flagLlmJudge = args.includes('--llm-judge');
+  const flagFeatures = args.includes('--features');
 
   const version = JSON.parse(
     readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf-8'),
@@ -621,6 +622,85 @@ async function run(): Promise<void> {
     }
 
     console.log(mSep);
+  }
+
+  // --- Opt-in features comparison (optional) ---
+  if (flagFeatures) {
+    const featureConfigs: { label: string; options: Record<string, unknown> }[] = [
+      {
+        label: 'importance + contradiction',
+        options: { importanceScoring: true, contradictionDetection: true },
+      },
+      {
+        label: 'semantic clustering',
+        options: { semanticClustering: true },
+      },
+      {
+        label: 'conversation flow',
+        options: { conversationFlow: true },
+      },
+      {
+        label: 'coreference',
+        options: { coreference: true },
+      },
+      {
+        label: 'all features',
+        options: {
+          importanceScoring: true,
+          contradictionDetection: true,
+          semanticClustering: true,
+          conversationFlow: true,
+          coreference: true,
+        },
+      },
+    ];
+
+    for (const config of featureConfigs) {
+      console.log();
+      console.log(`Feature: ${config.label}`);
+
+      const fHeader = [
+        'Scenario'.padEnd(24),
+        'Ratio'.padStart(6),
+        'EntRet'.padStart(7),
+        'Probes'.padStart(7),
+        'Pass'.padStart(5),
+        'Coher'.padStart(6),
+        'CmpQ'.padStart(6),
+        'vs base'.padStart(8),
+      ].join('  ');
+      const fSep = '-'.repeat(fHeader.length);
+
+      console.log(fSep);
+      console.log(fHeader);
+      console.log(fSep);
+
+      for (const scenario of allScenarios) {
+        const probes = getProbesForScenario(scenario.name);
+        const q = analyzeQuality(scenario.messages, probes, config.options);
+        const baseQ = qualityResults[scenario.name];
+
+        // Compare probe pass rate vs baseline
+        const probeDelta = q.probePassRate - baseQ.probePassRate;
+        const deltaStr =
+          probeDelta > 0.001 ? `+${pct(probeDelta)}` : probeDelta < -0.001 ? pct(probeDelta) : '=';
+
+        console.log(
+          [
+            scenario.name.padEnd(24),
+            fix(q.ratio).padStart(6),
+            pct(q.avgEntityRetention).padStart(7),
+            `${q.probesPassed}/${q.probesTotal}`.padStart(7),
+            pct(q.probePassRate).padStart(5),
+            String(q.coherenceIssues).padStart(6),
+            fix(q.compressedQualityScore).padStart(6),
+            deltaStr.padStart(8),
+          ].join('  '),
+        );
+      }
+
+      console.log(fSep);
+    }
   }
 
   // --- LLM Judge (optional) ---

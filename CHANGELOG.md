@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-21
+
+### Added
+
+- **Quality benchmark overhaul** — replaced broken metrics (keywordRetention, factRetention, negationErrors) with five meaningful ones: task-based probes (~70 across 13 scenarios), information density, compressed-only quality score, negative compression detection, and summary coherence checks.
+- **Task-based probes** — hand-curated per-scenario checks that verify whether specific critical information (identifiers, code patterns, config values) survives compression. Probe failures surface real quality issues.
+- **LLM-as-judge scoring** (`--llm-judge` flag) — optional LLM evaluation of compression quality. Multi-provider support: OpenAI, Anthropic, Gemini (`@google/genai`), Ollama. Display-only, not used for regression testing.
+- **Gemini provider** for LLM benchmarks via `GEMINI_API_KEY` env var (default model: `gemini-2.5-flash`).
+- **Opt-in feature comparison** (`--features` flag) — runs quality benchmark with each opt-in feature enabled to measure their impact vs baseline.
+- **Quality history documentation** (`docs/quality-history.md`) — version-over-version quality tracking across v1.0.0, v1.1.0, v1.2.0 with opt-in feature impact analysis.
+- **Min-output-chars probes** to catch over-aggressive compression.
+- **Code block language aliases** in benchmarks (typescript/ts, python/py, yaml/yml).
+- New npm scripts: `bench:quality:judge`, `bench:quality:features`.
+
+### Changed
+
+- Coherence and negative compression regression thresholds now track increases from baseline, not just zero-to-nonzero transitions.
+- Information density regression check only applies when compression actually occurs (ratio > 1.01).
+- Quality benchmark table now shows: `Ratio EntRet CodeOK InfDen Probes Pass NegCp Coher CmpQ`.
+- `analyzeQuality()` accepts optional `CompressOptions` for feature testing.
+
+### Removed
+
+- `keywordRetention` metric (tautological — 100% on 12/13 scenarios).
+- `factRetention` and `factCount` metrics (fragile regex-based fact extractor).
+- `negationErrors` metric (noisy, rarely triggered).
+- `extractFacts()` and `analyzeSemanticFidelity()` functions.
+
 ## [1.2.0] - 2026-03-20
 
 ### Added
