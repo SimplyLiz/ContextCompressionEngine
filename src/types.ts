@@ -193,9 +193,11 @@ export type CompressOptions = {
   compressionDepth?: 'gentle' | 'moderate' | 'aggressive' | 'auto';
   /** Budget strategy when tokenBudget is set.
    *  - 'binary-search': (default) binary search over recencyWindow to fit budget.
+   *    Runs the full pipeline log2(n) times — 7-8x slower than tiered at 500+ messages.
    *  - 'tiered': keeps recencyWindow fixed, progressively compresses older content
    *    by priority tier. System/T0/recent messages are protected; older prose is
-   *    compressed first, then stubbed, then truncated. Better preserves recent context. */
+   *    compressed first, then stubbed, then truncated. Better preserves recent context
+   *    and is significantly faster at scale. Recommended for 100+ message conversations. */
   budgetStrategy?: 'binary-search' | 'tiered';
 };
 

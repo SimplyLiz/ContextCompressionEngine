@@ -333,7 +333,14 @@ function computeBudget(
   }
 
   const min = depth === 'aggressive' ? 40 : depth === 'moderate' ? 100 : 200;
-  const max = depth === 'aggressive' ? 120 : depth === 'moderate' ? 300 : 600;
+  // Scale the cap logarithmically for very long content so huge messages
+  // (10k+ chars) get proportionally more budget to preserve entities.
+  // At 1k chars: 600 cap. At 10k: ~920. At 50k: ~1300. At 100k: ~1500.
+  const baseMax = depth === 'aggressive' ? 120 : depth === 'moderate' ? 300 : 600;
+  const max =
+    contentLength > 5000
+      ? Math.round(baseMax + baseMax * Math.log10(contentLength / 5000) * 0.75)
+      : baseMax;
   return Math.max(min, Math.min(Math.round(contentLength * baseRatio), max));
 }
 
@@ -460,7 +467,9 @@ function formatSummary(
   const entitySuffix = skipEntities
     ? ''
     : (() => {
-        const e = extractEntities(rawText);
+        // Scale entity count with content length: 3-15 for short, up to 30 for 50k+
+        const maxEntities = Math.max(3, Math.min(Math.round(rawText.length / 200), 30));
+        const e = extractEntities(rawText, maxEntities);
         return e.length > 0 ? ` | entities: ${e.join(', ')}` : '';
       })();
   const mergeSuffix = mergeCount && mergeCount > 1 ? ` (${mergeCount} messages merged)` : '';
