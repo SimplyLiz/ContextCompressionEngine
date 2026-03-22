@@ -42,6 +42,7 @@ export interface QualityResult {
   probeResults: ProbeResult[];
   negativeCompressions: number;
   coherenceIssues: number;
+  overheadRatio?: number;
   messages: MessageQuality[];
 }
 
@@ -531,6 +532,31 @@ export function analyzeQuality(
     coherenceIssues: coherence,
     messages: perMessage,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Compression overhead ratio
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute compression overhead ratio: how much time the compression takes
+ * relative to the time those tokens would take in an LLM inference pass.
+ *
+ * A ratio of 0.1 means compression took 10% of the LLM processing time
+ * for the same token count — i.e. compression is 10x cheaper.
+ *
+ * @param compressionTimeMs - wall-clock time for the compress() call
+ * @param originalTokens - estimated token count of the original messages
+ * @param msPerToken - assumed LLM inference cost per token (default: 20ms)
+ */
+export function computeOverheadRatio(
+  compressionTimeMs: number,
+  originalTokens: number,
+  msPerToken: number = 20,
+): number {
+  const llmTime = originalTokens * msPerToken;
+  if (llmTime <= 0) return 0;
+  return compressionTimeMs / llmTime;
 }
 
 // ---------------------------------------------------------------------------

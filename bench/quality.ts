@@ -9,6 +9,7 @@ import {
   sweepTradeoff,
   summarizeTradeoff,
   compareQualityResults,
+  computeOverheadRatio,
   runLlmJudge,
   type QualityBaseline,
   type QualityResult,
@@ -468,6 +469,7 @@ async function run(): Promise<void> {
     'NegCp'.padStart(6),
     'Coher'.padStart(6),
     'CmpQ'.padStart(6),
+    'OvhdR'.padStart(7),
   ].join('  ');
   const qSep = '-'.repeat(qHeader.length);
 
@@ -479,7 +481,18 @@ async function run(): Promise<void> {
 
   for (const scenario of allScenarios) {
     const probes = getProbesForScenario(scenario.name);
+
+    // Time the compression for overhead ratio
+    const inputTokens = scenario.messages.reduce((sum, m) => {
+      const len = typeof m.content === 'string' ? m.content.length : 0;
+      return sum + Math.ceil(len / 3.5);
+    }, 0);
+    const t0 = performance.now();
     const q = analyzeQuality(scenario.messages, probes);
+    const elapsed = performance.now() - t0;
+    const overhead = computeOverheadRatio(elapsed, inputTokens);
+    q.overheadRatio = overhead;
+
     qualityResults[scenario.name] = q;
 
     console.log(
@@ -494,6 +507,7 @@ async function run(): Promise<void> {
         String(q.negativeCompressions).padStart(6),
         String(q.coherenceIssues).padStart(6),
         fix(q.compressedQualityScore).padStart(6),
+        fix(overhead, 3).padStart(7),
       ].join('  '),
     );
   }

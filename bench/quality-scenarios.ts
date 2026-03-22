@@ -300,6 +300,29 @@ export function getProbesForScenario(name: string): ProbeDefinition[] {
         },
       ];
 
+    case 'High-entropy content':
+      return [
+        {
+          label: 'Hex block verbatim',
+          check: (ms) => anyMessageMatches(ms, /[a-f0-9]{64}/i),
+        },
+        {
+          label: 'UUID array verbatim',
+          check: (ms) =>
+            anyMessageMatches(ms, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i),
+        },
+        {
+          label: 'Base64 blob verbatim',
+          check: (ms) => anyMessageMatches(ms, /[A-Za-z0-9+/]{40,}={0,2}/),
+        },
+        {
+          label: 'Mixed entropy+prose preserves entropy',
+          check: (ms) =>
+            anyMessageMatches(ms, /[A-Za-z0-9+/]{40,}={0,2}/) &&
+            anyMessageMatches(ms, /preserved exactly|configuration/),
+        },
+      ];
+
     default:
       return [];
   }
@@ -644,6 +667,51 @@ export function mixedLanguages(): Scenario {
   };
 }
 
+/**
+ * Messages containing high-entropy content: Base64, hex dumps, UUID arrays.
+ * Tests that the engine preserves opaque binary/encoded data verbatim.
+ */
+export function highEntropyContent(): Scenario {
+  const hexLines = Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 32 }, (_, j) => ((i * 32 + j) % 256).toString(16).padStart(2, '0')).join(
+      '',
+    ),
+  ).join('\n');
+
+  const uuids = Array.from(
+    { length: 20 },
+    (_, i) =>
+      `${(i * 1111).toString(16).padStart(8, '0')}-` +
+      `${(i * 22).toString(16).padStart(4, '0')}-4${(i * 3).toString(16).padStart(3, '0')}-` +
+      `a${(i * 5).toString(16).padStart(3, '0')}-${(i * 777777).toString(16).padStart(12, '0')}`,
+  );
+
+  const base64Blob =
+    'U29tZSBiYXNlNjQgZW5jb2RlZCBkYXRhIHRoYXQgaXMgbG9uZyBlbm91Z2ggdG8gZXhjZWVkIHRoZSBmb3J0eSBjaGFyYWN0ZXIgdGhyZXNob2xkIGFuZCBzaG91bGQgYmUgcHJlc2VydmVkIHZlcmJhdGlt';
+
+  return {
+    name: 'High-entropy content',
+    messages: [
+      msg('system', 'You are a data analysis assistant.'),
+      msg('user', 'Here is the hex dump from the binary:\n\n' + hexLines),
+      msg(
+        'assistant',
+        'I see the hex data. Here is the UUID list from the database export:\n\n' +
+          uuids.join('\n'),
+      ),
+      msg('user', 'And here is the Base64 encoded certificate:\n\n' + base64Blob),
+      msg(
+        'assistant',
+        'The certificate data looks valid. Let me also note that the configuration ' +
+          'contains this embedded payload which must be preserved exactly:\n\n' +
+          base64Blob +
+          '\n\nThe rest of the configuration uses standard JSON format and includes ' +
+          'several environment variables for the staging deployment pipeline.',
+      ),
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Builder
 // ---------------------------------------------------------------------------
@@ -657,5 +725,6 @@ export function buildEdgeCaseScenarios(): Scenario[] {
     entityDenseTechnical(),
     proseOnlyConversation(),
     mixedLanguages(),
+    highEntropyContent(),
   ];
 }
