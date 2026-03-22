@@ -3,7 +3,6 @@ import { analyzeDuplicates, analyzeFuzzyDuplicates, type DedupAnnotation } from 
 import {
   computeImportance,
   DEFAULT_IMPORTANCE_THRESHOLD,
-  extractMessageEntities,
   type ImportanceMap,
 } from './importance.js';
 import { analyzeContradictions, type ContradictionAnnotation } from './contradiction.js';
@@ -162,40 +161,6 @@ function summarize(text: string, maxBudget?: number, externalScores?: Map<number
     paraSentences[bestIdx].primary = true;
     allSentences.push(...paraSentences);
     globalIdx += sentences.length;
-  }
-
-  // Adjacency pass: boost sentences that share entities with neighbors
-  if (allSentences.length > 1) {
-    const sentenceEntities = allSentences.map((s) => extractMessageEntities(s.text));
-    for (let i = 0; i < allSentences.length; i++) {
-      const myEnts = sentenceEntities[i];
-      if (myEnts.size === 0) continue;
-      let sharesPrev = false;
-      let sharesNext = false;
-      if (i > 0) {
-        const prev = sentenceEntities[i - 1];
-        for (const e of myEnts) {
-          if (prev.has(e)) {
-            sharesPrev = true;
-            break;
-          }
-        }
-      }
-      if (i < allSentences.length - 1) {
-        const next = sentenceEntities[i + 1];
-        for (const e of myEnts) {
-          if (next.has(e)) {
-            sharesNext = true;
-            break;
-          }
-        }
-      }
-      if (sharesPrev && sharesNext) {
-        allSentences[i].score += 3;
-      } else if (sharesPrev || sharesNext) {
-        allSentences[i].score += 2;
-      }
-    }
   }
 
   const budget = maxBudget ?? 400;

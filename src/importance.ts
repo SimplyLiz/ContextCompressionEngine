@@ -22,7 +22,7 @@ const SNAKE_RE = /\b[a-z]+(?:_[a-z]+)+\b/g;
 const VOWELLESS_RE = /\b[bcdfghjklmnpqrstvwxz]{3,}\b/gi;
 const FILE_REF_RE = /\S+\.\w+:\d+/g;
 
-export function extractMessageEntities(content: string): Set<string> {
+function extractMessageEntities(content: string): Set<string> {
   const entities = new Set<string>();
   for (const re of [CAMEL_RE, PASCAL_RE, SNAKE_RE, VOWELLESS_RE, FILE_REF_RE]) {
     const matches = content.match(re);

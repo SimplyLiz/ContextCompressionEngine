@@ -3271,32 +3271,4 @@ describe('compression decision audit trail (trace)', () => {
       expect(allContent).toContain(base64);
     });
   });
-
-  describe('sentence adjacency scoring', () => {
-    it('preferentially retains entity-linked sentences under tight budget', () => {
-      // 3 sentences sharing "fetchData" entity, 1 isolated sentence with similar content length
-      const linked =
-        'The fetchData function retrieves records from the API. ' +
-        'After fetchData completes, results are cached locally. ' +
-        'Errors in fetchData trigger the retry mechanism.';
-      const isolated =
-        'The deployment pipeline runs integration tests on every commit to the main branch.';
-      const text = linked + ' ' + isolated;
-      const messages: Message[] = [
-        msg({
-          id: '1',
-          index: 0,
-          role: 'assistant',
-          content: text.repeat(3), // repeat to exceed compression threshold
-        }),
-        msg({ id: '2', index: 1, role: 'user', content: 'Thanks.' }),
-      ];
-      const result = compress(messages, { recencyWindow: 0 });
-      const compressed = result.messages.find((m) => m.id === '1');
-      if (compressed && typeof compressed.content === 'string') {
-        // The fetchData sentences should be preferentially kept due to adjacency boost
-        expect(compressed.content).toContain('fetchData');
-      }
-    });
-  });
 });
