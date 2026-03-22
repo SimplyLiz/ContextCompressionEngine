@@ -324,6 +324,34 @@
         cursor: not-allowed;
       }
 
+      .settings select {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        padding: 4px 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        outline: none;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .settings select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+
+      .settings-divider {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+        margin: 0 4px;
+        flex-shrink: 0;
+      }
+
       /* ─── Main Panels ─── */
 
       .panels {
@@ -509,7 +537,7 @@
       }
 
       .stats-bar.visible {
-        max-height: 60px;
+        max-height: 100px;
         padding: 10px 20px;
       }
 
@@ -928,6 +956,83 @@
           <label>converge</label>
         </div>
 
+        <div class="ctrl-group" id="budgetStrategyGroup" style="display: none">
+          <label for="budgetStrategy">strategy</label>
+          <select id="budgetStrategy">
+            <option value="binary-search">binary-search</option>
+            <option value="tiered">tiered</option>
+          </select>
+        </div>
+
+        <span class="settings-divider"></span>
+
+        <div class="ctrl-group">
+          <label for="compressionDepth">depth</label>
+          <select id="compressionDepth">
+            <option value="">gentle</option>
+            <option value="moderate">moderate</option>
+            <option value="aggressive">aggressive</option>
+            <option value="auto">auto</option>
+          </select>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="relevanceEnabled" />
+            <span class="track"></span>
+          </label>
+          <label>relevance</label>
+          <input
+            type="number"
+            id="relevanceThreshold"
+            min="0"
+            max="20"
+            step="1"
+            value="3"
+            disabled
+          />
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="conversationFlow" />
+            <span class="track"></span>
+          </label>
+          <label>flow</label>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="importanceScoring" />
+            <span class="track"></span>
+          </label>
+          <label>importance</label>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="contradictionDetection" />
+            <span class="track"></span>
+          </label>
+          <label>contradiction</label>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="coreference" />
+            <span class="track"></span>
+          </label>
+          <label>coref</label>
+        </div>
+
+        <div class="ctrl-group">
+          <label class="toggle">
+            <input type="checkbox" id="semanticClustering" />
+            <span class="track"></span>
+          </label>
+          <label>cluster</label>
+        </div>
+
         <button class="help-btn" id="helpBtn" title="Explain settings">?</button>
       </div>
 
@@ -988,6 +1093,68 @@
             </dd>
           </div>
 
+          <div class="help-section-title">V2 Features</div>
+
+          <div class="help-item">
+            <dt>depth</dt>
+            <dd>
+              Compression aggressiveness. <code>gentle</code> (default) = standard sentence
+              selection. <code>moderate</code> = tighter budgets, +20% ratio at zero quality cost.
+              <code>aggressive</code> = entity-only stubs. <code>auto</code> = progressive
+              escalation until budget fits.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>relevance</dt>
+            <dd>
+              Drops low-value messages to stubs. The number sets the sentence score threshold
+              &mdash; 3 is a good default. Messages below this get replaced with
+              <code>[N messages omitted]</code>.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>flow</dt>
+            <dd>
+              Groups Q&amp;A pairs, request&rarr;action chains, and corrections into compression
+              units. Produces summaries like <code>Q: ... &rarr; A: ...</code>.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>importance</dt>
+            <dd>
+              Scores messages by forward-reference density and decision content. High-importance
+              messages are preserved even outside the recency window.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>contradiction</dt>
+            <dd>
+              Detects later messages that correct earlier ones. Superseded messages get compressed
+              with a <code>[cce:superseded by ...]</code> annotation.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>coref</dt>
+            <dd>
+              Inlines entity definitions into compressed summaries when a preserved message
+              references an entity defined only in a compressed message.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>cluster</dt>
+            <dd>
+              Groups consecutive messages by topic using TF-IDF similarity and compresses each
+              cluster as a unit. Best for long, topic-scattered conversations.
+            </dd>
+          </div>
+          <div class="help-item">
+            <dt>strategy</dt>
+            <dd>
+              Budget fitting strategy. <code>tiered</code> keeps recency window fixed and is 7-8x
+              faster than <code>binary-search</code> at 500+ messages.
+            </dd>
+          </div>
+
           <div class="help-section-title">Output</div>
 
           <div class="help-item">
@@ -1026,6 +1193,8 @@
                 <option value="structured">Structured + credentials</option>
                 <option value="short">Short chat</option>
                 <option value="deep">Deep conversation</option>
+                <option value="corrections">Q&A + corrections</option>
+                <option value="scattered">Topic-scattered</option>
               </select>
               <span class="panel-hint">role: message &mdash; blank lines separate</span>
             </span>
@@ -1253,6 +1422,54 @@ user: What about 144 / 12?
 
 A: 12`,
 
+        corrections: `system: You are a backend engineer helping with infrastructure decisions.
+
+user: What should we use for the caching layer?
+
+A: Use Redis for the caching layer with a TTL of 3600 seconds for all session data and user preferences. Configure the connection pool with a maximum of 20 connections per service instance. Redis gives you data structures beyond simple key-value pairs, which is useful for leaderboards, rate limiting counters, and pub-sub messaging between services.
+
+user: How should we handle the connection pooling?
+
+A: Set up the Redis connection pool with a minimum of 5 idle connections and a maximum of 20 active connections. Use a connection timeout of 5 seconds and an idle timeout of 300 seconds. Enable TCP keepalive to detect dead connections early. The pool should use FIFO ordering so connections are reused evenly and none sit idle long enough to be dropped by network infrastructure.
+
+user: Actually, use Memcached instead of Redis. Redis is overkill for simple key-value session storage and the operational overhead of running a Redis cluster isn't justified for our use case. Memcached is simpler to operate and has lower memory overhead per key.
+
+user: What about cache invalidation?
+
+A: For cache invalidation with Memcached, use a TTL-based approach as the primary strategy. Set session data TTL to 3600 seconds and user preferences to 7200 seconds. For write-through invalidation, delete the cache key immediately after a database write succeeds. Use cache stampede protection by implementing a locking mechanism where only one request regenerates a stale cache entry while others wait or serve the stale value briefly.
+
+user: Wait, I think we should reconsider. Let's use DynamoDB DAX instead. We already run on AWS and the team has more experience with DynamoDB. DAX provides microsecond latency for reads and we wouldn't need to manage any caching infrastructure ourselves.
+
+user: OK so with DynamoDB DAX, how do we handle the session storage?
+
+A: With DynamoDB DAX, session storage becomes straightforward. Create a sessions table with user_id as the partition key and session_id as the sort key. DAX automatically caches reads, so repeated session lookups hit the cache without any application-level caching code. Set a TTL attribute on each session record for automatic expiration. For write-heavy patterns like updating last_active timestamps, use DynamoDB conditional writes to avoid overwriting concurrent updates.`,
+
+        scattered: `system: You are a senior full-stack developer helping with a large project.
+
+user: The fetchData function in the API layer needs retry logic. Right now it fails silently on network errors.
+
+A: The fetchData function should implement exponential backoff with jitter for transient failures. Start with a 200ms base delay, double on each retry up to a maximum of 5 attempts. Add random jitter of plus or minus 20% to prevent thundering herd when multiple clients retry simultaneously. Categorize errors into transient (503, 429, network timeout) vs permanent (400, 401, 404) and only retry transient ones.
+
+user: The dashboard CSS is broken on mobile. The sidebar overlaps the main content below 768px.
+
+A: The sidebar layout needs a responsive breakpoint. At 768px and below, switch the sidebar from a fixed position column to a slide-out drawer triggered by a hamburger menu button. Use a CSS media query to change the grid layout from two columns to a single column stack. The drawer should use transform translateX for smooth animation and a semi-transparent backdrop overlay that closes the drawer on tap.
+
+user: The fetchData retry logic also needs a circuit breaker pattern. If a service returns 503 five times in a row, we should stop calling it for 30 seconds.
+
+A: Add a circuit breaker state machine to fetchData with three states: closed (normal), open (blocking requests), and half-open (testing recovery). Track failures in a sliding window of 60 seconds. When 5 failures accumulate, transition to open and reject requests immediately for 30 seconds. After the timeout, transition to half-open and allow one probe request through. If it succeeds, close the circuit. If it fails, reopen for another 30 seconds.
+
+user: For the dashboard mobile fix, we also need to handle the navigation tabs. They currently overflow horizontally.
+
+A: Convert the navigation tabs to a horizontally scrollable container on mobile. Use overflow-x auto with scroll-snap-align start on each tab for smooth snap scrolling. Hide the scrollbar with webkit-scrollbar display none while keeping the scroll functionality. Add subtle gradient fade indicators on the left and right edges to hint that more tabs are available. Each tab should have a min-width to prevent text wrapping.
+
+user: Back to the API — we need to add request deduplication to fetchData. If the same URL is requested twice within 100ms, return the same promise.
+
+A: Implement request deduplication using a Map keyed by the request URL plus a hash of the request body. When fetchData is called, check if an in-flight request exists for the same key. If yes, return the existing promise. If no, create the promise, store it in the map, and attach a finally handler that removes it from the map after completion. Set a 100ms debounce window where subsequent identical requests join the existing one rather than creating new network calls.
+
+user: The dashboard also needs a dark mode toggle. The current colors are hardcoded.
+
+A: Extract all color values into CSS custom properties on the root element. Create a data-theme attribute on the html element that switches between light and dark variable sets. Store the user preference in localStorage and check it on page load before first paint to avoid a flash of wrong theme. Use prefers-color-scheme media query as the default when no stored preference exists. The toggle button should use a smooth CSS transition on all color properties with a 200ms duration.`,
+
         deep: `system: You are a software architecture consultant.
 
 user: Let's discuss the database schema design. We need to handle user profiles, posts, and comments with proper relationships and indexing.
@@ -1373,10 +1590,27 @@ A: Observability requires three pillars working together: metrics, logs, and tra
 
       $budgetEnabled.addEventListener('change', () => {
         $tokenBudget.disabled = !$budgetEnabled.checked;
+        $budgetStrategyGroup.style.display = $budgetEnabled.checked ? 'flex' : 'none';
       });
 
       $fuzzyDedup.addEventListener('change', () => {
         $fuzzyThresholdGroup.style.display = $fuzzyDedup.checked ? 'flex' : 'none';
+      });
+
+      // V2 controls
+      const $compressionDepth = document.getElementById('compressionDepth');
+      const $relevanceEnabled = document.getElementById('relevanceEnabled');
+      const $relevanceThreshold = document.getElementById('relevanceThreshold');
+      const $conversationFlow = document.getElementById('conversationFlow');
+      const $importanceScoring = document.getElementById('importanceScoring');
+      const $contradictionDetection = document.getElementById('contradictionDetection');
+      const $coreference = document.getElementById('coreference');
+      const $semanticClustering = document.getElementById('semanticClustering');
+      const $budgetStrategy = document.getElementById('budgetStrategy');
+      const $budgetStrategyGroup = document.getElementById('budgetStrategyGroup');
+
+      $relevanceEnabled.addEventListener('change', () => {
+        $relevanceThreshold.disabled = !$relevanceEnabled.checked;
       });
 
       // ── Line-level diff (LCS) ──
@@ -1474,7 +1708,21 @@ A: Observability requires three pillars working together: metrics, logs, and tra
 
         if ($budgetEnabled.checked) {
           opts.tokenBudget = parseInt($tokenBudget.value, 10);
+          opts.budgetStrategy = $budgetStrategy.value;
         }
+
+        // V2 features
+        if ($compressionDepth.value) {
+          opts.compressionDepth = $compressionDepth.value;
+        }
+        if ($relevanceEnabled.checked) {
+          opts.relevanceThreshold = parseInt($relevanceThreshold.value, 10);
+        }
+        if ($conversationFlow.checked) opts.conversationFlow = true;
+        if ($importanceScoring.checked) opts.importanceScoring = true;
+        if ($contradictionDetection.checked) opts.contradictionDetection = true;
+        if ($coreference.checked) opts.coreference = true;
+        if ($semanticClustering.checked) opts.semanticClustering = true;
 
         try {
           const result = CCE.compress(inputMessages, opts);
@@ -1579,6 +1827,35 @@ A: Observability requires three pillars working together: metrics, logs, and tra
           chips += chip('token count', result.tokenCount, 'neutral', i++);
         if (result.recencyWindow != null)
           chips += chip('auto window', result.recencyWindow, 'neutral', i++);
+
+        // V2 quality metrics
+        if (c.quality_score != null)
+          chips += chip(
+            'quality',
+            c.quality_score.toFixed(3),
+            c.quality_score >= 0.9 ? 'good' : c.quality_score >= 0.7 ? 'warn' : 'bad',
+            i++,
+          );
+        if (c.entity_retention != null)
+          chips += chip(
+            'entities',
+            (c.entity_retention * 100).toFixed(0) + '%',
+            c.entity_retention >= 0.9 ? 'good' : c.entity_retention >= 0.7 ? 'warn' : 'bad',
+            i++,
+          );
+        if (c.structural_integrity != null)
+          chips += chip(
+            'structure',
+            (c.structural_integrity * 100).toFixed(0) + '%',
+            c.structural_integrity >= 0.9 ? 'good' : 'warn',
+            i++,
+          );
+        if (c.messages_relevance_dropped != null)
+          chips += chip('relevance dropped', c.messages_relevance_dropped, 'neutral', i++);
+        if (c.messages_importance_preserved != null)
+          chips += chip('importance kept', c.messages_importance_preserved, 'neutral', i++);
+        if (c.messages_contradicted != null)
+          chips += chip('contradicted', c.messages_contradicted, 'neutral', i++);
 
         $stats.innerHTML = chips;
         $stats.classList.add('visible');

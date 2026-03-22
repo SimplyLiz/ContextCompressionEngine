@@ -194,6 +194,7 @@ const FORCE_T0_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/, label: 'phone' },
   { re: /\b(v\d+\.\d+(\.\d+)?|version\s+\d+)\b/i, label: 'version_number' },
   { re: /[a-f0-9]{40,64}/i, label: 'hash_or_sha' },
+  { re: /[A-Za-z0-9+/]{40,}={0,2}/, label: 'base64_content' },
   { re: /(?:\/[\w.-]+){2,}/, label: 'file_path' },
   { re: /\b\d+(\.\d+){1,5}\b/, label: 'ip_or_semver' },
   { re: /"[^"]{3,}"(?:\s*[,:])/, label: 'quoted_key' },
@@ -280,6 +281,7 @@ export const HARD_T0_REASONS = new Set([
   'sql_content',
   'verse_pattern',
   'reasoning_chain',
+  'base64_content',
 ]);
 
 export function classifyMessage(content: string): ClassifyResult {

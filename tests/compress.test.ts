@@ -3241,4 +3241,34 @@ describe('compression decision audit trail (trace)', () => {
       expect(result.compression.messages_compressed).toBeGreaterThan(0);
     });
   });
+
+  describe('high-entropy content preservation', () => {
+    it('preserves hex dump verbatim in output', () => {
+      const hexDump = Array.from({ length: 10 }, (_, i) =>
+        Array.from({ length: 32 }, (_, j) =>
+          ((i * 32 + j) % 256).toString(16).padStart(2, '0'),
+        ).join(''),
+      ).join('\n');
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Analyze this hex dump:\n\n' + hexDump }),
+        msg({ id: '2', index: 1, role: 'assistant', content: 'I see the hex data.' }),
+      ];
+      const result = compress(messages, { recencyWindow: 0 });
+      // Hex dump should survive — classified as T0 via hash_or_sha
+      const allContent = result.messages.map((m) => m.content).join('\n');
+      expect(allContent).toContain(hexDump.slice(0, 64));
+    });
+
+    it('preserves Base64 blob in output', () => {
+      const base64 =
+        'U29tZSBiYXNlNjQgZW5jb2RlZCBkYXRhIHRoYXQgaXMgbG9uZyBlbm91Z2ggdG8gZXhjZWVkIHRoZSBmb3J0eSBjaGFyYWN0ZXIgdGhyZXNob2xkIGFuZCBzaG91bGQgYmUgcHJlc2VydmVkIHZlcmJhdGlt';
+      const messages: Message[] = [
+        msg({ id: '1', index: 0, role: 'user', content: 'Here is the cert:\n\n' + base64 }),
+        msg({ id: '2', index: 1, role: 'assistant', content: 'Certificate received.' }),
+      ];
+      const result = compress(messages, { recencyWindow: 0 });
+      const allContent = result.messages.map((m) => m.content).join('\n');
+      expect(allContent).toContain(base64);
+    });
+  });
 });

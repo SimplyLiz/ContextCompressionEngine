@@ -825,6 +825,66 @@ describe('classifyMessage', () => {
     });
   });
 
+  describe('high-entropy content', () => {
+    it('classifies Base64 blob as T0 via base64_content', () => {
+      const base64 =
+        'U29tZSBiYXNlNjQgZW5jb2RlZCBkYXRhIHRoYXQgaXMgbG9uZyBlbm91Z2ggdG8gZXhjZWVkIHRoZSBmb3J0eSBjaGFyYWN0ZXIgdGhyZXNob2xkIGFuZCBzaG91bGQgYmUgcHJlc2VydmVkIHZlcmJhdGlt';
+      const r = classifyMessage(base64);
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('base64_content');
+    });
+
+    it('classifies hex dump as T0 via hash_or_sha', () => {
+      const hexLines = Array.from({ length: 10 }, (_, i) =>
+        Array.from({ length: 32 }, (_, j) =>
+          ((i * 32 + j) % 256).toString(16).padStart(2, '0'),
+        ).join(''),
+      ).join('\n');
+      const r = classifyMessage(hexLines);
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('hash_or_sha');
+    });
+
+    it('classifies standalone UUID array as T3 (known gap — UUIDs are 32 hex chars, below 40-char threshold)', () => {
+      // UUIDs without dashes are 32 hex chars, under the 40-char hash_or_sha minimum.
+      // This documents a known classification gap for pure UUID blocks.
+      const uuids = Array.from(
+        { length: 20 },
+        (_, i) =>
+          `${(i * 1111).toString(16).padStart(8, '0')}-` +
+          `${(i * 22).toString(16).padStart(4, '0')}-4${(i * 3).toString(16).padStart(3, '0')}-` +
+          `a${(i * 5).toString(16).padStart(3, '0')}-${(i * 777777).toString(16).padStart(12, '0')}`,
+      ).join('\n');
+      const r = classifyMessage(uuids);
+      expect(r.decision).toBe('T3');
+    });
+
+    it('classifies mixed Base64 + prose as T0', () => {
+      const base64 = 'U29tZSBiYXNlNjQgZW5jb2RlZCBkYXRhIHRoYXQgaXMgbG9uZyBlbm91Z2ggdG8gZXhjZWVk';
+      const r = classifyMessage(
+        'Here is the encoded payload:\n\n' + base64 + '\n\nPlease decode and process it.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('base64_content');
+    });
+
+    it('does not false-positive on short alphanumeric words', () => {
+      const r = classifyMessage('The quick brown fox jumps over the lazy dog near the river bank.');
+      expect(r.reasons).not.toContain('base64_content');
+    });
+
+    it('long camelCase identifier triggers base64_content (known limitation)', () => {
+      // Long identifiers without spaces match [A-Za-z0-9+/]{40,}.
+      // In practice these also trigger other T0 signals (camelCase detection),
+      // so the classification outcome (T0) is correct even if the reason is imprecise.
+      const r = classifyMessage(
+        'The class MyVeryLongClassNameThatExceedsFortyCharactersEasily extends Base.',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('base64_content');
+    });
+  });
+
   describe('performance', () => {
     it('completes in under 5ms', () => {
       const start = performance.now();
