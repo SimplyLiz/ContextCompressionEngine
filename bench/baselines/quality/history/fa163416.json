@@ -1,0 +1,37 @@
+{
+  "version": "v1.0.0",
+  "gitRef": "fa16341616891d2601ecbb519c97c27edd7e9fe3",
+  "generated": "2026-03-21T10:04:04.160Z",
+  "results": {
+    "scenarios": {
+      "Coding assistant": {
+        "ratio": 1.518628912071535,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": -1,
+        "factRetention": -1,
+        "roundTrip": true
+      },
+      "Long Q&A": {
+        "ratio": 5.830339321357285,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": -1,
+        "factRetention": -1,
+        "roundTrip": true
+      },
+      "Deep conversation": {
+        "ratio": 1.950067476383266,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": -1,
+        "factRetention": -1,
+        "roundTrip": true
+      }
+    },
+    "tradeoff": {}
+  }
+}

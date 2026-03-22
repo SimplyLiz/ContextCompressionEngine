@@ -1,0 +1,1393 @@
+{
+  "version": "1.2.0",
+  "gitRef": "a75f1d42b458d2e6d83a17a2af4845d9325edbe5",
+  "generated": "2026-03-21T10:03:56.390Z",
+  "results": {
+    "scenarios": {
+      "Coding assistant": {
+        "ratio": 1.9385451505016722,
+        "avgEntityRetention": 0.9380952380952381,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0.8333333333333334,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 0.5294117647058824,
+        "negationErrors": 0,
+        "factCount": 51,
+        "messages": [
+          {
+            "messageId": "3",
+            "action": "code_split",
+            "inputChars": 912,
+            "outputChars": 564,
+            "localRatio": 1.6170212765957446,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "5",
+            "action": "code_split",
+            "inputChars": 1057,
+            "outputChars": 530,
+            "localRatio": 1.9943396226415093,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "7",
+            "action": "code_split",
+            "inputChars": 824,
+            "outputChars": 297,
+            "localRatio": 2.774410774410774,
+            "entityRetention": 0.8333333333333334,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "9",
+            "action": "code_split",
+            "inputChars": 828,
+            "outputChars": 480,
+            "localRatio": 1.725,
+            "entityRetention": 0.8571428571428571,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "13",
+            "action": "compressed",
+            "inputChars": 713,
+            "outputChars": 218,
+            "localRatio": 3.270642201834862,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Long Q&A": {
+        "ratio": 4.902912621359223,
+        "avgEntityRetention": 0.8,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 0.7727272727272727,
+        "negationErrors": 0,
+        "factCount": 66,
+        "messages": [
+          {
+            "messageId": "16",
+            "action": "deduped",
+            "inputChars": 1800,
+            "outputChars": 28,
+            "localRatio": 64.28571428571429,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "18",
+            "action": "compressed",
+            "inputChars": 2250,
+            "outputChars": 493,
+            "localRatio": 4.563894523326572,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "20",
+            "action": "compressed",
+            "inputChars": 1800,
+            "outputChars": 493,
+            "localRatio": 3.6511156186612577,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "22",
+            "action": "compressed",
+            "inputChars": 2700,
+            "outputChars": 493,
+            "localRatio": 5.476673427991886,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "24",
+            "action": "compressed",
+            "inputChars": 1350,
+            "outputChars": 353,
+            "localRatio": 3.8243626062322944,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Tool-heavy": {
+        "ratio": 1.4009797060881735,
+        "avgEntityRetention": 0.8,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0.6,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 0.972,
+        "factRetention": 0.2857142857142857,
+        "negationErrors": 0,
+        "factCount": 7,
+        "messages": [
+          {
+            "messageId": "30",
+            "action": "compressed",
+            "inputChars": 744,
+            "outputChars": 235,
+            "localRatio": 3.1659574468085108,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "36",
+            "action": "compressed",
+            "inputChars": 236,
+            "outputChars": 172,
+            "localRatio": 1.372093023255814,
+            "entityRetention": 0.6,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Deep conversation": {
+        "ratio": 2.5041568769202964,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 0.8942857142857142,
+        "negationErrors": 0,
+        "factCount": 350,
+        "messages": [
+          {
+            "messageId": "44",
+            "action": "compressed",
+            "inputChars": 306,
+            "outputChars": 168,
+            "localRatio": 1.8214285714285714,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "45",
+            "action": "compressed",
+            "inputChars": 809,
+            "outputChars": 246,
+            "localRatio": 3.2886178861788617,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "46",
+            "action": "compressed",
+            "inputChars": 306,
+            "outputChars": 168,
+            "localRatio": 1.8214285714285714,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "47",
+            "action": "compressed",
+            "inputChars": 809,
+            "outputChars": 246,
+            "localRatio": 3.2886178861788617,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "48",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "49",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "51",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "52",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "53",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "54",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "55",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "56",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "57",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "58",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "59",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "60",
+            "action": "compressed",
+            "inputChars": 303,
+            "outputChars": 202,
+            "localRatio": 1.5,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "61",
+            "action": "compressed",
+            "inputChars": 806,
+            "outputChars": 246,
+            "localRatio": 3.2764227642276422,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "62",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "63",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "64",
+            "action": "compressed",
+            "inputChars": 305,
+            "outputChars": 167,
+            "localRatio": 1.8263473053892216,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "65",
+            "action": "compressed",
+            "inputChars": 808,
+            "outputChars": 246,
+            "localRatio": 3.2845528455284554,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "66",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "67",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "68",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "69",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "70",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "71",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "72",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "73",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "74",
+            "action": "compressed",
+            "inputChars": 300,
+            "outputChars": 202,
+            "localRatio": 1.4851485148514851,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "75",
+            "action": "compressed",
+            "inputChars": 803,
+            "outputChars": 246,
+            "localRatio": 3.2642276422764227,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "76",
+            "action": "compressed",
+            "inputChars": 299,
+            "outputChars": 202,
+            "localRatio": 1.4801980198019802,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "77",
+            "action": "compressed",
+            "inputChars": 802,
+            "outputChars": 246,
+            "localRatio": 3.2601626016260163,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "78",
+            "action": "compressed",
+            "inputChars": 302,
+            "outputChars": 202,
+            "localRatio": 1.495049504950495,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "79",
+            "action": "compressed",
+            "inputChars": 805,
+            "outputChars": 246,
+            "localRatio": 3.272357723577236,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "80",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "81",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "82",
+            "action": "compressed",
+            "inputChars": 307,
+            "outputChars": 169,
+            "localRatio": 1.816568047337278,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "83",
+            "action": "compressed",
+            "inputChars": 810,
+            "outputChars": 246,
+            "localRatio": 3.292682926829268,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "84",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "85",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "86",
+            "action": "compressed",
+            "inputChars": 297,
+            "outputChars": 202,
+            "localRatio": 1.4702970297029703,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "87",
+            "action": "compressed",
+            "inputChars": 800,
+            "outputChars": 246,
+            "localRatio": 3.252032520325203,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "88",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "89",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "90",
+            "action": "compressed",
+            "inputChars": 301,
+            "outputChars": 202,
+            "localRatio": 1.49009900990099,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "91",
+            "action": "compressed",
+            "inputChars": 804,
+            "outputChars": 246,
+            "localRatio": 3.268292682926829,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "92",
+            "action": "compressed",
+            "inputChars": 298,
+            "outputChars": 202,
+            "localRatio": 1.4752475247524752,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "93",
+            "action": "compressed",
+            "inputChars": 801,
+            "outputChars": 246,
+            "localRatio": 3.2560975609756095,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Technical explanation": {
+        "ratio": 1.2398561890087314,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 0.75,
+        "negationErrors": 0,
+        "factCount": 4,
+        "messages": [
+          {
+            "messageId": "98",
+            "action": "compressed",
+            "inputChars": 483,
+            "outputChars": 203,
+            "localRatio": 2.3793103448275863,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "100",
+            "action": "compressed",
+            "inputChars": 347,
+            "outputChars": 209,
+            "localRatio": 1.6602870813397128,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "102",
+            "action": "compressed",
+            "inputChars": 227,
+            "outputChars": 178,
+            "localRatio": 1.2752808988764044,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Structured content": {
+        "ratio": 1.2595769010863351,
+        "avgEntityRetention": 0.675,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0.6,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 0.95,
+        "factRetention": 0.16666666666666666,
+        "negationErrors": 0,
+        "factCount": 12,
+        "messages": [
+          {
+            "messageId": "109",
+            "action": "compressed",
+            "inputChars": 494,
+            "outputChars": 230,
+            "localRatio": 2.1478260869565218,
+            "entityRetention": 0.75,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "111",
+            "action": "compressed",
+            "inputChars": 415,
+            "outputChars": 225,
+            "localRatio": 1.8444444444444446,
+            "entityRetention": 0.6,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Agentic coding session": {
+        "ratio": 1.004950495049505,
+        "avgEntityRetention": 0.2857142857142857,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0.2857142857142857,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 0.956,
+        "factRetention": 1,
+        "negationErrors": 0,
+        "factCount": 0,
+        "messages": [
+          {
+            "messageId": "122",
+            "action": "compressed",
+            "inputChars": 183,
+            "outputChars": 172,
+            "localRatio": 1.063953488372093,
+            "entityRetention": 0.2857142857142857,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Single-char messages": {
+        "ratio": 1,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 1,
+        "negationErrors": 0,
+        "factCount": 0,
+        "messages": []
+      },
+      "Giant single message": {
+        "ratio": 2.828036762263315,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 1,
+        "negationErrors": 0,
+        "factCount": 0,
+        "messages": [
+          {
+            "messageId": "50012",
+            "action": "code_split",
+            "inputChars": 50980,
+            "outputChars": 17962,
+            "localRatio": 2.8382140073488475,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Code-only conversation": {
+        "ratio": 1,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 1,
+        "negationErrors": 0,
+        "factCount": 0,
+        "messages": []
+      },
+      "Entity-dense technical": {
+        "ratio": 1.5571321882001494,
+        "avgEntityRetention": 0.5292397660818713,
+        "avgKeywordRetention": 0.85,
+        "minEntityRetention": 0.42105263157894735,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 0.872,
+        "factRetention": 0.6923076923076923,
+        "negationErrors": 0,
+        "factCount": 13,
+        "messages": [
+          {
+            "messageId": "50022",
+            "action": "compressed",
+            "inputChars": 466,
+            "outputChars": 253,
+            "localRatio": 1.841897233201581,
+            "entityRetention": 0.5,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50023",
+            "action": "compressed",
+            "inputChars": 641,
+            "outputChars": 242,
+            "localRatio": 2.6487603305785123,
+            "entityRetention": 0.42105263157894735,
+            "keywordRetention": 0.8,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50024",
+            "action": "compressed",
+            "inputChars": 403,
+            "outputChars": 269,
+            "localRatio": 1.4981412639405205,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 0.75,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Prose-only conversation": {
+        "ratio": 3.367965367965368,
+        "avgEntityRetention": 1,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 1,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 1,
+        "factRetention": 0.2,
+        "negationErrors": 0,
+        "factCount": 5,
+        "messages": [
+          {
+            "messageId": "50028",
+            "action": "compressed",
+            "inputChars": 684,
+            "outputChars": 113,
+            "localRatio": 6.053097345132743,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50030",
+            "action": "compressed",
+            "inputChars": 736,
+            "outputChars": 257,
+            "localRatio": 2.8638132295719845,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          },
+          {
+            "messageId": "50032",
+            "action": "compressed",
+            "inputChars": 711,
+            "outputChars": 120,
+            "localRatio": 5.925,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      },
+      "Mixed languages": {
+        "ratio": 1.0689134808853118,
+        "avgEntityRetention": 0.6666666666666666,
+        "avgKeywordRetention": 1,
+        "minEntityRetention": 0.6666666666666666,
+        "codeBlockIntegrity": 1,
+        "qualityScore": 0.972,
+        "factRetention": 0,
+        "negationErrors": 0,
+        "factCount": 3,
+        "messages": [
+          {
+            "messageId": "50039",
+            "action": "compressed",
+            "inputChars": 375,
+            "outputChars": 238,
+            "localRatio": 1.5756302521008403,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "codeBlocksIntact": true
+          }
+        ]
+      }
+    },
+    "tradeoff": {
+      "Coding assistant": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.9385451505016722,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.6061655697956356,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1.4333848531684699,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 1.4333848531684699,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 7,
+            "ratio": 1.232589048378522,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 1.232589048378522,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 9,
+            "ratio": 1.0811377943576592,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.0811377943576592,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 11,
+            "ratio": 1,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": 1,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.9385451505016722
+      },
+      "Deep conversation": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 2.5041568769202964,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 2.3650251770931128,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 2.2394536932277354,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 2.1265443941370576,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 2.025657894736842,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.9328311362209667,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 12,
+            "ratio": 1.8426092160383005,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 14,
+            "ratio": 1.7661567877629063,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 16,
+            "ratio": 1.6949660529696007,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 18,
+            "ratio": 1.629867074461828,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 20,
+            "ratio": 1.569405901342244,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 22,
+            "ratio": 1.5136006117544243,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 24,
+            "ratio": 1.4616277229811698,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 26,
+            "ratio": 1.413249694002448,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 28,
+            "ratio": 1.3675665005181858,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 30,
+            "ratio": 1.3219004913418881,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 32,
+            "ratio": 1.2790676205861988,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 34,
+            "ratio": 1.2411986025262027,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 36,
+            "ratio": 1.2058222009486097,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 38,
+            "ratio": 1.1724064985615164,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 40,
+            "ratio": 1.1405111742190395,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 42,
+            "ratio": 1.110839413132366,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 44,
+            "ratio": 1.0804351216469121,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 46,
+            "ratio": 1.053289748755179,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 48,
+            "ratio": 1.0259533506108849,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 50,
+            "ratio": 1,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": 1,
+        "qualityAt3x": 1,
+        "maxRatioAbove80pctQuality": 2.5041568769202964
+      },
+      "Technical explanation": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.2398561890087314,
+            "entityRetention": 0.8571428571428571,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.2094188376753507,
+            "entityRetention": 0.8,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.2094188376753507,
+            "entityRetention": 0.8,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.1312089971883785,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.1312089971883785,
+            "entityRetention": 0.6666666666666666,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": null,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.2398561890087314
+      },
+      "Agentic coding session": {
+        "points": [
+          {
+            "recencyWindow": 0,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 1,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 2,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 3,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 4,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 5,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 6,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 7,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 8,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 9,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 10,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 11,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 12,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 13,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 14,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 15,
+            "ratio": 1.004950495049505,
+            "entityRetention": 0,
+            "keywordRetention": 1,
+            "qualityScore": 0.956
+          },
+          {
+            "recencyWindow": 16,
+            "ratio": 1,
+            "entityRetention": 1,
+            "keywordRetention": 1,
+            "qualityScore": 1
+          }
+        ],
+        "qualityAt2x": null,
+        "qualityAt3x": null,
+        "maxRatioAbove80pctQuality": 1.004950495049505
+      }
+    }
+  }
+}
