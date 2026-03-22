@@ -204,8 +204,15 @@ function cosineSimilarity(a: Map<string, number>, b: Map<string, number>): numbe
 }
 
 /**
+ * Maximum eligible messages for clustering. Beyond this, the O(n²) similarity
+ * matrix becomes too expensive. Messages are sampled by taking the most recent.
+ */
+const MAX_CLUSTER_CANDIDATES = 200;
+
+/**
  * Agglomerative clustering using cosine similarity on TF-IDF + entity overlap.
- * Merges closest clusters until similarity drops below threshold.
+ * Pre-computes a pairwise similarity matrix to avoid redundant recalculation.
+ * Caps input at MAX_CLUSTER_CANDIDATES for performance (O(n²) matrix).
  */
 export function clusterMessages(
   messages: Message[],
@@ -214,31 +221,49 @@ export function clusterMessages(
 ): MessageCluster[] {
   if (eligibleIndices.length < 2) return [];
 
-  const tfidf = computeTfIdf(messages, eligibleIndices);
+  // Cap to avoid O(n²) blowup — keep the most recent messages
+  const capped =
+    eligibleIndices.length > MAX_CLUSTER_CANDIDATES
+      ? eligibleIndices.slice(-MAX_CLUSTER_CANDIDATES)
+      : eligibleIndices;
+
+  const tfidf = computeTfIdf(messages, capped);
 
   // Entity overlap boost
   const entitySets = new Map<number, Set<string>>();
-  for (const idx of eligibleIndices) {
+  for (const idx of capped) {
     const content = (messages[idx].content as string | undefined) ?? '';
     entitySets.set(idx, new Set(extractEntities(content, 100)));
   }
 
-  // Combined similarity: 0.7 * cosine(tfidf) + 0.3 * jaccard(entities)
-  function similarity(i: number, j: number): number {
-    const cos = cosineSimilarity(tfidf.get(i)!, tfidf.get(j)!);
-    const eA = entitySets.get(i)!;
-    const eB = entitySets.get(j)!;
-    let intersection = 0;
-    for (const e of eA) if (eB.has(e)) intersection++;
-    const union = eA.size + eB.size - intersection;
-    const jaccard = union > 0 ? intersection / union : 0;
-    return 0.7 * cos + 0.3 * jaccard;
+  // Pre-compute pairwise similarity matrix (indexed by position in capped array)
+  const n = capped.length;
+  const simMatrix: number[] = new Array(n * n).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const idxA = capped[i];
+      const idxB = capped[j];
+      const cos = cosineSimilarity(tfidf.get(idxA)!, tfidf.get(idxB)!);
+      const eA = entitySets.get(idxA)!;
+      const eB = entitySets.get(idxB)!;
+      let intersection = 0;
+      for (const e of eA) if (eB.has(e)) intersection++;
+      const union = eA.size + eB.size - intersection;
+      const jaccard = union > 0 ? intersection / union : 0;
+      const sim = 0.7 * cos + 0.3 * jaccard;
+      simMatrix[i * n + j] = sim;
+      simMatrix[j * n + i] = sim;
+    }
   }
 
-  // Start with each message as its own cluster
-  const clusters: number[][] = eligibleIndices.map((idx) => [idx]);
+  // Map from message index → position in capped array
+  const posMap = new Map<number, number>();
+  for (let i = 0; i < n; i++) posMap.set(capped[i], i);
 
-  // Agglomerative: merge closest pair until threshold
+  // Start with each message as its own cluster
+  const clusters: number[][] = capped.map((idx) => [idx]);
+
+  // Agglomerative: merge closest pair using cached similarities
   while (clusters.length > 1) {
     let bestSim = -1;
     let bestI = -1;
@@ -246,12 +271,13 @@ export function clusterMessages(
 
     for (let ci = 0; ci < clusters.length; ci++) {
       for (let cj = ci + 1; cj < clusters.length; cj++) {
-        // Average-linkage similarity between clusters
+        // Average-linkage using pre-computed matrix
         let totalSim = 0;
         let count = 0;
         for (const a of clusters[ci]) {
+          const posA = posMap.get(a)!;
           for (const b of clusters[cj]) {
-            totalSim += similarity(a, b);
+            totalSim += simMatrix[posA * n + posMap.get(b)!];
             count++;
           }
         }
