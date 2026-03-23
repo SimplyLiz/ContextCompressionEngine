@@ -72,6 +72,10 @@ export { splitSentences, normalizeScores, combineScores } from './entropy.js';
 export { analyzeContradictions } from './contradiction.js';
 export type { ContradictionAnnotation } from './contradiction.js';
 
+// Persistence (optional peer dependency: better-sqlite3)
+export { SqliteStore } from './sqlite-store.js';
+export type { SqliteStoreLoadResult } from './sqlite-store.js';
+
 // Types
 export type {
   Classifier,
