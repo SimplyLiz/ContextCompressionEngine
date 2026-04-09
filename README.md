@@ -46,10 +46,11 @@ The deterministic engine achieves **1.3-6.1x compression with zero latency and z
 - **LLM-powered** — plug in any summarizer (Claude, GPT, Gemini, Grok, Ollama) for semantic compression
 - **Three-level fallback** — LLM → deterministic → size guard, never makes output worse
 - **Budget-driven** — `tokenBudget` binary-searches `recencyWindow` to fit a target token count
+- **Agent tool pre-pass** — strips verbose output, echoed content, and expired file reads from tool messages before compression (`agentToolPrepass: true`)
 - **Pluggable token counter** — bring your own tokenizer for accurate budget decisions
 - **Provenance tracking** — every compressed message carries origin IDs, summary hashes, and version chains
 - **Zero dependencies** — pure TypeScript, no crypto, no network calls
-- **333 tests** — comprehensive coverage across all compression paths
+- **706 tests** — comprehensive coverage across all compression paths
 
 ## Install
 

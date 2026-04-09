@@ -148,6 +148,7 @@ function compress(
 | `clusterThreshold`            | `number`                                           | `0.15`                | Similarity threshold for semantic clustering (0–1). Lower = larger clusters                                                                                                                                                                                                                                          |
 | `compressionDepth`            | `'gentle' \| 'moderate' \| 'aggressive' \| 'auto'` | `'gentle'`            | Controls summarization aggressiveness. `'auto'` tries each level until `tokenBudget` fits. See [V2 features](v2-features.md#compression-depth)                                                                                                                                                                       |
 | `mlTokenClassifier`           | `MLTokenClassifier`                                | -                     | Per-token keep/remove classifier. T0 rules still override for code/structured content. See [V2 features](v2-features.md#ml-token-classifier)                                                                                                                                                                         |
+| `agentToolPrepass`            | `boolean`                                          | `false`               | Strip verbose output, echoed content, and expired file reads from tool/function messages before the main pipeline runs. See [V2 features](v2-features.md#agent-tool-pre-pass)                                                                                                                                        |
 
 ### CompressResult
 
@@ -168,6 +169,8 @@ function compress(
 | `compression.messages_contradicted`         | `number \| undefined`  | Messages superseded by a later correction (when `contradictionDetection: true`)     |
 | `compression.messages_importance_preserved` | `number \| undefined`  | Messages preserved due to high importance score (when `importanceScoring: true`)    |
 | `compression.messages_relevance_dropped`    | `number \| undefined`  | Messages replaced with stubs (when `relevanceThreshold` is set)                     |
+| `compression.messages_tool_prepass_trimmed` | `number \| undefined`  | Messages whose content was trimmed by the agent tool pre-pass (when `agentToolPrepass: true`) |
+| `compression.chars_tool_prepass_removed`    | `number \| undefined`  | Characters removed by the agent tool pre-pass before the main pipeline ran          |
 | `compression.entity_retention`              | `number \| undefined`  | Fraction of technical identifiers preserved (0–1). Present when compression occurs  |
 | `compression.structural_integrity`          | `number \| undefined`  | Fraction of structural elements preserved (0–1). Present when compression occurs    |
 | `compression.reference_coherence`           | `number \| undefined`  | Fraction of entity references with surviving sources (0–1)                          |
@@ -288,7 +291,7 @@ function createSummarizer(
 | ------------------- | -------------------------- | ---------- | -------------------------------------------------------------------- |
 | `maxResponseTokens` | `number`                   | `300`      | Hint for maximum tokens in the LLM response                          |
 | `systemPrompt`      | `string`                   | -          | Domain-specific instructions prepended to the built-in rules         |
-| `mode`              | `'normal' \| 'aggressive'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget |
+| `mode`              | `'normal' \| 'aggressive' \| 'structured'` | `'normal'` | `'aggressive'` produces terse bullet points at half the token budget; `'structured'` outputs ACON-style REASONING / VARS / GUARDRAILS sections optimised for multi-turn agents |
 | `preserveTerms`     | `string[]`                 | -          | Domain-specific terms appended to the built-in preserve list         |
 
 ### Built-in preserve list
@@ -308,6 +311,25 @@ const summarizer = createSummarizer(async (prompt) => myLlm.complete(prompt), {
 
 const result = await compress(messages, { summarizer });
 ```
+
+### Structured mode output
+
+`mode: 'structured'` instructs the LLM to produce sections rather than prose. Sections are omitted when empty:
+
+```
+### REASONING
+One or two sentences on key decisions and why they matter for future steps.
+
+### VARS
+| name | value | purpose |
+|------|-------|---------|
+| sessionId | abc123 | required for all subsequent API calls |
+
+### GUARDRAILS
+- Login with password alone returns 422; username is required.
+```
+
+Use this mode for long-running agentic sessions where the summarized message needs to survive multiple compression rounds — the VARS table preserves exact runtime values (tokens, IDs, counts) that plain prose summarization tends to drop.
 
 ---
 

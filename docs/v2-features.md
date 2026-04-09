@@ -19,6 +19,7 @@ New compression features added in v2. All features are **opt-in** with backward-
 | [Semantic clustering](#semantic-clustering)                      | `semanticClustering`       | `false`                    | Groups messages by topic for cluster-aware compression                                            | Better coherence on topic-scattered conversations; O(n²) similarity computation             |
 | [Compression depth](#compression-depth)                          | `compressionDepth`         | `'gentle'`                 | Controls aggressiveness: gentle/moderate/aggressive/auto                                          | Higher depth = higher ratio but lower quality                                               |
 | [ML token classifier](#ml-token-classifier)                      | `mlTokenClassifier`        | off                        | Per-token keep/remove via external ML model                                                       | Highest quality compression; requires a trained model (~500MB)                              |
+| [Agent tool pre-pass](#agent-tool-pre-pass)                      | `agentToolPrepass`         | `false`                    | Strips verbose output, echoed content, and expired file reads from tool messages before compression | Lossy for removed content; up to 5.8x effective ratio on agentic sessions                  |
 
 ---
 
@@ -430,6 +431,51 @@ const mock = createMockTokenClassifier([/fetch/i, /retry/i], 0.9);
 
 ---
 
+## Agent tool pre-pass
+
+Strips three categories of agentic waste from `tool` and `function` role messages before the main compression pipeline runs. Based on [AgentDiet (arXiv:2509.23586)](https://arxiv.org/abs/2509.23586).
+
+### Usage
+
+```ts
+const result = compress(messages, {
+  agentToolPrepass: true,
+});
+
+// Stats in the result
+result.compression.messages_tool_prepass_trimmed; // messages whose content was trimmed
+result.compression.chars_tool_prepass_removed;    // characters removed before the main pipeline
+```
+
+### What it removes
+
+| Category | Trigger | What happens |
+| --- | --- | --- |
+| **Verbose output** | Directory trees (≥5 `node_modules` lines), build step counters `[N/M]` (≥5 lines), npm/yarn noise (≥3 lines), test runner passing lines (≥10 `✓` lines) | Collapsed to stubs: `[... N directory entries omitted ...]`, `[... N build steps omitted ...]`, `[... N passing test lines omitted ...]` |
+| **Echoed content** | Blocks ≥200 chars whose first 120 chars appear in a preceding assistant message | Replaced with `[content from preceding turn omitted (N chars)]` |
+| **Expired file reads** | Tool messages ≥2000 chars whose path appears in a write-signal message within the next 15 turns | Replaced with `[file content omitted — superseded by a later write (N chars original)]` |
+
+### Why this matters
+
+Standard compression sees the waste patterns as T2 prose and compresses them to short summaries — but a summary of `[1/48] Compiling index.ts … [48/48] done` is worthless. The pre-pass drops the content entirely before classification runs, so the compressible budget is spent on signal instead of noise.
+
+On sessions heavy with tool output, effective end-to-end ratio reaches **5.8x** vs **1.6x** baseline. Sessions without these patterns are unaffected — the pre-pass exits early at each threshold.
+
+### Important: the pre-pass is lossy
+
+The removed content is **not** stored in the verbatim map. `uncompress` restores originals back to the post-prepass state, not the original tool messages. This is intentional — verbose npm output and expired file reads have no value in a restored context.
+
+If you need full fidelity on tool messages, do not enable `agentToolPrepass`.
+
+### Tradeoffs
+
+- No effect on sessions without the waste patterns — safe to enable by default in agentic pipelines
+- The `expired file reads` category uses a conservative path pattern (≥3 slash-separated components with an extension) and a 15-turn lookahead — short or unconventional paths are not detected
+- Echo detection uses the first 120 chars of each block as a probe — blocks that only partially overlap are not collapsed
+- `system` messages and messages with `tool_calls` are never subject to pre-pass trimming; only `tool` and `function` role messages are processed
+
+---
+
 ## Combining features
 
 Features can be combined freely. Here are recommended combinations:
@@ -470,8 +516,20 @@ const result = compress(messages, {
 });
 ```
 
+### Agentic coding sessions
+
+```ts
+const result = compress(messages, {
+  agentToolPrepass: true,   // strip tool message waste first
+  dedup: true,              // remove repeated file reads / test runs
+  recencyWindow: 6,
+  importanceScoring: true,
+});
+```
+
 ### Feature interaction notes
 
+- `agentToolPrepass` runs before everything else — it reduces the input the main pipeline sees, so all other feature ratios are measured on the already-trimmed messages
 - `conversationFlow` and `semanticClustering` cooperate — flow chains are detected first, remaining messages are clustered
 - `discourseAware` is experimental and not included in any recommended combination — it reduces ratio without a custom ML scorer
 - `mlTokenClassifier` takes priority over `discourseAware` and `entropyScorer`
