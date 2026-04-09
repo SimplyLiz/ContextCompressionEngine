@@ -188,6 +188,31 @@ export function detectReasoningChain(text: string): boolean {
   return false;
 }
 
+// -- Head 6: Guardrail Pattern Detector (GPD) --
+//
+// Detects error tracebacks, HTTP error responses, and named failure signatures.
+// These messages carry information an agent must not lose: a summarizer that drops
+// "401 Unauthorized — username is required" will cause the agent to repeat the same
+// failed approach. Classified as hard T0 so they are never compressed.
+
+const ERROR_TRACEBACK_RE =
+  /^(?:Traceback \(most recent call last\)|Exception in thread\b|\s+at \w[\w$.]*\()/m;
+const HTTP_ERROR_RE =
+  /\bResponse\s+status\s+code\s+is\s+[45]\d\d\b|\bHTTP\/\d[.]\d\s+[45]\d\d\b|\bstatus(?:\s+code)?[:\s]+[45]\d\d\b/i;
+const EXPLICIT_FAILURE_RE =
+  /\b(?:Execution\s+failed|Authentication\s+(?:failed|error)|Authorization\s+(?:failed|denied)|Connection\s+(?:refused|timeout|timed\s+out)|Permission\s+denied)\b/i;
+
+function detectGuardrailPatterns(text: string): {
+  isT0: boolean;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+  if (ERROR_TRACEBACK_RE.test(text)) reasons.push('error_traceback');
+  if (HTTP_ERROR_RE.test(text)) reasons.push('http_error');
+  if (EXPLICIT_FAILURE_RE.test(text)) reasons.push('failure_signature');
+  return { isT0: reasons.length > 0, reasons };
+}
+
 const FORCE_T0_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /https?:\/\/[^\s]+/, label: 'url' },
   { re: /[\w.+-]+@[\w-]+\.[a-z]{2,}/i, label: 'email' },
@@ -282,14 +307,19 @@ export const HARD_T0_REASONS = new Set([
   'verse_pattern',
   'reasoning_chain',
   'base64_content',
+  // Guardrail signals: failure context an agent must not lose across sessions
+  'error_traceback',
+  'http_error',
+  'failure_signature',
 ]);
 
 export function classifyMessage(content: string): ClassifyResult {
   const structural = detectStructuralPatterns(content);
   const contentTypes = detectContentTypes(content);
+  const guardrails = detectGuardrailPatterns(content);
 
-  const allReasons = [...structural.reasons, ...contentTypes.reasons];
-  const isT0 = structural.isT0 || contentTypes.isT0;
+  const allReasons = [...structural.reasons, ...contentTypes.reasons, ...guardrails.reasons];
+  const isT0 = structural.isT0 || contentTypes.isT0 || guardrails.isT0;
 
   let decision: ClassifyResult['decision'];
   let confidence: number;

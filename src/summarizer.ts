@@ -4,7 +4,7 @@ const DEFAULT_MAX_RESPONSE_TOKENS = 300;
 
 type BuildPromptOpts = {
   systemPrompt?: string;
-  mode?: 'normal' | 'aggressive';
+  mode?: 'normal' | 'aggressive' | 'structured';
   preserveTerms?: string[];
 };
 
@@ -21,6 +21,38 @@ const BASE_TERMS = [
 
 function buildPrompt(text: string, maxResponseTokens: number, opts?: BuildPromptOpts): string {
   const prefix = opts?.systemPrompt ? `${opts.systemPrompt}\n\n` : '';
+
+  if (opts?.mode === 'structured') {
+    return `${prefix}Summarize the following conversation message for a stateful multi-turn agent.
+
+Extract ONLY the sections that have relevant content (omit empty sections entirely):
+
+### REASONING
+One or two sentences on key decisions, outcomes, and why they matter for future steps.
+
+### VARS
+A markdown table of runtime values the next session must know:
+| name | value | purpose |
+|------|-------|---------|
+
+Include: tokens, session IDs, file paths, page indices, counts, credentials, and named values used in API calls.
+Truncate long opaque tokens to the first 12 characters + "..." unless exact reproduction is required.
+Omit this section if no runtime values are present.
+
+### GUARDRAILS
+Bulleted list of past failures to avoid repeating. State the error and the corrective insight.
+Example: "- Login with password alone returns 422; username is required."
+Omit this section if no failures occurred.
+
+Rules:
+- Keep the summary under ${maxResponseTokens} tokens
+- Preserve all technical identifiers exactly
+- Output ONLY the sections above — no preamble, no commentary
+
+Text:
+${text}`;
+  }
+
   const isAggressive = opts?.mode === 'aggressive';
   const tokenBudget = isAggressive
     ? Math.max(1, Math.floor(maxResponseTokens / 2))

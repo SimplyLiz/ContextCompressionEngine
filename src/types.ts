@@ -46,8 +46,16 @@ export type CreateSummarizerOptions = {
   maxResponseTokens?: number;
   /** Domain-specific instructions prepended to the built-in rules. */
   systemPrompt?: string;
-  /** Summarization mode. 'normal' (default) = concise prose, 'aggressive' = terse bullet points at half token budget. */
-  mode?: 'normal' | 'aggressive';
+  /**
+   * Summarization mode.
+   * - 'normal' (default): concise prose summary
+   * - 'aggressive': terse bullet points at half token budget
+   * - 'structured': agent-oriented output with REASONING / VARS / GUARDRAILS sections.
+   *   VARS captures runtime values (tokens, IDs, paths, counts) in a markdown table so
+   *   they survive multi-turn compression. GUARDRAILS records past failures to prevent
+   *   repetition. Sections are omitted when they have no content.
+   */
+  mode?: 'normal' | 'aggressive' | 'structured';
   /** Domain-specific terms appended to the built-in preserve list. */
   preserveTerms?: string[];
 };

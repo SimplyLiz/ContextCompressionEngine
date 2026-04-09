@@ -885,6 +885,80 @@ describe('classifyMessage', () => {
     });
   });
 
+  describe('guardrail patterns', () => {
+    it('detects Python traceback', () => {
+      const r = classifyMessage(
+        'Traceback (most recent call last):\n  File "app.py", line 12, in <module>\nKeyError: "access_token"',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('error_traceback');
+    });
+
+    it('detects Java-style stack trace', () => {
+      const r = classifyMessage(
+        'Exception in thread "main" java.lang.NullPointerException\n\tat com.example.Main.run(Main.java:42)',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('error_traceback');
+    });
+
+    it('detects HTTP 401 error response', () => {
+      const r = classifyMessage(
+        'Request failed. Response status code is 401: {"message":"access token missing or expired"}',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('http_error');
+    });
+
+    it('detects HTTP 403 in status line', () => {
+      const r = classifyMessage('HTTP/1.1 403 Forbidden — you do not have permission.');
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('http_error');
+    });
+
+    it('detects HTTP 5xx server error', () => {
+      const r = classifyMessage('Response status code is 500: Internal Server Error');
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('http_error');
+    });
+
+    it('detects Execution failed', () => {
+      const r = classifyMessage(
+        'Execution failed. Traceback:\n  Exception: Response status code is 422\n{"message":"Validation error. username: Field required"}',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('failure_signature');
+    });
+
+    it('detects Authentication failed', () => {
+      const r = classifyMessage(
+        'Authentication failed: invalid credentials for user admin@example.com',
+      );
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('failure_signature');
+    });
+
+    it('detects Connection refused', () => {
+      const r = classifyMessage('Connection refused to 127.0.0.1:5432 — is the database running?');
+      expect(r.decision).toBe('T0');
+      expect(r.reasons).toContain('failure_signature');
+    });
+
+    it('does not false-positive on plain prose with common words', () => {
+      const r = classifyMessage(
+        'We need to update the docs. The previous attempt failed because the link was broken.',
+      );
+      expect(r.reasons).not.toContain('error_traceback');
+      expect(r.reasons).not.toContain('http_error');
+      expect(r.reasons).not.toContain('failure_signature');
+    });
+
+    it('does not false-positive on "status: active" in config prose', () => {
+      const r = classifyMessage('The deployment status: active. All services are healthy.');
+      expect(r.reasons).not.toContain('http_error');
+    });
+  });
+
   describe('performance', () => {
     it('completes in under 5ms', () => {
       const start = performance.now();

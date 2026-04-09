@@ -196,6 +196,54 @@ describe('createSummarizer', () => {
 
       expect(noMode.mock.calls[0][0]).toBe(normalMode.mock.calls[0][0]);
     });
+
+    it('structured mode prompt contains REASONING / VARS / GUARDRAILS sections', async () => {
+      const callLlm = vi.fn().mockReturnValue('### REASONING\nDid a thing.');
+      const summarizer = createSummarizer(callLlm, { mode: 'structured' });
+
+      await summarizer('some text');
+
+      const prompt = callLlm.mock.calls[0][0] as string;
+      expect(prompt).toContain('### REASONING');
+      expect(prompt).toContain('### VARS');
+      expect(prompt).toContain('### GUARDRAILS');
+    });
+
+    it('structured mode prompt mentions runtime values and token budget', async () => {
+      const callLlm = vi.fn().mockReturnValue('### REASONING\nOk.');
+      const summarizer = createSummarizer(callLlm, { mode: 'structured', maxResponseTokens: 400 });
+
+      await summarizer('some text');
+
+      const prompt = callLlm.mock.calls[0][0] as string;
+      expect(prompt).toContain('tokens, session IDs, file paths');
+      expect(prompt).toContain('400 tokens');
+    });
+
+    it('structured mode prompt includes systemPrompt prefix', async () => {
+      const callLlm = vi.fn().mockReturnValue('### REASONING\nOk.');
+      const summarizer = createSummarizer(callLlm, {
+        mode: 'structured',
+        systemPrompt: 'Agent context: productivity assistant.',
+      });
+
+      await summarizer('some text');
+
+      const prompt = callLlm.mock.calls[0][0] as string;
+      expect(prompt.startsWith('Agent context: productivity assistant.')).toBe(true);
+      expect(prompt).toContain('### REASONING');
+    });
+
+    it('structured mode does not include the normal prose summarize instruction', async () => {
+      const callLlm = vi.fn().mockReturnValue('### REASONING\nOk.');
+      const summarizer = createSummarizer(callLlm, { mode: 'structured' });
+
+      await summarizer('some text');
+
+      const prompt = callLlm.mock.calls[0][0] as string;
+      expect(prompt).not.toContain('Summarize the following conversation message concisely');
+      expect(prompt).not.toContain('terse bullet points');
+    });
   });
 
   describe('preserveTerms', () => {
