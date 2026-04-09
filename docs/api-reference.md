@@ -12,6 +12,10 @@ export { compress, defaultTokenCounter, bestSentenceScore } from './compress.js'
 export { uncompress } from './expand.js';
 export type { StoreLookup } from './expand.js';
 
+// Format adapters
+export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
+export { XmlAdapter, YamlAdapter, MarkdownAdapter } from './format-adapters.js';
+
 // Helpers (LLM integration)
 export { createSummarizer, createEscalatingSummarizer } from './summarizer.js';
 export { createClassifier, createEscalatingClassifier } from './classifier.js';
@@ -496,8 +500,69 @@ type StoreLookup = VerbatimMap | ((id: string) => Message | undefined);
 
 ---
 
+---
+
+## Format adapters
+
+See [Format adapters](format-adapters.md) for the full guide. Quick reference:
+
+### `FormatAdapter` interface
+
+```ts
+interface FormatAdapter {
+  name: string;
+  detect(content: string): boolean;
+  extractPreserved(content: string): string[];
+  extractCompressible(content: string): string[];
+  reconstruct(preserved: string[], summary: string): string;
+}
+```
+
+Adapters are registered via `CompressOptions.adapters`. The first adapter whose `detect()` returns `true` handles the message. Adapters run after the built-in code-split pass, so content containing code fences is already handled before adapters are checked.
+
+If the adapter's `reconstruct()` output is not shorter than the original, the message is preserved unchanged (adapter reverts automatically — no size regression possible).
+
+### Built-in adapters
+
+| Adapter | Export | Detects | Preserves | Compresses |
+|---|---|---|---|---|
+| `CodeAdapter` | `adapters.js` | `` ``` `` fences | Code fences verbatim | Surrounding prose |
+| `StructuredOutputAdapter` | `adapters.js` | Test output, grep, status lines | Status lines, file paths | Bulk line content |
+| `XmlAdapter` | `format-adapters.js` | XML documents | Tag skeleton + short values | Prose text nodes (6+ words, 100+ chars) |
+| `YamlAdapter` | `format-adapters.js` | YAML configs | Keys with atomic values (≤60 chars, booleans, numbers) | Keys with long prose string values |
+| `MarkdownAdapter` | `format-adapters.js` | Structured Markdown (2+ headings) | All headings + tables | Paragraph prose between structural elements |
+
+### Example
+
+```ts
+import { compress, XmlAdapter, YamlAdapter, MarkdownAdapter } from 'context-compression-engine';
+
+const result = compress(messages, {
+  adapters: [XmlAdapter, YamlAdapter, MarkdownAdapter],
+});
+```
+
+Custom adapter:
+
+```ts
+import type { FormatAdapter } from 'context-compression-engine';
+
+const CsvAdapter: FormatAdapter = {
+  name: 'csv',
+  detect: (content) => content.includes(',') && content.split('\n').length > 5,
+  extractPreserved: (content) => [content.split('\n')[0]], // header row
+  extractCompressible: (content) => content.split('\n').slice(1),
+  reconstruct: (preserved, summary) => `${preserved.join('\n')}\n[${summary}]`,
+};
+
+compress(messages, { adapters: [CsvAdapter] });
+```
+
+---
+
 ## See also
 
+- [Format adapters](format-adapters.md) - adapter pattern, built-in adapters, writing custom adapters
 - [V2 features](v2-features.md) - quality metrics, flow detection, clustering, depth, ML classifier
 - [Compression pipeline](compression-pipeline.md) - how the engine processes messages
 - [Token budget](token-budget.md) - budget-driven compression

@@ -5,6 +5,7 @@
 | Page                                            | Description                                                       |
 | ----------------------------------------------- | ----------------------------------------------------------------- |
 | [API Reference](api-reference.md)               | All exports, types, options, and result fields                    |
+| [Format Adapters](format-adapters.md)           | XmlAdapter, YamlAdapter, MarkdownAdapter, custom adapter guide    |
 | [Compression Pipeline](compression-pipeline.md) | How compression works: classify, dedup, merge, summarize, guard   |
 | [Deduplication](deduplication.md)               | Exact + fuzzy dedup algorithms, tuning thresholds                 |
 | [Token Budget](token-budget.md)                 | Budget-driven compression, binary search, custom tokenizers       |

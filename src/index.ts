@@ -18,6 +18,7 @@ export {
 
 // Format adapters
 export { CodeAdapter, StructuredOutputAdapter } from './adapters.js';
+export { XmlAdapter, YamlAdapter, MarkdownAdapter } from './format-adapters.js';
 
 // Entity extraction & quality metrics
 export {

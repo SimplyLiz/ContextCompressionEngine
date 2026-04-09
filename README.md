@@ -42,6 +42,7 @@ The deterministic engine achieves **1.3-6.1x compression with zero latency and z
 
 - **Lossless round-trip** — `compress` then `uncompress` restores byte-identical originals
 - **Structure-aware** — code fences, SQL, JSON, tables, citations, URLs, and file paths stay verbatim
+- **Format adapters** — built-in `XmlAdapter`, `YamlAdapter`, and `MarkdownAdapter` handle structured formats; implement `FormatAdapter` for custom formats. See [Format adapters](docs/format-adapters.md)
 - **Deduplication** — exact and fuzzy duplicate detection eliminates repeated content
 - **LLM-powered** — plug in any summarizer (Claude, GPT, Gemini, Grok, Ollama) for semantic compression
 - **Three-level fallback** — LLM → deterministic → size guard, never makes output worse
@@ -50,7 +51,7 @@ The deterministic engine achieves **1.3-6.1x compression with zero latency and z
 - **Pluggable token counter** — bring your own tokenizer for accurate budget decisions
 - **Provenance tracking** — every compressed message carries origin IDs, summary hashes, and version chains
 - **Zero dependencies** — pure TypeScript, no crypto, no network calls
-- **706 tests** — comprehensive coverage across all compression paths
+- **752 tests** — comprehensive coverage across all compression paths
 
 ## Install
 

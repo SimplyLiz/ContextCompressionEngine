@@ -17,12 +17,12 @@ classify ──> dedup ──> merge consecutive ──> summarize ──> size 
   |            |              |                  |         if summary >= original
   |            |              |                  v
   |            |              |            LLM or deterministic
-  |            |              v
-  |            |         same-role groups
-  |            v
-  |       exact + fuzzy
+  |            |              v                  ^
+  |            |         same-role groups        |
+  |            v                            format adapter
+  |       exact + fuzzy                    (if matched)
   v
- T0/T2/T3 + preservation rules
+ T0/T2/T3 + format adapters + preservation rules
 ```
 
 ## 1. Classification
