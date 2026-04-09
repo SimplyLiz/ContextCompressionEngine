@@ -62,6 +62,17 @@ export interface AncsResult {
   contradicted: number;
 }
 
+export interface PrepassResult {
+  /** Compression ratio without agentToolPrepass. */
+  baselineRatio: number;
+  /** Compression ratio with agentToolPrepass enabled. */
+  prepassRatio: number;
+  /** Characters removed by the pre-pass (before main pipeline). */
+  charsRemoved: number;
+  /** Messages whose content was trimmed by the pre-pass. */
+  messagesTrimmed: number;
+}
+
 export interface BenchmarkResults {
   basic: Record<string, BasicResult>;
   tokenBudget: Record<string, TokenBudgetResult>;
@@ -71,6 +82,7 @@ export interface BenchmarkResults {
   retention?: Record<string, RetentionResult>;
   quality?: Record<string, QualityResult>;
   ancs?: Record<string, AncsResult>;
+  prepass?: Record<string, PrepassResult>;
 }
 
 export interface Baseline {
@@ -491,6 +503,44 @@ export function compareResults(
         'contradicted',
         exp.contradicted,
         act.contradicted,
+        tolerance,
+      );
+    }
+  }
+
+  // Prepass
+  if (baseline.prepass && current.prepass) {
+    for (const [name, exp] of Object.entries(baseline.prepass)) {
+      const act = current.prepass[name];
+      if (!act) {
+        missing(regressions, 'prepass', name);
+        continue;
+      }
+      checkNum(
+        regressions,
+        'prepass',
+        name,
+        'baselineRatio',
+        exp.baselineRatio,
+        act.baselineRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'prepass',
+        name,
+        'prepassRatio',
+        exp.prepassRatio,
+        act.prepassRatio,
+        tolerance,
+      );
+      checkNum(
+        regressions,
+        'prepass',
+        name,
+        'messagesTrimmed',
+        exp.messagesTrimmed,
+        act.messagesTrimmed,
         tolerance,
       );
     }
@@ -971,6 +1021,29 @@ function generateAncsSection(r: BenchmarkResults): string[] {
   return lines;
 }
 
+function generatePrepassSection(r: BenchmarkResults): string[] {
+  if (!r.prepass || Object.keys(r.prepass).length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('## Agent Tool Pre-pass');
+  lines.push('');
+  lines.push(
+    '> Strips verbose output, echoed content, and expired file reads from tool messages ' +
+      'before the main pipeline runs (`agentToolPrepass: true`).',
+  );
+  lines.push('');
+  lines.push('| Scenario | Baseline | +Prepass | Delta | Chars Removed | Msgs Trimmed |');
+  lines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
+  for (const [name, v] of Object.entries(r.prepass)) {
+    const delta = v.prepassRatio - v.baselineRatio;
+    const sign = delta >= 0 ? '+' : '';
+    lines.push(
+      `| ${name} | ${fix(v.baselineRatio)} | ${fix(v.prepassRatio)} | ${sign}${fix(delta)} | ${v.charsRemoved.toLocaleString()} | ${v.messagesTrimmed} |`,
+    );
+  }
+  return lines;
+}
+
 function generateTokenBudgetSection(r: BenchmarkResults): string[] {
   const lines: string[] = [];
   const entries = Object.entries(r.tokenBudget);
@@ -1231,6 +1304,13 @@ export function generateBenchmarkDocs(baselinesDir: string, outputPath: string):
   const ancsSection = generateAncsSection(latest.results);
   if (ancsSection.length > 0) {
     lines.push(...ancsSection);
+    lines.push('');
+  }
+
+  // --- Prepass ---
+  const prepassSection = generatePrepassSection(latest.results);
+  if (prepassSection.length > 0) {
+    lines.push(...prepassSection);
     lines.push('');
   }
 

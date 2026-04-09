@@ -17,6 +17,7 @@ import {
 import { clusterMessages, summarizeCluster, type MessageCluster } from './cluster.js';
 import { summarizeWithEDUs } from './discourse.js';
 import { compressWithTokenClassifierSync, compressWithTokenClassifier } from './ml-classifier.js';
+import { applyToolPrepass, type ToolPrepassStats } from './tool-prepass.js';
 import type {
   Classifier,
   ClassifierResult,
@@ -2258,6 +2259,22 @@ async function compressAsyncWithBudget(
 // Public API: compress() with overloads
 // ---------------------------------------------------------------------------
 
+function withPrepassStats(
+  result: CompressResult,
+  stats: ToolPrepassStats | undefined,
+): CompressResult {
+  if (!stats) return result;
+  const total = stats.verbose_trimmed + stats.echo_trimmed + stats.expired_stubbed;
+  return {
+    ...result,
+    compression: {
+      ...result.compression,
+      messages_tool_prepass_trimmed: total,
+      chars_tool_prepass_removed: stats.chars_removed,
+    },
+  };
+}
+
 /**
  * Compress a message array. Sync by default; async when a `summarizer` or `classifier` is provided.
  *
@@ -2311,6 +2328,15 @@ export function compress(
     }
   }
 
+  // AgentDiet tool pre-pass: trim verbose/echoed/expired content from tool messages
+  // before the main pipeline so classifiers and summarizers see leaner input.
+  let toolPrepassStats: ToolPrepassStats | undefined;
+  if (options.agentToolPrepass) {
+    const prepass = applyToolPrepass(messages);
+    messages = prepass.messages;
+    toolPrepassStats = prepass.stats;
+  }
+
   const hasSummarizer = !!options.summarizer;
   const hasClassifier = !!options.classifier;
   const hasBudget = options.tokenBudget != null;
@@ -2333,21 +2359,24 @@ export function compress(
       const cr = isTiered
         ? compressTieredSync(messages, options.tokenBudget!, depthOpts)
         : compressSyncWithBudget(messages, options.tokenBudget!, depthOpts);
-      if (cr.fits) return cr;
+      if (cr.fits) return withPrepassStats(cr, toolPrepassStats);
       // Quality gate: if quality drops too low, stop and use the current result
       if (
         cr.compression.quality_score != null &&
         cr.compression.quality_score < 0.6 &&
         depth !== 'aggressive'
       ) {
-        return cr;
+        return withPrepassStats(cr, toolPrepassStats);
       }
     }
     // All depths tried, return the last (most aggressive) result
     const aggressiveOpts = { ...options, compressionDepth: 'aggressive' as const };
-    return isTiered
-      ? compressTieredSync(messages, options.tokenBudget!, aggressiveOpts)
-      : compressSyncWithBudget(messages, options.tokenBudget!, aggressiveOpts);
+    return withPrepassStats(
+      isTiered
+        ? compressTieredSync(messages, options.tokenBudget!, aggressiveOpts)
+        : compressSyncWithBudget(messages, options.tokenBudget!, aggressiveOpts),
+      toolPrepassStats,
+    );
   }
 
   if (hasSummarizer || hasClassifier) {
@@ -2370,23 +2399,28 @@ export function compress(
             lastResult = isTiered
               ? await compressTieredAsync(messages, options.tokenBudget!, depthOpts)
               : await compressAsyncWithBudget(messages, options.tokenBudget!, depthOpts);
-            if (lastResult.fits) return lastResult;
+            if (lastResult.fits) return withPrepassStats(lastResult, toolPrepassStats);
           }
-          return lastResult!;
+          return withPrepassStats(lastResult!, toolPrepassStats);
         })();
       }
-      return isTiered
-        ? compressTieredAsync(messages, options.tokenBudget!, options)
-        : compressAsyncWithBudget(messages, options.tokenBudget!, options);
+      return (
+        isTiered
+          ? compressTieredAsync(messages, options.tokenBudget!, options)
+          : compressAsyncWithBudget(messages, options.tokenBudget!, options)
+      ).then((cr) => withPrepassStats(cr, toolPrepassStats));
     }
-    return compressAsync(messages, options);
+    return compressAsync(messages, options).then((cr) => withPrepassStats(cr, toolPrepassStats));
   }
 
   // Sync paths
   if (hasBudget) {
-    return isTiered
-      ? compressTieredSync(messages, options.tokenBudget!, options)
-      : compressSyncWithBudget(messages, options.tokenBudget!, options);
+    return withPrepassStats(
+      isTiered
+        ? compressTieredSync(messages, options.tokenBudget!, options)
+        : compressSyncWithBudget(messages, options.tokenBudget!, options),
+      toolPrepassStats,
+    );
   }
-  return compressSync(messages, options);
+  return withPrepassStats(compressSync(messages, options), toolPrepassStats);
 }

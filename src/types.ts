@@ -193,6 +193,22 @@ export type CompressOptions = {
    *  chains, and correction sequences into compression units for better summaries.
    *  Default: false. */
   conversationFlow?: boolean;
+  /**
+   * Enable AgentDiet-inspired tool message pre-pass (arXiv:2509.23586).
+   * Before the main pipeline runs, tool/function role messages are trimmed of
+   * three categories of agentic waste:
+   *   1. Verbose output — directory listings, build step counters,
+   *      package-manager noise, verbose test runner output.
+   *   2. Echoed content — blocks repeated verbatim from the preceding
+   *      assistant message (str_replace_editor-style echoes).
+   *   3. Expired content — large file-read results that are superseded by a
+   *      later write to the same path within the next 15 turns.
+   *
+   * Trimming is lossy for the removed content but preserves all metadata.
+   * Recommended for agentic coding sessions and tool-heavy conversations.
+   * Default: false.
+   */
+  agentToolPrepass?: boolean;
   /** Compression depth controls aggressiveness.
    *  - 'gentle': standard sentence selection (~2x, default)
    *  - 'moderate': tighter budgets + clause pruning (~3-4x)
@@ -243,6 +259,10 @@ export type CompressResult = {
     messages_llm_preserved?: number;
     /** Messages superseded by a later correction (when contradictionDetection is enabled). */
     messages_contradicted?: number;
+    /** Messages trimmed by the agent tool pre-pass (when agentToolPrepass is enabled). */
+    messages_tool_prepass_trimmed?: number;
+    /** Characters removed by the agent tool pre-pass (when agentToolPrepass is enabled). */
+    chars_tool_prepass_removed?: number;
     /** Messages preserved due to high importance score (when importanceScoring is enabled). */
     messages_importance_preserved?: number;
     /** Messages dropped to a stub because their best sentence score fell below the relevance threshold. */

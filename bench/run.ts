@@ -1,5 +1,6 @@
 import { compress } from '../src/compress.js';
 import { uncompress } from '../src/expand.js';
+import { applyToolPrepass } from '../src/tool-prepass.js';
 import { createSummarizer, createEscalatingSummarizer } from '../src/summarizer.js';
 import type { CompressResult, Message } from '../src/types.js';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -787,6 +788,210 @@ function agenticCodingSession(): Scenario {
   };
 }
 
+function agentToolPrepassHeavy(): Scenario {
+  // Scenario designed to exercise all three AgentDiet pre-pass categories:
+  //   Cat 1: verbose output (npm noise, directory tree, build steps, 30+ test pass lines)
+  //   Cat 2: echoed content (assistant shows file content → tool echoes it back)
+  //   Cat 3: expired file read (large file read superseded by a later write)
+
+  // 15 npm warn/notice lines → stripped (threshold: 3)
+  const npmInstallOutput = [
+    'npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory.',
+    'npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported.',
+    'npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead.',
+    'npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported.',
+    'npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead.',
+    'npm notice created tarball: package.tgz',
+    'npm notice tarball contents: 12 files, 284.5 kB',
+    'npm warn peer dep missing: react@>=16, required by react-dom@18.2.0',
+    'npm warn ERESOLVE overriding peer dependency',
+    'npm warn While resolving: foo@1.0.0',
+    'npm warn Found: bar@2.0.0',
+    'npm notice Publishing to https://registry.npmjs.org/ with tag latest and no access',
+    'npm warn deprecated lodash@4.17.21: Critical security vulnerability.',
+    'npm warn peer dep missing: typescript@>=4.7, required by ts-node@10.9.2',
+    'npm warn deprecated source-map-url@0.4.1: See https://github.com/lydell/source-map-url',
+    'added 847 packages, and audited 848 packages in 12s',
+    'found 0 vulnerabilities',
+  ].join('\n');
+
+  // 22 directory tree lines for node_modules → collapsed
+  const dirListingOutput = [
+    'project/',
+    '├── node_modules/.package-lock.json',
+    '├── node_modules/accepts',
+    '├── node_modules/acorn',
+    '├── node_modules/acorn-jsx',
+    '├── node_modules/ajv',
+    '│   ├── node_modules/json-schema-traverse',
+    '│   └── node_modules/fast-deep-equal',
+    '├── node_modules/ansi-regex',
+    '├── node_modules/ansi-styles',
+    '├── node_modules/argparse',
+    '├── node_modules/array-flatten',
+    '├── node_modules/balanced-match',
+    '├── node_modules/brace-expansion',
+    '├── node_modules/braces',
+    '├── node_modules/browser-stdout',
+    '├── node_modules/c8',
+    '├── node_modules/callsites',
+    '├── node_modules/camelcase',
+    '├── node_modules/chalk',
+    '│   └── node_modules/ansi-styles',
+    '└── node_modules/chokidar',
+    '├── src/',
+    '│   ├── index.ts',
+    '│   └── auth.ts',
+    '└── tests/',
+  ].join('\n');
+
+  // 10 build steps → first + last kept, middle collapsed
+  const buildStepsOutput =
+    Array.from(
+      { length: 10 },
+      (_, i) =>
+        `[${i + 1}/10] Compiling ${['src/index.ts', 'src/auth.ts', 'src/types.ts', 'src/utils.ts', 'src/middleware.ts', 'src/routes.ts', 'src/db.ts', 'src/cache.ts', 'src/logger.ts', 'src/config.ts'][i]}`,
+    ).join('\n') + '\nBuild succeeded in 4.2s';
+
+  // 32 passing test lines + summary → stripped (threshold: 10)
+  const testRunOutput =
+    ' RUN  v4.1.0 /project\n\n' +
+    Array.from(
+      { length: 32 },
+      (_, i) =>
+        `  ✓ AuthService > ${['sign', 'verify', 'refresh', 'middleware', 'rateLimit', 'blocklist', 'claims', 'expiry'][i % 8]} > test case ${Math.floor(i / 8) + 1} passes`,
+    ).join('\n') +
+    '\n\n Test Files  4 passed\n Tests: 32 passed, 0 failed\n Duration  2.1s\n';
+
+  // Large file content (>2000 chars) that will be superseded by a write
+  const configFileContent =
+    '// config.ts — application configuration\n' +
+    'export const config = {\n' +
+    '  port: 3000,\n' +
+    '  host: "0.0.0.0",\n' +
+    '  database: {\n' +
+    '    host: "localhost",\n' +
+    '    port: 5432,\n' +
+    '    name: "myapp",\n' +
+    '    pool: { min: 2, max: 10, idleTimeoutMillis: 30000 },\n' +
+    '  },\n' +
+    '  redis: { host: "localhost", port: 6379, ttl: 3600 },\n' +
+    '  jwt: { secret: process.env.JWT_SECRET!, expiresIn: "15m", refreshExpiresIn: "7d" },\n' +
+    '  rateLimit: { windowMs: 15 * 60 * 1000, max: 100 },\n' +
+    '  cors: { origin: ["https://app.example.com"], credentials: true },\n' +
+    '  logging: { level: "info", format: "json", destination: "stdout" },\n' +
+    '  features: { betaUsers: false, newDashboard: false, analyticsV2: true },\n' +
+    '};\n\n' +
+    '// Validation\n' +
+    'if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");\n' +
+    'if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");\n'.repeat(50);
+
+  // Content echoed back by a tool (assistant shows it; tool echoes verbatim)
+  const sharedCodeBlock =
+    'export function validateRequest(schema: ZodSchema) {\n' +
+    '  return (req: Request, res: Response, next: NextFunction) => {\n' +
+    '    const result = schema.safeParse(req.body);\n' +
+    '    if (!result.success) {\n' +
+    '      return res.status(400).json({ errors: result.error.flatten() });\n' +
+    '    }\n' +
+    '    req.body = result.data;\n' +
+    '    next();\n' +
+    '  };\n' +
+    '}\n\n' +
+    '// Additional validation helpers used across multiple routes.\n' +
+    'export const userSchema = z.object({ email: z.string().email(), password: z.string().min(8) });\n' +
+    'export const loginSchema = z.object({ email: z.string().email(), password: z.string() });\n' +
+    'export const refreshSchema = z.object({ refreshToken: z.string().min(10) });\n';
+
+  return {
+    name: 'Agent prepass heavy',
+    messages: [
+      msg('system', 'You are a senior TypeScript developer with tool access.'),
+
+      // Phase 1: npm install (cat 1 — package manager noise)
+      msg('user', 'Install the project dependencies.'),
+      msg('assistant', 'Running npm install.', {
+        tool_calls: [{ id: 'tc1', function: { name: 'exec', arguments: '{"cmd":"npm install"}' } }],
+      }),
+      msg('tool', npmInstallOutput),
+
+      // Phase 2: list project files (cat 1 — directory tree)
+      msg('user', 'Show me the project structure.'),
+      msg('assistant', 'Listing the directory tree.', {
+        tool_calls: [{ id: 'tc2', function: { name: 'exec', arguments: '{"cmd":"ls -R"}' } }],
+      }),
+      msg('tool', dirListingOutput),
+
+      // Phase 3: build (cat 1 — build step counters)
+      msg('user', 'Build the project.'),
+      msg('assistant', 'Compiling TypeScript.', {
+        tool_calls: [{ id: 'tc3', function: { name: 'exec', arguments: '{"cmd":"tsc"}' } }],
+      }),
+      msg('tool', buildStepsOutput),
+
+      // Phase 4: run tests (cat 1 — verbose test output)
+      msg('user', 'Run the full test suite.'),
+      msg('assistant', 'Running all tests.', {
+        tool_calls: [
+          { id: 'tc4', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } },
+        ],
+      }),
+      msg('tool', testRunOutput),
+
+      // Phase 5: read large config file (cat 3 — will be expired by write below)
+      msg('user', 'Read the config file so I can update the rate limit.'),
+      msg('assistant', 'Reading /usr/local/src/app/config.ts.', {
+        tool_calls: [
+          {
+            id: 'tc5',
+            function: { name: 'read', arguments: '{"path":"/usr/local/src/app/config.ts"}' },
+          },
+        ],
+      }),
+      msg('tool', configFileContent),
+
+      // Phase 6: assistant shows validation code; tool echoes it back (cat 2)
+      msg(
+        'assistant',
+        `I can see the config. Now let me show you the validation middleware:\n\n\`\`\`typescript\n${sharedCodeBlock}\`\`\`\n\nI'll apply the rate limit change now.`,
+        {
+          tool_calls: [
+            {
+              id: 'tc6',
+              function: {
+                name: 'edit',
+                arguments: '{"path":"/usr/local/src/app/config.ts","changes":"rateLimit.max=50"}',
+              },
+            },
+          ],
+        },
+      ),
+      // Tool echoes the shared code block back verbatim (cat 2 — echo)
+      msg(
+        'tool',
+        `Applied changes. Current validation middleware:\n\n${sharedCodeBlock}\nFile /usr/local/src/app/config.ts written successfully.`,
+      ),
+
+      // Phase 7: the write makes the earlier read expired (cat 3 activates retroactively)
+      msg(
+        'assistant',
+        'Rate limit updated from 100 to 50. I wrote /usr/local/src/app/config.ts with the new value.',
+      ),
+
+      msg('user', 'Perfect, run the tests again to confirm.'),
+      msg('assistant', 'Re-running tests.', {
+        tool_calls: [
+          { id: 'tc7', function: { name: 'exec', arguments: '{"cmd":"npx vitest run"}' } },
+        ],
+      }),
+      msg('tool', testRunOutput),
+
+      msg('assistant', 'All 32 tests pass. The config change is live.'),
+      msg('user', 'Great, ship it.'),
+    ],
+  };
+}
+
 function iterativeDesign(): Scenario {
   // Simulates a real design conversation where:
   // 1. Early messages establish important architectural decisions (importance scoring target)
@@ -1492,6 +1697,96 @@ async function run(): Promise<void> {
 
   if (ancsFails > 0) {
     console.error(`FAIL: ${ancsFails} ANCS scenario(s) failed round-trip`);
+    process.exit(1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agent Tool Pre-pass benchmark
+  // ---------------------------------------------------------------------------
+
+  console.log();
+  console.log('Agent Tool Pre-pass (agentToolPrepass: true)');
+
+  // Re-assign IDs to avoid collisions with scenarios already run
+  nextId = 50000;
+  const prepassScenarios: Scenario[] = [
+    agentToolPrepassHeavy(),
+    agenticCodingSession(),
+    toolHeavy(),
+  ];
+
+  // Columns: Baseline ratio uses original chars / baseline compressed chars.
+  // Effective ratio uses original chars / prepass+compressed chars — the true
+  // end-to-end savings when agentToolPrepass is enabled.
+  const ppHeader = [
+    'Scenario'.padEnd(cols.name),
+    'Msgs'.padStart(5),
+    'BaseR'.padStart(6),
+    'EffR'.padStart(6),
+    'CharsRmvd'.padStart(10),
+    'MsgsTrmd'.padStart(9),
+    'R/T'.padStart(cols.rt),
+    'Time'.padStart(cols.time),
+  ].join('  ');
+  const ppSep = '-'.repeat(ppHeader.length);
+
+  console.log(ppSep);
+  console.log(ppHeader);
+  console.log(ppSep);
+
+  if (!benchResults.prepass) benchResults.prepass = {};
+  let ppFails = 0;
+
+  for (const scenario of prepassScenarios) {
+    const t0 = performance.now();
+    const baseline = compress(scenario.messages, { recencyWindow: 0 });
+    const withPrepass = compress(scenario.messages, { recencyWindow: 0, agentToolPrepass: true });
+    const t1 = performance.now();
+
+    // Round-trip: prepass is lossy, so compare uncompress result against
+    // post-prepass messages (not original). The compression layer must be
+    // fully reversible even if the prepass itself is not.
+    const postPrepass = applyToolPrepass(scenario.messages).messages;
+    const er = uncompress(withPrepass.messages, withPrepass.verbatim);
+    const rt =
+      JSON.stringify(postPrepass) === JSON.stringify(er.messages) && er.missing_ids.length === 0
+        ? 'PASS'
+        : 'FAIL';
+    if (rt === 'FAIL') ppFails++;
+
+    const charsRemoved = withPrepass.compression.chars_tool_prepass_removed ?? 0;
+    const msgsTrimmed = withPrepass.compression.messages_tool_prepass_trimmed ?? 0;
+
+    // Effective ratio: original input chars / final prepass+compressed chars
+    const originalChars = chars(scenario.messages);
+    const finalChars = chars(withPrepass.messages);
+    const effectiveRatio = finalChars > 0 ? originalChars / finalChars : 1;
+
+    console.log(
+      [
+        scenario.name.padEnd(cols.name),
+        String(scenario.messages.length).padStart(5),
+        baseline.compression.ratio.toFixed(2).padStart(6),
+        effectiveRatio.toFixed(2).padStart(6),
+        String(charsRemoved).padStart(10),
+        String(msgsTrimmed).padStart(9),
+        rt.padStart(cols.rt),
+        ((t1 - t0).toFixed(2) + 'ms').padStart(cols.time),
+      ].join('  '),
+    );
+
+    benchResults.prepass[scenario.name] = {
+      baselineRatio: baseline.compression.ratio,
+      prepassRatio: effectiveRatio,
+      charsRemoved,
+      messagesTrimmed: msgsTrimmed,
+    };
+  }
+
+  console.log(ppSep);
+
+  if (ppFails > 0) {
+    console.error(`FAIL: ${ppFails} prepass scenario(s) failed round-trip`);
     process.exit(1);
   }
 
