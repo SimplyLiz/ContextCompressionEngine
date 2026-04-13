@@ -146,6 +146,6 @@ jobs:
         uses: ffurrer2/extract-release-notes@v3
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.release_notes.outputs.release_notes }}
